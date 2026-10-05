@@ -1,5 +1,9 @@
 # AuthHub
 
+[![CI](https://github.com/ShenHaoCore/AuthHub/actions/workflows/ci.yml/badge.svg)](https://github.com/ShenHaoCore/AuthHub/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ShenHaoCore/AuthHub/actions/workflows/codeql.yml/badge.svg)](https://github.com/ShenHaoCore/AuthHub/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 基于 **.NET 9 + OpenIddict 5.8** 的统一认证授权中心（Identity Provider）。
 
 为下游多个应用提供一套账号体系与登录入口：一处登录，多处通行（SSO）；下游服务既能用
@@ -19,6 +23,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 - [测试](#测试)
 - [错误响应约定](#错误响应约定)
 - [安全设计要点](#安全设计要点)
+- [持续集成](#持续集成)
 - [与原始需求 / OpenIddict 实际 API 的差异](#与原始需求--openiddict-实际-api-的差异)
 - [部署](#部署)
 - [待办与扩展方向](#待办与扩展方向)
@@ -521,6 +526,22 @@ Content-Type 恒定是 `application/problem+json`。
 | 异常信息 | 生产环境异常详情只进日志，响应只给 `traceId`；开发环境才附 `exception` |
 | 客户端密钥 | 经 OpenIddict 哈希后入库，不落明文；支持 `rotate-secret` 轮换 |
 | CORS | 未配置来源时收紧到同源；显式禁止 `AllowAnyOrigin()` + `AllowCredentials()` 组合 |
+
+---
+
+## 持续集成
+
+流水线在 GitHub Actions 上（`.github/workflows/`），全部跑在 `ubuntu-latest`：
+
+| 工作流 | 触发 | 内容 |
+|--------|------|------|
+| `ci.yml` | push / PR 到 main、手动 | Release 编译（`-warnaserror`，警告即失败）、单元测试、集成测试、Dockerfile 构建校验（防止镜像烂掉）、`dotnet list package --vulnerable` 依赖漏洞扫描 |
+| `codeql.yml` | push / PR 到 main、每周一 | CodeQL 静态分析（C#），结果进仓库的 Security 标签页 |
+| `.github/dependabot.yml` | 每周 | NuGet 与 GitHub Actions 版本的依赖自动更新 PR |
+
+分支约定：`main` 开启了轻量保护——**禁止强推与删除**；日常提交直接 push 即可。
+
+安全漏洞的报告方式见 [SECURITY.md](SECURITY.md)（不要开公开 Issue）。
 
 ---
 
