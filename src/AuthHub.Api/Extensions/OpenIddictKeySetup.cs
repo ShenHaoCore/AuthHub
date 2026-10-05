@@ -33,8 +33,11 @@ internal static class OpenIddictKeySetup
                     certificatePath);
             }
 
-            // PFX/PKCS#12 文件：同时用于签名与加密
-            var certificate = new X509Certificate2(
+            // PFX/PKCS#12 文件：同时用于签名与加密。
+            // 用 X509CertificateLoader 而不是 new X509Certificate2(path, password, flags)：
+            // 后者自 .NET 9 起标记为过时（SYSLIB0057），且新 API 默认套用一套更严格的
+            // PKCS#12 加载限制（拒绝可疑的证书链/空密码等边缘形态），对正常 PFX 无影响。
+            var certificate = X509CertificateLoader.LoadPkcs12FromFile(
                 certificatePath,
                 certificatePassword,
                 X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);

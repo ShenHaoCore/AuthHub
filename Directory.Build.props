@@ -5,8 +5,15 @@
     注意：TargetFramework 在这里统一定义，单个 csproj 不再重复声明。
   -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <LangVersion>12.0</LangVersion>
+    <!--
+      目标框架是 net9.0：运行时内置了 OpenAPI 文档生成器（Microsoft.AspNetCore.OpenApi 的
+      AddOpenApi / MapOpenApi，.NET 9 引入），因此不再需要 Swashbuckle 这类第三方生成器。
+      LangVersion 跟着 TFM 走（net9.0 的默认语言版本是 C# 13）—— 这里显式写出来，
+      是为了让"框架版本 → 语言版本"这层对应关系在文件里一眼可见；
+      升 TFM 时记得一并核对它。
+    -->
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>13.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

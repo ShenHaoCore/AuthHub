@@ -1,6 +1,6 @@
 # AuthHub
 
-基于 **.NET 8 + OpenIddict 5.8** 的统一认证授权中心（Identity Provider）。
+基于 **.NET 9 + OpenIddict 5.8** 的统一认证授权中心（Identity Provider）。
 
 为下游多个应用提供一套账号体系与登录入口：一处登录，多处通行（SSO）；下游服务既能用
 Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无需回源。
@@ -49,19 +49,19 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 
 | 组件 | 版本 | 说明 |
 |------|------|------|
-| .NET / ASP.NET Core | 8.0 | `net8.0`，`LangVersion 12`，可空引用开启 |
+| .NET / ASP.NET Core | 9.0 | `net9.0`，`LangVersion 13`，可空引用开启 |
 | OpenIddict | **5.8.0** | Server + Validation + EF Core 集成 |
-| Entity Framework Core | 8.0.31 | Identity / OpenIddict / 自定义表共用一个 `DbContext` |
-| ASP.NET Core Identity | 8.0 | 用户、角色、密码哈希、锁定、MFA |
+| Entity Framework Core | 9.0.20 | Identity / OpenIddict / 自定义表共用一个 `DbContext` |
+| ASP.NET Core Identity | 9.0 | 用户、角色、密码哈希、锁定、MFA |
 | 数据库 | SQL Server（生产）/ SQLite（开发与测试） | 二者切换只需改配置 |
 | AutoMapper | 13.x | 实体 → DTO |
 | FluentValidation | 11.x | 校验规则集中在 Application 层，经 `ValidationFilter` 自动执行 |
 | Serilog | 8.x | Console + 按天滚动文件，可平滑接入 Seq / ELK |
-| Swashbuckle | 6.9.0 | **只用于生成 OpenAPI 文档 JSON**（引的是 `Swashbuckle.AspNetCore.SwaggerGen`，未使用其 Swagger UI） |
+| Microsoft.AspNetCore.OpenApi | 9.0（框架内置） | 生成 OpenAPI 文档 JSON（`AddOpenApi` / `MapOpenApi`），原生读取 `[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` |
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
-| Razor Pages | 8.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
+| Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 50 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 57 项 |
 
 ---
 
@@ -119,8 +119,8 @@ Api ──▶ Application ──▶ Domain
 
 ### 前置条件
 
-- **.NET SDK 9.0.200 及以上**。运行目标框架是 `net8.0`（见 `Directory.Build.props`），
-  但解决方案文件用的是新的 `.slnx` 格式，需要 9.0.200+ 的 SDK / IDE 才认识。
+- **.NET SDK 9.0.200 及以上**。运行目标框架是 `net9.0`（见 `Directory.Build.props`），
+  解决方案文件用的是 `.slnx` 格式，同样需要 9.0.200+ 的 SDK / IDE。
   不想升级 SDK 的话，也可以按项目路径操作：`dotnet build src/AuthHub.Api/AuthHub.Api.csproj`
   （CI 与 Dockerfile 就是这么做的，因此它们对 SDK 版本不敏感）。
 - 任选其一：SQL Server LocalDB（默认）/ SQL Server / SQLite
@@ -226,7 +226,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | 路径 | 说明 |
 |------|------|
 | `GET /scalar/v1` | Scalar 交互式 API 文档 UI（受 `AuthHub:Features:EnableApiDocs` 控制，Development 默认开） |
-| `GET /openapi/v1.json` | OpenAPI 文档 JSON（由 Swashbuckle 生成） |
+| `GET /openapi/v1.json` | OpenAPI 文档 JSON（由框架内置生成器产出） |
 
 ### 会话与账号（浏览器，Cookie 认证）
 
@@ -552,27 +552,20 @@ Bearer error="insufficient_access", error_description="The user represented by t
 `AllowPasswordFlow()` 只在 `AuthHub:Features:EnablePasswordFlow=true` 时启用（仅 Development 默认开）。
 资源所有者密码流程在 OAuth 2.1 里已被移除，生产不应启用。
 
-### 10. API 文档 UI 用 Scalar 而非 Swagger UI
+### 10. API 文档：Scalar + 框架内置生成器（Swashbuckle 已整体移除）
 
-需求里写的是 Swashbuckle 的 Swagger UI。这里**保留 Swashbuckle 生成 OpenAPI 文档**，
-只把展示层换成 Scalar：
+需求里写的是 Swashbuckle 的 Swagger UI。这里分两步走：先把**展示层**换成 Scalar
+（那时生成仍靠 Swashbuckle，只删了它的 Swagger UI 一半）；目标框架升到 net9.0 之后，
+**生成器**也换成了框架内置的 `AddOpenApi` / `MapOpenApi`，Swashbuckle 依赖整体删除：
 
 | 变化 | 说明 |
 |------|------|
-| 包引用 | 只引 `Swashbuckle.AspNetCore.SwaggerGen`，不再引完整的 `Swashbuckle.AspNetCore`（后者会捎带 SwaggerUI 的静态资源，已用不上） |
-| 文档路径 | 从 `swagger/v1/swagger.json` 改为 `openapi/{documentName}.json` —— 这是 Scalar 的默认约定，对齐后少一处需要两边手工同步的配置 |
+| 包引用 | `Swashbuckle.AspNetCore.SwaggerGen` → `Microsoft.AspNetCore.OpenApi`（.NET 9 起随框架提供的 NuGet 包） |
+| 生成入口 | `AddSwaggerGen` + `UseSwagger` → `AddOpenApi` + `MapOpenApi`；文档标题 / OAuth2 方案改由文档转换器声明（见 `OpenApiExtensions`） |
+| 文档路径 | `/openapi/{documentName}.json` —— 内置生成器的默认约定与 Scalar 的默认约定相同，两边共用 `OpenApiExtensions.DocumentRoutePattern` 一个常量 |
 | UI 地址 | `/scalar/v1`（受 `AuthHub:Features:EnableApiDocs` 控制，Development 默认开） |
 | 配置项改名 | `AuthHub:Features:EnableSwagger` → `AuthHub:Features:EnableApiDocs`，让名字与实现一致 |
 | 旧路径 | `/swagger/index.html`、`/swagger/v1/swagger.json` 现在都返回 404 |
-
-**为什么没顺手把 Swashbuckle 也从依赖里删掉**：它现在只剩「生成文档」这一半
-（Swagger UI 的中间件与静态资源已清空，代码面只有 `AddSwaggerGen` + `UseSwagger` 两处）。
-ASP.NET Core 内置的运行时文档端点（`AddOpenApi` / `MapOpenApi`）是 **.NET 9** 才有的 API，
-本项目目标框架是 net8.0，而 Scalar 需要一个运行时可取的文档 JSON URL。
-net8.0 上的另一条路 `Microsoft.Extensions.ApiDescription.Server` 是**构建期**生成，
-且它只是个宿主、仍要挂 provider（Swashbuckle / NSwag），换汤不换药。
-即「彻底删掉 Swashbuckle」等价于「升级目标框架到 net9.0+」，不在本次范围。
-
 
 换 UI 的实际理由：Scalar 对 OAuth2 授权码流程的调试更顺手，且它的前端资源
 **内嵌在程序集里、由本地路由提供**（`/scalar/scalar.js`），**不从 CDN 加载** ——
@@ -583,16 +576,38 @@ Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PK
 客户端凭证流程预填 `m2m-service`。**机密客户端的密钥不写进代码**，
 需要在 UI 的认证面板里手工填写。
 
+#### 换生成器时踩到的两个隐式行为（都有契约测试守着）
+
+**① ApiExplorer 的可见性。** 内置生成器只认 ApiExplorer 里「可见」的端点，而 MVC 默认
+只把标注了 `[ApiController]` 的控制器交给 ApiExplorer。本项目有两个控制器**故意不加**
+`[ApiController]`（`AccountController` / `AuthorizationController` 要返回 HTML 与 302，
+加了会改变运行时行为），于是 `/account/*`、`/connect/*`（含 OIDC 的 token / authorize /
+userinfo / logout，共 14 个端点）会**静默**从文档里消失 —— 而其余断言全部照常通过。
+以前看不到这个坑，是因为 Swashbuckle 在 `AddSwaggerGen` 里注册了同样作用的约定
+（其源码原话："Add Mvc convention to ensure ApiExplorer is enabled for all actions"）。
+现在由 `OpenApiExtensions.AddAuthHubOpenApi` 显式补上 `ApiVisibilityConvention`，
+`OpenApi_document_should_cover_non_api_controllers_too` 这条测试守着它。
+
+**② XML 注释不再被读取。** Swashbuckle 在运行时解析程序集的 `.xml` 注释文件；
+内置生成器不读它（随源生成器提供的 XML 注释支持要到 .NET 10 才有）。
+影响面实测如下：
+
+| 内容 | 影响 |
+|------|------|
+| 端点摘要 / 描述 | 无 —— 来自 `[EndpointSummary]` / `[EndpointDescription]`，内置生成器原生支持 |
+| 分组描述（Scalar 侧边栏分组标题下的说明） | 会丢，由 `ApplyTagDescriptions` 从控制器 `<summary>` 补回，`Every_tag_should_have_a_description` 守着 |
+| DTO 属性说明、参数说明 | 本来就没有（DTO 的 XML 在另一个程序集里，Swashbuckle 当年也只加载了 Api 程序集自己的 .xml） |
+
 侧边栏的分组与每个端点的摘要 / 描述都是中文标注，来自控制器上的
-`[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` 特性（.NET 8 官方元数据）。
+`[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` 特性（.NET 8 起的官方端点元数据，
+内置生成器原生读取 —— 因此也不再需要当年为「特性 vs XML 注释优先级」写的过滤器）。
 两个约定：
 
 - **新增端点记得同样标注**，否则会掉进以程序集名命名的默认分组（"AuthHub.Api"），
   与中文分组混在一起 —— `Every_operation_should_declare_group_summary_and_description`
   这条契约测试会拦住它。
 - 代码里的 XML `<summary>` 面向维护者，可以写长；特性标注面向调用者，保持一行短句。
-  两者同时存在时**特性优先**（`OpenApiExtensions.EndpointMetadataOperationFilter`
-  负责这件事——Swashbuckle 原生会让 XML 注释覆盖特性，见该过滤器注释）。
+  控制器的 `<summary>` 同时充当文档里的分组描述。
 
 ### 11. 为管理后台引入 Razor Pages（对"零视图依赖"取舍的修订）
 
