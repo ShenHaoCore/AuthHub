@@ -53,6 +53,52 @@ public class ApiDocsTests
         flows.TryGetProperty("clientCredentials", out _).Should().BeTrue(because: "M2M 调试依赖它");
     }
 
+    /// <summary>
+    /// 文档里每个操作都必须有分组、摘要与描述。
+    ///
+    /// 这是把 <c>[Tags]</c> / <c>[EndpointSummary]</c> / <c>[EndpointDescription]</c>
+    /// 用起来之后立下的契约，防两种回归：
+    /// <list type="number">
+    ///   <item>新增端点忘了标注 —— 会掉进以程序集名命名的默认分组（"AuthHub.Api"），
+    ///         在 Scalar 侧边栏里与中文分组格格不入；</item>
+    ///   <item>OpenApiExtensions 里的 EndpointMetadataOperationFilter 被删 ——
+    ///         [EndpointSummary] 会被 XML 注释静默覆盖，短摘要变回面向维护者的长注释。</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public async Task Every_operation_should_declare_group_summary_and_description()
+    {
+        using var factory = CreateApiDocsFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var paths = document.RootElement.GetProperty("paths");
+
+        paths.EnumerateObject().Should().NotBeEmpty(because: "文档里理应能找到已暴露的端点");
+
+        foreach (var path in paths.EnumerateObject())
+        {
+            foreach (var operation in path.Value.EnumerateObject())
+            {
+                // 形如 "GET /api/users" 的标识，让断言失败时能直接定位到端点
+                var id = $"{operation.Name.ToUpperInvariant()} {path.Name}";
+
+                operation.Value.TryGetProperty("tags", out var tags).Should()
+                    .BeTrue(because: $"{id} 必须用 [Tags] 声明分组");
+                tags.GetArrayLength().Should().BeGreaterThan(0, because: $"{id} 的分组不能为空");
+                tags[0].GetString().Should().NotBe("AuthHub.Api",
+                    because: $"{id} 落进了程序集名命名的默认分组，说明漏标了 [Tags]");
+
+                operation.Value.TryGetProperty("summary", out var summary).Should().BeTrue();
+                summary.GetString().Should().NotBeNullOrWhiteSpace(because: $"{id} 缺少摘要（[EndpointSummary]）");
+
+                operation.Value.TryGetProperty("description", out var description).Should().BeTrue();
+                description.GetString().Should().NotBeNullOrWhiteSpace(because: $"{id} 缺少描述（[EndpointDescription]）");
+            }
+        }
+    }
+
     [Fact]
     public async Task Scalar_ui_should_serve_assets_locally_without_any_cdn()
     {

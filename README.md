@@ -574,6 +574,17 @@ Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PK
 客户端凭证流程预填 `m2m-service`。**机密客户端的密钥不写进代码**，
 需要在 UI 的认证面板里手工填写。
 
+侧边栏的分组与每个端点的摘要 / 描述都是中文标注，来自控制器上的
+`[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` 特性（.NET 8 官方元数据）。
+两个约定：
+
+- **新增端点记得同样标注**，否则会掉进以程序集名命名的默认分组（"AuthHub.Api"），
+  与中文分组混在一起 —— `Every_operation_should_declare_group_summary_and_description`
+  这条契约测试会拦住它。
+- 代码里的 XML `<summary>` 面向维护者，可以写长；特性标注面向调用者，保持一行短句。
+  两者同时存在时**特性优先**（`OpenApiExtensions.EndpointMetadataOperationFilter`
+  负责这件事——Swashbuckle 原生会让 XML 注释覆盖特性，见该过滤器注释）。
+
 ### 11. 为管理后台引入 Razor Pages（对"零视图依赖"取舍的修订）
 
 早期版本的注释里写着"为什么不用 Razor：本项目的定位是 OIDC 服务端 + 管理 API"。

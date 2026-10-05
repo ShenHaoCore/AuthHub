@@ -18,6 +18,7 @@ namespace AuthHub.Api.Controllers;
 ///
 /// 该控制器不加 [ApiController]：需要返回 HTML 页面与 302 跳转。
 /// </summary>
+[Tags("登录与提示页")]
 [Route("account")]
 public class AccountController : Controller
 {
@@ -40,10 +41,14 @@ public class AccountController : Controller
 
     // ------------------------------------------------------------------ 登录
 
+    [EndpointSummary("登录页")]
+    [EndpointDescription("浏览器表单页；未登录访问受保护页面时会跳到这里。")]
     [HttpGet("login")]
     public IActionResult Login([FromQuery] string? returnUrl = null, [FromQuery] string? error = null)
         => Html(HtmlPages.LoginPage(SafeReturnUrl(returnUrl), IssueAntiforgeryToken(), error));
 
+    [EndpointSummary("提交登录")]
+    [EndpointDescription("表单提交；成功 302 回 returnUrl，启用 MFA 则转两步验证页。")]
     [HttpPost("login")]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
@@ -90,6 +95,8 @@ public class AccountController : Controller
 
     // ------------------------------------------------------------------ 两步验证
 
+    [EndpointSummary("两步验证页")]
+    [EndpointDescription("浏览器表单页；没有待验证票据时回到登录页。")]
     [HttpGet("2fa")]
     public IActionResult TwoFactor([FromQuery] string? returnUrl = null, [FromQuery] string? error = null)
     {
@@ -102,6 +109,8 @@ public class AccountController : Controller
         return Html(HtmlPages.TwoFactorPage(SafeReturnUrl(returnUrl), IssueAntiforgeryToken(), error));
     }
 
+    [EndpointSummary("提交两步验证码")]
+    [EndpointDescription("校验通过后建立登录会话。")]
     [HttpPost("2fa")]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
@@ -148,6 +157,8 @@ public class AccountController : Controller
     ///
     /// 用 POST + 防伪令牌而不是 GET：GET 登出可以被任意页面用一张图片触发。
     /// </summary>
+    [EndpointSummary("退出登录（页面）")]
+    [EndpointDescription("清除会话后停在“已退出”提示页。")]
     [HttpPost("logout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
@@ -160,10 +171,14 @@ public class AccountController : Controller
 
     // ------------------------------------------------------------------ 提示页
 
+    [EndpointSummary("已退出提示页")]
+    [EndpointDescription("静态提示页，引导重新登录。")]
     [HttpGet("loggedout")]
     public IActionResult LoggedOut()
         => Html(HtmlPages.MessagePage("已退出登录", "你的 AuthHub 会话已结束。关闭浏览器标签页，或重新登录。", "/account/login", "重新登录"));
 
+    [EndpointSummary("无权访问提示页")]
+    [EndpointDescription("已登录但缺少所需权限时跳转到这里。")]
     [HttpGet("denied")]
     public IActionResult Denied()
         => Html(HtmlPages.MessagePage("无权访问", "当前账号没有访问该资源的权限。", "/", "返回首页"));

@@ -1,7 +1,9 @@
 using System.Reflection;
 using AuthHub.Domain.Constants;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace AuthHub.Api.Extensions;
 
@@ -77,6 +79,11 @@ public static class OpenApiExtensions
             {
                 options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
             }
+
+            // 关键：本行必须在 IncludeXmlComments **之后**。
+            // OperationFilter 按注册顺序执行，放在最后才能让 [EndpointSummary] / [EndpointDescription]
+            // 覆盖 XML 注释里的长文本，见 EndpointMetadataOperationFilter 的类型注释。
+            options.OperationFilter<EndpointMetadataOperationFilter>();
         });
 
         return services;
@@ -153,6 +160,44 @@ public static class OpenApiExtensions
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// 让 .NET 8 的 <c>[EndpointSummary]</c> / <c>[EndpointDescription]</c> 优先于 XML 注释。
+    /// </summary>
+    /// <remarks>
+    /// 为什么需要它：Swashbuckle 先生成操作（此时把端点元数据里的 summary / description 写进
+    /// <see cref="OpenApiOperation"/>），**再**依次执行 <c>IOperationFilter</c>；
+    /// 而 <c>IncludeXmlComments</c> 注册的 XmlCommentsOperationFilter 会直接给
+    /// <see cref="OpenApiOperation.Summary"/> 赋值。结果是：只要 action 上写了 <c>&lt;summary&gt;</c>，
+    /// 特性标注就被静默覆盖，文档里显示的是面向代码维护者的那段长注释。
+    ///
+    /// 本过滤器注册在 <c>IncludeXmlComments</c> 之后（按注册顺序最后执行），
+    /// 只把「确实标了特性」的端点覆盖回特性值；没标特性的端点仍沿用 XML 注释，
+    /// 因此两种写法可以共存、逐端点选择。
+    /// </remarks>
+    private sealed class EndpointMetadataOperationFilter : IOperationFilter
+    {
+        public void Apply(OpenApiOperation operation, OperationFilterContext context)
+        {
+            var metadata = context.ApiDescription.ActionDescriptor.EndpointMetadata;
+            if (metadata is null)
+            {
+                return;
+            }
+
+            var summary = metadata.OfType<IEndpointSummaryMetadata>().LastOrDefault()?.Summary;
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                operation.Summary = summary;
+            }
+
+            var description = metadata.OfType<IEndpointDescriptionMetadata>().LastOrDefault()?.Description;
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                operation.Description = description;
+            }
+        }
     }
 
     /// <summary>
