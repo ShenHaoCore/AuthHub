@@ -338,7 +338,7 @@ dotnet test tests/AuthHub.IntegrationTests
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
 | `AuthHub.UnitTests` | 66 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"） |
-| `AuthHub.IntegrationTests` | 50 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用） |
+| `AuthHub.IntegrationTests` | 65 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
@@ -576,17 +576,48 @@ Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PK
 客户端凭证流程预填 `m2m-service`。**机密客户端的密钥不写进代码**，
 需要在 UI 的认证面板里手工填写。
 
+#### 文档只收录面向调用方的接口（页面与站点跳转不在其中）
+
+侧边栏里只有三类内容：`/api/*` 各业务接口、`/api/account/*` 账号自助接口、
+`/connect/*` OIDC 协议端点。
+
+产出**浏览器页面**的端点被有意排除。文档的读者是 API 调用方，而登录页 / 两步验证页
+需要会话 + 防伪令牌，既不能在 Scalar 里直接发起，也不该在接口清单里冒充"接口"：
+
+| 排除的内容 | 位置 | 做法 |
+|---|---|---|
+| `/account/login`、`/account/2fa`、`/account/logout`、`/account/denied`、`/account/loggedout` | `AccountController` | `[ApiExplorerSettings(IgnoreApi = true)]` |
+| `GET /`（302 跳到 `/admin`） | `Program.cs` | `ExcludeFromDescription()` |
+
+两点容易走错：
+
+- **别用「去掉 `ApiVisibilityConvention`」来实现这件事。** 那个约定是专门给 `/connect/*`
+  用的（见下节 ①），去掉它连 OIDC 主端点一起丢。框架的 `ApiVisibilityConvention`
+  只在控制器与动作的 `IsVisible` **都为 null** 时才点亮，所以控制器上的显式 `false`
+  不会被它覆盖 —— 两件事互不干扰，各自留在声明处。
+- **程序化入口是 `/api/account/*`**，与页面的 `/account/*` 是两套（前者 JSON、
+  后者 HTML + 表单）。摘掉页面端点不影响任何调用方。
+
+`Page_endpoints_should_stay_out_of_the_document` 守着这条边界：既断言页面没混进来，
+也断言 `/connect/token` 还在 —— 两侧共用同一个可见性开关，很容易一刀切过头。
+
 #### 换生成器时踩到的两个隐式行为（都有契约测试守着）
 
 **① ApiExplorer 的可见性。** 内置生成器只认 ApiExplorer 里「可见」的端点，而 MVC 默认
 只把标注了 `[ApiController]` 的控制器交给 ApiExplorer。本项目有两个控制器**故意不加**
 `[ApiController]`（`AccountController` / `AuthorizationController` 要返回 HTML 与 302，
-加了会改变运行时行为），于是 `/account/*`、`/connect/*`（含 OIDC 的 token / authorize /
-userinfo / logout，共 14 个端点）会**静默**从文档里消失 —— 而其余断言全部照常通过。
+加了会改变运行时行为），于是它们的端点会**静默**从文档里消失 —— 而其余断言全部照常通过。
+当年一次丢的是 14 个（7 个 `/account/*` + 7 个 `/connect/*`）。
 以前看不到这个坑，是因为 Swashbuckle 在 `AddSwaggerGen` 里注册了同样作用的约定
 （其源码原话："Add Mvc convention to ensure ApiExplorer is enabled for all actions"）。
-现在由 `OpenApiExtensions.AddAuthHubOpenApi` 显式补上 `ApiVisibilityConvention`，
+现在由 `OpenApiExtensions.AddAuthHubOpenApi` 显式补上框架的 `ApiVisibilityConvention`
+（`IActionModelConvention`，只在 `IsVisible` 为 null 时点亮，所以不会覆盖显式的 false），
 `OpenApi_document_should_cover_non_api_controllers_too` 这条测试守着它。
+
+三种配置下的操作总数（去掉约定再生成一次对比即得，别凭印象）：
+不补约定 → 45 个、`/connect/*` 整组消失；补约定、还没摘页面 → 60 个；
+现在（补约定 + 摘页面）→ 52 个。因此**约定只对 `/connect/*` 有净贡献（7 个）**，
+摘页面的开关独立于它，改哪个都不会顺手把另一个弄坏。
 
 **② XML 注释不再被读取。** Swashbuckle 在运行时解析程序集的 `.xml` 注释文件；
 内置生成器不读它（随源生成器提供的 XML 注释支持要到 .NET 10 才有）。
@@ -601,11 +632,14 @@ userinfo / logout，共 14 个端点）会**静默**从文档里消失 —— �
 侧边栏的分组与每个端点的摘要 / 描述都是中文标注，来自控制器上的
 `[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` 特性（.NET 8 起的官方端点元数据，
 内置生成器原生读取 —— 因此也不再需要当年为「特性 vs XML 注释优先级」写的过滤器）。
-两个约定：
+三个约定：
 
 - **新增端点记得同样标注**，否则会掉进以程序集名命名的默认分组（"AuthHub.Api"），
   与中文分组混在一起 —— `Every_operation_should_declare_group_summary_and_description`
   这条契约测试会拦住它。
+- **新增的页面型端点记得关掉可见性**（控制器上 `[ApiExplorerSettings(IgnoreApi = true)]`，
+  Minimal API 用 `ExcludeFromDescription()`）。这里默认是"收录"，忘了关只会多几个噪音端点，
+  不会静默丢接口 —— 有意选了这个方向：漏收是看不见的故障，多收是一眼能看出来的。
 - 代码里的 XML `<summary>` 面向维护者，可以写长；特性标注面向调用者，保持一行短句。
   控制器的 `<summary>` 同时充当文档里的分组描述。
 

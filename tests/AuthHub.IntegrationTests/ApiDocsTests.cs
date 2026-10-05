@@ -95,15 +95,13 @@ public class ApiDocsTests
     }
 
     /// <summary>
-    /// 文档必须覆盖**全部**控制器，包括两个故意不加 <c>[ApiController]</c> 的
-    /// （登录页 / 提示页 / OIDC 协议端点）。
+    /// 文档必须覆盖**故意不加 <c>[ApiController]</c> 的 OIDC 协议控制器**。
     ///
     /// 为什么值得单独写一条测试：MVC 默认只把 <c>[ApiController]</c> 控制器交给 ApiExplorer，
     /// 而文档生成器只认 ApiExplorer 里「可见」的端点。以前这件事由 Swashbuckle 的
     /// <c>SwaggerApplicationConvention</c> 隐式兜着，换成框架内置生成器后必须自己显式声明
     /// （见 <c>OpenApiExtensions.AddAuthHubOpenApi</c>）。丢掉那个约定的症状是
-    /// **静默少 14 个端点**（含 /connect/token、/connect/userinfo 这些 OIDC 主端点），
-    /// 而其余断言全都照样通过。
+    /// <c>/connect/*</c> 整组消失（14 个端点，含 token / userinfo），而其余断言全都照样通过。
     /// </summary>
     [Fact]
     public async Task OpenApi_document_should_cover_non_api_controllers_too()
@@ -119,15 +117,55 @@ public class ApiDocsTests
             .Select(tag => tag.GetProperty("name").GetString())
             .ToList();
 
-        tags.Should().Contain(["登录与提示页", "OIDC 协议"],
-            because: "这两个分组来自未标注 [ApiController] 的控制器，最容易从文档里消失");
+        tags.Should().Contain("OIDC 协议",
+            because: "该分组来自未标注 [ApiController] 的控制器，最容易从文档里消失");
 
         var paths = root.GetProperty("paths");
-        foreach (var path in new[] { "/connect/token", "/connect/userinfo", "/account/login" })
+        foreach (var path in new[] { "/connect/token", "/connect/userinfo", "/connect/authorize" })
         {
             paths.TryGetProperty(path, out _).Should().BeTrue(
-                because: $"{path} 属于 OIDC / 登录流程，是文档的一部分");
+                because: $"{path} 是 OIDC 协议端点，属于文档的一部分");
         }
+    }
+
+    /// <summary>
+    /// 文档只收录面向调用方的接口，**不得**收录浏览器页面。
+    ///
+    /// 页面型端点在文档里是有害的：它们需要会话与防伪令牌，无法从 Scalar 直接发起，
+    /// 点一下只会误导调用方；同时「登录与提示页」这种分组出现在接口清单里本身就不像接口文档。
+    /// 因此 <c>AccountController</c> 显式 <c>IgnoreApi</c>、根路径显式
+    /// <c>ExcludeFromDescription()</c> —— 这条测试同时守住「页面别混进来」和
+    /// 「OIDC 协议别被顺手一起关掉」两侧。
+    /// </summary>
+    [Fact]
+    public async Task Page_endpoints_should_stay_out_of_the_document()
+    {
+        using var factory = CreateApiDocsFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+
+        var leakedTags = root.GetProperty("tags").EnumerateArray()
+            .Select(tag => tag.GetProperty("name").GetString())
+            .Where(name => name is "登录与提示页" or "站点入口")
+            .ToList();
+
+        leakedTags.Should().BeEmpty(
+            because: "这两个分组只包含 HTML 页面与 302 跳转，不是接口文档该有的内容");
+
+        var leakedPaths = root.GetProperty("paths").EnumerateObject()
+            .Select(path => path.Name)
+            .Where(path => path.StartsWith("/account/", StringComparison.Ordinal) || path == "/")
+            .ToList();
+
+        leakedPaths.Should().BeEmpty(
+            because: "登录 / 两步验证 / 提示页都是浏览器页面；程序化入口是 /api/account/*");
+
+        // 反面对照：摘掉页面的同时，OIDC 协议端点必须还在。
+        // 两者都靠 ApiExplorer 的可见性开关，很容易一刀切过头。
+        root.GetProperty("paths").TryGetProperty("/connect/token", out _).Should().BeTrue();
     }
 
     /// <summary>
@@ -136,8 +174,6 @@ public class ApiDocsTests
     /// 分组描述来自控制器类上的 XML <c>&lt;summary&gt;</c>，而框架内置的文档生成器
     /// **不读 XML 注释**（.NET 10 才随源生成器提供），得由
     /// <c>OpenApiExtensions.ApplyTagDescriptions</c> 自己补 —— 这条测试就是它的护栏。
-    ///
-    /// 例外是 Minimal API 的「站点入口」：它没有控制器类型，也就没有可查的 XML 注释。
     /// </summary>
     [Fact]
     public async Task Every_tag_should_have_a_description()
@@ -149,7 +185,6 @@ public class ApiDocsTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         var withoutDescription = document.RootElement.GetProperty("tags").EnumerateArray()
-            .Where(tag => tag.GetProperty("name").GetString() != "站点入口")
             .Where(tag => !tag.TryGetProperty("description", out var description)
                           || string.IsNullOrWhiteSpace(description.GetString()))
             .Select(tag => tag.GetProperty("name").GetString())

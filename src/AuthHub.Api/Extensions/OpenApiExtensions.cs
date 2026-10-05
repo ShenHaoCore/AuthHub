@@ -31,6 +31,14 @@ namespace AuthHub.Api.Extensions;
 ///   <item>XML 注释：内置生成器不读它（.NET 10 才有），分组描述由
 ///         <see cref="ApplyTagDescriptions"/> 自己补，其余内容本来就不依赖它。</item>
 /// </list>
+///
+/// 收录范围（有意为之，别当成漏了）：文档只收**面向调用方**的端点 ——
+/// 各 <c>/api/*</c> 业务接口、OIDC 协议端点 <c>/connect/*</c>。
+/// 产出浏览器页面的控制器与站点跳转不进来，它们各自在声明处显式关掉
+/// （<c>AccountController</c> 用 <c>[ApiExplorerSettings(IgnoreApi = true)]</c>、
+/// 根路径用 <c>ExcludeFromDescription()</c>）。原因是文档的读者是 API 调用方，
+/// 而登录页 / 提示页需要会话与防伪令牌，既不能在 Scalar 里直接发起，
+/// 出现在侧边栏里也只是噪音。
 /// </remarks>
 public static class OpenApiExtensions
 {

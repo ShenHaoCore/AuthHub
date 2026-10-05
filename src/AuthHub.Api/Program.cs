@@ -410,12 +410,14 @@ app.UseAuthorization();
 // 没有这一行时，用户打开 https://host:port/ 会得到 404（根路径没有任何路由），
 // 无从判断该往哪走 —— 而这是任何人第一次访问站点时最自然的入口。
 //
-// 这里显式标注文档元数据：不标的话它会以程序集名（AuthHub.Api）自成一组出现在
-// API 文档侧边栏里，与其它中文分组格格不入。
+// 这一条不进 API 文档：它是一个浏览器跳转，不是接口。
+//
+// 注意别把它退回成 WithTags/WithSummary 的写法 —— 那是"用文档元数据包装一个非接口"，
+// 结果是 Scalar 侧边栏里凭空多出一个「站点入口」分组，点进去只有一个会 302 的 GET /。
+// 摘掉它的正确做法是 ExcludeFromDescription()，与 AccountController 上的
+// [ApiExplorerSettings(IgnoreApi = true)] 一个意思（那边是控制器，这边是 Minimal API）。
 app.MapGet("/", () => Results.Redirect("/admin"))
-    .WithTags("站点入口")
-    .WithSummary("站点入口")
-    .WithDescription("302 跳转到管理后台 /admin；未登录会继续跳登录页。");
+    .ExcludeFromDescription();
 
 app.MapControllers();
 app.MapRazorPages();
