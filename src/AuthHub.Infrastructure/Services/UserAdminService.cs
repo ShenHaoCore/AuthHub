@@ -137,7 +137,7 @@ public sealed class UserAdminService : IUserAdminService
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
-            return Result.Failure<UserDto>(MapIdentityErrors(result));
+            return Result.Failure<UserDto>(result.ToError());
         }
 
         await _userManager.AddToRolesAsync(user, roles);
@@ -200,7 +200,7 @@ public sealed class UserAdminService : IUserAdminService
         var update = await _userManager.UpdateAsync(user);
         if (!update.Succeeded)
         {
-            return Result.Failure<UserDto>(MapIdentityErrors(update));
+            return Result.Failure<UserDto>(update.ToError());
         }
 
         if (request.IsActive == false)
@@ -232,7 +232,7 @@ public sealed class UserAdminService : IUserAdminService
         var result = await _userManager.DeleteAsync(user);
         if (!result.Succeeded)
         {
-            return Result.Failure(MapIdentityErrors(result));
+            return Result.Failure(result.ToError());
         }
 
         await _audit.LogAsync(
@@ -274,13 +274,13 @@ public sealed class UserAdminService : IUserAdminService
         if (toAdd.Length > 0)
         {
             var addResult = await _userManager.AddToRolesAsync(user, toAdd);
-            if (!addResult.Succeeded) return Result.Failure<UserDto>(MapIdentityErrors(addResult));
+            if (!addResult.Succeeded) return Result.Failure<UserDto>(addResult.ToError());
         }
 
         if (toRemove.Length > 0)
         {
             var removeResult = await _userManager.RemoveFromRolesAsync(user, toRemove);
-            if (!removeResult.Succeeded) return Result.Failure<UserDto>(MapIdentityErrors(removeResult));
+            if (!removeResult.Succeeded) return Result.Failure<UserDto>(removeResult.ToError());
         }
 
         // 角色变更会影响权限声明，刷新安全戳让旧会话/令牌失效
@@ -309,7 +309,7 @@ public sealed class UserAdminService : IUserAdminService
         var result = await _userManager.SetLockoutEndDateAsync(user, locked ? DateTimeOffset.MaxValue : null);
         if (!result.Succeeded)
         {
-            return Result.Failure<UserDto>(MapIdentityErrors(result));
+            return Result.Failure<UserDto>(result.ToError());
         }
 
         if (locked)
@@ -358,16 +358,5 @@ public sealed class UserAdminService : IUserAdminService
         return pairs
             .GroupBy(p => p.UserId)
             .ToDictionary(g => g.Key, g => g.Select(p => p.Name!).ToArray());
-    }
-
-    private static Error MapIdentityErrors(IdentityResult result)
-    {
-        if (result.Succeeded) return Error.None;
-
-        var errors = result.Errors
-            .GroupBy(e => e.Code)
-            .ToDictionary(g => g.Key, g => g.Select(e => e.Description).ToArray());
-
-        return Error.Validation(string.Join(" ", result.Errors.Select(e => e.Description)), errors);
     }
 }

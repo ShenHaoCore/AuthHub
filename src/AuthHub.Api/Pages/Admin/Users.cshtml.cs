@@ -13,13 +13,13 @@ namespace AuthHub.Api.Pages.Admin;
 /// 用户管理。
 ///
 /// 交互遵循 PRG（Post-Redirect-Get）：POST 成功后 302 回列表，刷新页面不会重复提交；
-/// POST 失败则原地重新渲染并把弹窗重新打开（<see cref="OpenDialog"/>），用户填过的值不丢。
+/// POST 失败则原地重新渲染并把弹窗重新打开（<see cref="AdminPageModel.OpenDialog"/>），用户填过的值不丢。
 ///
 /// 所有写操作都直接调用 Application 层的管理服务，因此与 <c>/api/users</c> 走完全相同的
 /// 校验、审计与安全戳刷新逻辑 —— 后台不会成为绕过审计的后门。
 /// </summary>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.UsersManage)]
-public class UsersModel : PageModel
+public class UsersModel : AdminPageModel
 {
     private const int DefaultPageSize = 20;
 
@@ -50,8 +50,6 @@ public class UsersModel : PageModel
     public string? ActiveFilter { get; set; }
 
     // ------------------------------------------------------------------ 表单字段（POST）
-
-    [BindProperty] public string? ReturnUrl { get; set; }
 
     [BindProperty] public string? NewUserName { get; set; }
 
@@ -89,22 +87,11 @@ public class UsersModel : PageModel
     /// <summary>全部角色（用于筛选下拉与编辑弹窗的角色勾选）。</summary>
     public IReadOnlyCollection<RoleDto> AllRoles { get; private set; } = Array.Empty<RoleDto>();
 
-    /// <summary>POST 失败时展示的错误文本。</summary>
-    public string? FormError { get; private set; }
+    // ------------------------------------------------------------------ 基类钩子（见 AdminPageModel）
 
-    /// <summary>POST 失败时需要重新打开的弹窗：create / edit。</summary>
-    public string? OpenDialog { get; private set; }
+    protected override string ListPath => "/admin/users";
 
-    /// <summary>当前列表地址（含筛选条件），供 POST 后跳回原位置。</summary>
-    public string CurrentUrl => $"{Request.Path}{Request.QueryString}";
-
-    /// <summary>新建弹窗是否需要在页面加载后自动打开（上一次提交失败）。</summary>
-    public bool AutoOpenCreate => string.Equals(OpenDialog, "create", StringComparison.Ordinal);
-
-    /// <summary>该行的编辑弹窗是否需要自动打开。</summary>
-    public bool IsEditFailure(string userId)
-        => string.Equals(OpenDialog, "edit", StringComparison.Ordinal)
-           && string.Equals(EditId, userId, StringComparison.Ordinal);
+    protected override string? EditingId => EditId;
 
     /// <summary>分页组件模型。</summary>
     public Pages.Shared.PaginationModel Pagination => new()
@@ -126,7 +113,7 @@ public class UsersModel : PageModel
         ViewData["Title"] = "用户";
         ViewData["NavKey"] = "users";
 
-        await LoadAsync(cancellationToken);
+        await LoadDataAsync(cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：新建
@@ -135,7 +122,7 @@ public class UsersModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(NewUserName) || string.IsNullOrWhiteSpace(NewEmail))
         {
-            return await FailAsync("create", Error.Validation("用户名与邮箱为必填项。"), cancellationToken);
+            return await FailAsync(CreateDialog, Error.Validation("用户名与邮箱为必填项。"), cancellationToken);
         }
 
         var result = await _users.CreateAsync(
@@ -143,17 +130,16 @@ public class UsersModel : PageModel
                 NewUserName.Trim(),
                 NewEmail.Trim(),
                 NewPassword ?? string.Empty,
-                string.IsNullOrWhiteSpace(NewDisplayName) ? null : NewDisplayName.Trim(),
+                TrimToNull(NewDisplayName),
                 NewRoles.Length > 0 ? NewRoles : null),
             cancellationToken);
 
         if (result.IsFailure)
         {
-            return await FailAsync("create", result.Error, cancellationToken);
+            return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已创建用户 {result.Value.UserName}（角色：{DescribeRoles(result.Value.Roles)}）。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已创建用户 {result.Value.UserName}（角色：{DescribeRoles(result.Value.Roles)}）。");
     }
 
     // ------------------------------------------------------------------ POST：保存编辑
@@ -171,23 +157,23 @@ public class UsersModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(EditId))
         {
-            return await FailAsync("edit", Error.Validation("缺少用户标识。"), cancellationToken);
+            return await FailAsync(EditDialog, Error.Validation("缺少用户标识。"), cancellationToken);
         }
 
         if (string.IsNullOrWhiteSpace(EditEmail))
         {
-            return await FailAsync("edit", Error.Validation("邮箱不能为空。"), cancellationToken);
+            return await FailAsync(EditDialog, Error.Validation("邮箱不能为空。"), cancellationToken);
         }
 
         if (string.IsNullOrWhiteSpace(EditDisplayName))
         {
-            return await FailAsync("edit", Error.Validation("显示名不能为空。"), cancellationToken);
+            return await FailAsync(EditDialog, Error.Validation("显示名不能为空。"), cancellationToken);
         }
 
         var current = await _users.GetByIdAsync(EditId, cancellationToken);
         if (current.IsFailure)
         {
-            return await FailAsync("edit", current.Error, cancellationToken);
+            return await FailAsync(EditDialog, current.Error, cancellationToken);
         }
 
         var existing = current.Value;
@@ -212,7 +198,7 @@ public class UsersModel : PageModel
 
         if (update.IsFailure)
         {
-            return await FailAsync("edit", update.Error, cancellationToken);
+            return await FailAsync(EditDialog, update.Error, cancellationToken);
         }
 
         var desired = EditRoles.Distinct(StringComparer.Ordinal).OrderBy(r => r, StringComparer.Ordinal).ToArray();
@@ -224,18 +210,15 @@ public class UsersModel : PageModel
 
             if (assign.IsFailure)
             {
-                return await FailAsync("edit", assign.Error, cancellationToken);
+                return await FailAsync(EditDialog, assign.Error, cancellationToken);
             }
 
-            TempData["Success"] =
+            return RedirectBackWithSuccess(
                 $"已保存 {existing.UserName} 的资料并更新角色（{DescribeRoles(desired)}）。" +
-                "角色变更会刷新安全戳，该用户的旧会话与令牌已失效。";
-
-            return RedirectBack();
+                "角色变更会刷新安全戳，该用户的旧会话与令牌已失效。");
         }
 
-        TempData["Success"] = $"已保存 {existing.UserName} 的资料。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已保存 {existing.UserName} 的资料。");
     }
 
     // ------------------------------------------------------------------ POST：锁定 / 解锁
@@ -253,11 +236,9 @@ public class UsersModel : PageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = Locked
+        return RedirectBackWithSuccess(Locked
             ? $"已锁定 {result.Value.UserName}，其现有会话已失效。"
-            : $"已解除 {result.Value.UserName} 的锁定。";
-
-        return RedirectBack();
+            : $"已解除 {result.Value.UserName} 的锁定。");
     }
 
     // ------------------------------------------------------------------ POST：强制下线
@@ -275,10 +256,8 @@ public class UsersModel : PageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        TempData["Success"] =
-            $"已撤销 {result.Value.Tokens} 个令牌与 {result.Value.Authorizations} 条授权。未过期的访问令牌也会立即失效。";
-
-        return RedirectBack();
+        return RedirectBackWithSuccess(
+            $"已撤销 {result.Value.Tokens} 个令牌与 {result.Value.Authorizations} 条授权。未过期的访问令牌也会立即失效。");
     }
 
     // ------------------------------------------------------------------ POST：删除
@@ -296,13 +275,12 @@ public class UsersModel : PageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = "用户已删除。";
-        return RedirectBack();
+        return RedirectBackWithSuccess("用户已删除。");
     }
 
     // ------------------------------------------------------------------ 内部辅助
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    protected override async Task LoadDataAsync(CancellationToken cancellationToken)
     {
         AllRoles = await _roles.GetAllAsync(cancellationToken);
 
@@ -333,22 +311,6 @@ public class UsersModel : PageModel
         return string.Equals(value ?? string.Empty, current ?? string.Empty, StringComparison.Ordinal)
             ? null
             : value;
-    }
-
-    /// <summary>退回列表页（只允许站内地址，防开放重定向）。</summary>
-    private IActionResult RedirectBack()
-        => Redirect(!string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl)
-            ? ReturnUrl
-            : "/admin/users");
-
-    private async Task<IActionResult> FailAsync(string? dialog, Error error, CancellationToken cancellationToken)
-    {
-        await LoadAsync(cancellationToken);
-
-        FormError = error.Message;
-        OpenDialog = dialog;
-
-        return Page();
     }
 
     private static string DescribeRoles(IReadOnlyCollection<string> roles)

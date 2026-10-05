@@ -88,7 +88,7 @@ public sealed class RoleAdminService : IRoleAdminService
         var result = await _roleManager.CreateAsync(role);
         if (!result.Succeeded)
         {
-            return Result.Failure<RoleDto>(Error.Validation(string.Join(" ", result.Errors.Select(e => e.Description))));
+            return Result.Failure<RoleDto>(result.ToError());
         }
 
         await _audit.LogAsync(
@@ -111,7 +111,7 @@ public sealed class RoleAdminService : IRoleAdminService
         var result = await _roleManager.UpdateAsync(role);
         if (!result.Succeeded)
         {
-            return Result.Failure<RoleDto>(Error.Validation(string.Join(" ", result.Errors.Select(e => e.Description))));
+            return Result.Failure<RoleDto>(result.ToError());
         }
 
         await _audit.LogAsync(
@@ -138,7 +138,7 @@ public sealed class RoleAdminService : IRoleAdminService
         var result = await _roleManager.DeleteAsync(role);
         if (!result.Succeeded)
         {
-            return Result.Failure(Error.Validation(string.Join(" ", result.Errors.Select(e => e.Description))));
+            return Result.Failure(result.ToError());
         }
 
         await _audit.LogAsync(
