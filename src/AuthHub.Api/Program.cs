@@ -42,7 +42,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("缺少连接字符串 ConnectionStrings:DefaultConnection。");
 var requireHttps = builder.Configuration.GetValue("AuthHub:Security:RequireHttps", true);
 var enablePasswordFlow = builder.Configuration.GetValue("AuthHub:Features:EnablePasswordFlow", false);
-var enableSwagger = builder.Configuration.GetValue("AuthHub:Features:EnableSwagger", builder.Environment.IsDevelopment());
+var enableApiDocs = builder.Configuration.GetValue("AuthHub:Features:EnableApiDocs", builder.Environment.IsDevelopment());
 var keyDescription = "未初始化";
 
 // ---------------------------------------------------------------------------
@@ -269,7 +269,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 7. 授权策略、CORS、限流、MVC、Swagger、应用与基础设施服务
+// 7. 授权策略、CORS、限流、MVC、API 文档、应用与基础设施服务
 // ---------------------------------------------------------------------------
 builder.Services.AddAuthHubAuthorization();
 
@@ -326,9 +326,9 @@ builder.Services.AddControllersWithViews(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 
-if (enableSwagger)
+if (enableApiDocs)
 {
-    builder.Services.AddAuthHubSwagger();
+    builder.Services.AddAuthHubOpenApi();
 }
 
 // 分层注册
@@ -378,34 +378,21 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-if (enableSwagger)
+if (enableApiDocs)
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "AuthHub v1");
-
-        // 示例 public 客户端：授权码 + PKCE，无需客户端密钥
-        options.OAuthClientId(AuthHubConstants.SeedClients.Spa);
-        options.OAuthUsePkce();
-        options.OAuthScopes(
-            AuthHubConstants.Scopes.OpenId,
-            AuthHubConstants.Scopes.Profile,
-            AuthHubConstants.Scopes.Email,
-            AuthHubConstants.Scopes.Roles,
-            AuthHubConstants.Scopes.ApiRead,
-            AuthHubConstants.Scopes.ApiWrite);
-    });
+    // OpenAPI 文档 JSON（/openapi/v1.json）+ Scalar 交互式 UI（/scalar/v1）。
+    // 文档生成器、OAuth2 方案与 Scalar 的授权配置都在 OpenApiExtensions 里。
+    app.MapAuthHubApiDocs();
 }
 
 app.Logger.LogInformation(
-    "AuthHub 启动完成 | 环境={Environment} | 数据库={Provider} | 密钥={KeyDescription} | 强制HTTPS={RequireHttps} | 密码流程={PasswordFlow} | Swagger={Swagger}",
+    "AuthHub 启动完成 | 环境={Environment} | 数据库={Provider} | 密钥={KeyDescription} | 强制HTTPS={RequireHttps} | 密码流程={PasswordFlow} | API文档={ApiDocs}",
     app.Environment.EnvironmentName,
     databaseProvider,
     keyDescription,
     requireHttps,
     enablePasswordFlow,
-    enableSwagger);
+    enableApiDocs);
 
 app.Run();
 

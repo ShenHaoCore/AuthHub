@@ -6,7 +6,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <!--
+      只引 SwaggerGen（而非完整的 Swashbuckle.AspNetCore）：这里只用它生成 OpenAPI 文档 JSON，
+      交互式 UI 已改用 Scalar，因此不再需要 Swashbuckle 自带的 SwaggerUI 静态资源。
+    -->
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.9.0" />
+
+    <!--
+      Scalar：OpenAPI 文档的交互式 UI（替代 Swagger UI）。
+      对 net8.0 目标没有任何传递依赖，UI 资源（JS/CSS）内嵌在程序集里、由本地路由提供，
+      不从 CDN 加载 —— 因此在离线/内网环境可用，也不会被本站的 CSP（script-src 'self'）拦截。
+    -->
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.6" />
+
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.4" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />

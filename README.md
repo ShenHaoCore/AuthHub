@@ -39,7 +39,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | 9 | Scope 管理 | `ScopesController`、`ScopeService` |
 | 10 | 令牌撤销与黑名单（未过期 JWT 立即失效） | `TokensController`、`EnableTokenEntryValidation` |
 
-附带：审计日志（`AuditLogs` 表 + `/api/audit-logs`）、限流、安全响应头、健康检查、Swagger。
+附带：审计日志（`AuditLogs` 表 + `/api/audit-logs`）、限流、安全响应头、健康检查、OpenAPI 文档（Scalar UI）。
 
 ---
 
@@ -55,8 +55,9 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | AutoMapper | 13.x | 实体 → DTO |
 | FluentValidation | 11.x | 校验规则集中在 Application 层，经 `ValidationFilter` 自动执行 |
 | Serilog | 8.x | Console + 按天滚动文件，可平滑接入 Seq / ELK |
-| Swashbuckle | 6.x | Swagger UI + OAuth 交互式授权 |
-| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 21 项 |
+| Swashbuckle | 6.9.0 | **只用于生成 OpenAPI 文档 JSON**（引的是 `Swashbuckle.AspNetCore.SwaggerGen`，未使用其 Swagger UI） |
+| Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
+| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 27 项 |
 
 ---
 
@@ -71,7 +72,7 @@ AuthHub.slnx
 │   └── AuthHub.Api/             24 个文件   控制器、HTML 页面、中间件、DI 组装、Program.cs
 ├── tests/
 │   ├── AuthHub.UnitTests/        4 个文件   领域规则、Result、校验器、AccountService（Moq）
-│   └── AuthHub.IntegrationTests/ 6 个文件   WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流
+│   └── AuthHub.IntegrationTests/ 7 个文件   WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 文档端点
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
@@ -128,7 +129,7 @@ dotnet run --project src/AuthHub.Api
 
 | 地址 | 说明 |
 |------|------|
-| <https://localhost:5001/swagger> | Swagger UI（Development 默认开启，可交互授权） |
+| <https://localhost:5001/scalar/v1> | Scalar 交互式 API 文档（Development 默认开启，可交互授权）；文档 JSON 在 `/openapi/v1.json` |
 | <https://localhost:5001/.well-known/openid-configuration> | OIDC 发现文档 |
 | <https://localhost:5001/health> | 健康检查 |
 | <http://localhost:5000> | 同端口组的 HTTP 端点 |
@@ -202,6 +203,13 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | GET | `/.well-known/jwks` | 公钥集（下游离线校验令牌用） |
 | GET | `/health` | 健康检查 |
 
+### API 文档
+
+| 路径 | 说明 |
+|------|------|
+| `GET /scalar/v1` | Scalar 交互式 API 文档 UI（受 `AuthHub:Features:EnableApiDocs` 控制，Development 默认开） |
+| `GET /openapi/v1.json` | OpenAPI 文档 JSON（由 Swashbuckle 生成） |
+
 ### 会话与账号（浏览器，Cookie 认证）
 
 | 路径 | 说明 |
@@ -240,20 +248,23 @@ dotnet build AuthHub.slnx
 # 单元测试：66 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：23 项
+# 集成测试：27 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
 | `AuthHub.UnitTests` | 66 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"） |
-| `AuthHub.IntegrationTests` | 23 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429 |
+| `AuthHub.IntegrationTests` | 27 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、旧 Swagger 路径已下线、未开启时不暴露） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
 
 > **注意**：集成测试会占用 `src/AuthHub.Api/bin` 下的 DLL。如果本机正跑着
-> `dotnet run`，先停掉它，否则会拿到 `MSB3021 / MSB3027: 文件被 AuthHub.Api (PID) 锁定`。
+> `dotnet run`（或在 Visual Studio 里调试），先停掉它，否则会拿到
+> `MSB3021 / MSB3027: 文件被 AuthHub.Api (PID) 锁定`。
+> 不想停调试时，也可以换个配置跑：`dotnet test -c Release`
+> （IDE 的调试通常占用 Debug 目录，两边互不干扰）。
 
 ### 端到端脚本
 
@@ -454,6 +465,28 @@ Bearer error="insufficient_access", error_description="The user represented by t
 `AllowPasswordFlow()` 只在 `AuthHub:Features:EnablePasswordFlow=true` 时启用（仅 Development 默认开）。
 资源所有者密码流程在 OAuth 2.1 里已被移除，生产不应启用。
 
+### 10. API 文档 UI 用 Scalar 而非 Swagger UI
+
+需求里写的是 Swashbuckle 的 Swagger UI。这里**保留 Swashbuckle 生成 OpenAPI 文档**，
+只把展示层换成 Scalar：
+
+| 变化 | 说明 |
+|------|------|
+| 包引用 | 只引 `Swashbuckle.AspNetCore.SwaggerGen`，不再引完整的 `Swashbuckle.AspNetCore`（后者会捎带 SwaggerUI 的静态资源，已用不上） |
+| 文档路径 | 从 `swagger/v1/swagger.json` 改为 `openapi/{documentName}.json` —— 这是 Scalar 的默认约定，对齐后少一处需要两边手工同步的配置 |
+| UI 地址 | `/scalar/v1`（受 `AuthHub:Features:EnableApiDocs` 控制，Development 默认开） |
+| 配置项改名 | `AuthHub:Features:EnableSwagger` → `AuthHub:Features:EnableApiDocs`，让名字与实现一致 |
+| 旧路径 | `/swagger/index.html`、`/swagger/v1/swagger.json` 现在都返回 404 |
+
+换 UI 的实际理由：Scalar 对 OAuth2 授权码流程的调试更顺手，且它的前端资源
+**内嵌在程序集里、由本地路由提供**（`/scalar/scalar.js`），**不从 CDN 加载** ——
+这对内网/离线部署是硬需求，也才不会撞上本项目自己的 CSP（`script-src 'self'`）。
+集成测试里有断言守着这一点（页面不得出现 `cdn.jsdelivr.net` / `unpkg.com`）。
+
+Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PKCE(S256)，
+客户端凭证流程预填 `m2m-service`。**机密客户端的密钥不写进代码**，
+需要在 UI 的认证面板里手工填写。
+
 ---
 
 ## 部署
@@ -468,7 +501,7 @@ ConnectionStrings__DefaultConnection="Server=...;Database=AuthHub;User Id=...;Pa
 AuthHub__Issuer="https://authhub.example.com/"
 AuthHub__Security__RequireHttps=true
 AuthHub__Features__EnablePasswordFlow=false
-AuthHub__Features__EnableSwagger=false
+AuthHub__Features__EnableApiDocs=false
 AuthHub__Seeding__Enabled=false        # 生产不要跑种子数据
 AuthHub__Seeding__MigrateOnStartup=false # 迁移建议在发布流程里显式执行
 AuthHub__Keys__SigningCertificatePath="/run/secrets/authhub-signing.pfx"
@@ -521,7 +554,7 @@ docker run --rm -p 8080:8080 \
 - [ ] **OpenTelemetry**：分布式追踪（导出到 OTLP）。
 - [ ] **CI 安全扫描**：`dotnet list package --vulnerable` 与 OWASP Dependency Check
       （见 `.github/workflows/ci.yml`）。
-- [ ] **管理后台 UI**：目前只有 API 与 Swagger，没有管理界面。
+- [ ] **管理后台 UI**：目前只有 API 与 Scalar 文档，没有管理界面。
 - [ ] **MFA 渠道补齐**：邮件与短信当前是"写日志"实现（`LoggingEmailSender` / `LoggingSmsSender`），
       接真实 SMTP / 短信服务商时替换 `IEmailSender` / `ISmsSender` 的注册即可，业务代码无需改动。
 - [ ] **密钥轮换流程**：证书轮换需要在 JWKS 中短暂并存新旧公钥，目前未实现。
