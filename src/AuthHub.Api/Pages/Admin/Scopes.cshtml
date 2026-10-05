@@ -11,10 +11,7 @@
     </div>
     <div class="ah-page-header-actions">
         <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create">
-            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Plus" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Plus" size="15" />
             新建 Scope
         </button>
     </div>
@@ -24,10 +21,7 @@
     @if (!string.IsNullOrEmpty(Model.FormError))
     {
         <div class="ah-alert ah-alert--danger" role="alert">
-            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Alert" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Alert" size="16" />
             <div class="ah-alert-body">
                 <strong>操作未完成</strong>
                 <span>@Model.FormError</span>
@@ -36,10 +30,7 @@
     }
 
     <div class="ah-alert ah-alert--info">
-        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="@AdminNav.Icons.Info" />
-        </svg>
+        <ah-icon path="@AdminNav.Icons.Info" size="16" />
         <div class="ah-alert-body">
             <strong>标准 Scope 不在这张表里</strong>
             <span>
@@ -54,10 +45,7 @@
         <div class="ah-card-header">
             <form method="get" action="/admin/scopes" class="ah-toolbar" role="search">
                 <div class="ah-search">
-                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="@AdminNav.Icons.Search" />
-                    </svg>
+                    <ah-icon path="@AdminNav.Icons.Search" size="15" />
                     <input class="ah-input" type="search" name="q" value="@Model.Search"
                            placeholder="搜索名称 / 显示名 / 说明" aria-label="搜索 Scope" />
                 </div>
@@ -74,10 +62,7 @@
             <div class="ah-card-body">
                 <div class="ah-empty">
                     <span class="ah-empty-icon" aria-hidden="true">
-                        <svg class="ah-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="@AdminNav.Icons.Scopes" />
-                        </svg>
+                        <ah-icon path="@AdminNav.Icons.Scopes" size="22" />
                     </span>
                     @if (Model.HasFilter)
                     {
@@ -164,11 +149,7 @@
                                         <div class="ah-act">
                                             <button type="button" class="ah-act-btn" data-dialog-open="#dlg-edit-@scope.Name"
                                                     title="编辑 Scope" aria-label="编辑 Scope @scope.Name">
-                                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                     stroke-linejoin="round" aria-hidden="true">
-                                                    <path d="@AdminNav.Icons.Edit" />
-                                                </svg>
+                                                <ah-icon path="@AdminNav.Icons.Edit" size="15" />
                                             </button>
 
                                             <form method="post" asp-page-handler="delete"
@@ -177,11 +158,7 @@
                                                 <input type="hidden" name="TargetName" value="@scope.Name" />
                                                 <button type="submit" class="ah-act-btn ah-act-danger" title="删除 Scope"
                                                         aria-label="删除 Scope @scope.Name">
-                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                         stroke-linejoin="round" aria-hidden="true">
-                                                        <path d="@AdminNav.Icons.Trash" />
-                                                    </svg>
+                                                    <ah-icon path="@AdminNav.Icons.Trash" size="15" />
                                                 </button>
                                             </form>
                                         </div>
@@ -209,22 +186,11 @@
 @* ------------------------------------------------------------ 新建 Scope *@
 @* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
    "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
-<dialog class="ah-modal" id="dlg-create" aria-labelledby="dlg-create-title"
-        data-dialog-autoopen="@(Model.AutoOpenCreate ? "true" : "false")">
+<ah-dialog id="dlg-create" title="新建 Scope" auto-open="@(Model.AutoOpenCreate ? "true" : "false")">
     <form method="post" asp-page-handler="create">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
-        <div class="ah-modal-head">
-            <h2 id="dlg-create-title">新建 Scope</h2>
-            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
-                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
-
-        <div class="ah-modal-body">
+        <ah-dialog-body>
             <div class="ah-field">
                 <label class="ah-label" for="create-name">名称<span class="ah-req">*</span></label>
                 <input class="ah-input" id="create-name" name="NewName" type="text" required
@@ -256,38 +222,21 @@
                     留空表示该 Scope 不影响 <code>aud</code>。
                 </div>
             </div>
-        </div>
-
-        <div class="ah-modal-foot">
-            <button type="button" class="ah-btn" data-dialog-close>取消</button>
-            <div class="ah-modal-foot-end">
-                <button type="submit" class="ah-btn ah-btn--primary">创建</button>
-            </div>
-        </div>
+        </ah-dialog-body>
+        <ah-dialog-foot submit="创建" />
     </form>
-</dialog>
+</ah-dialog>
 
 @* ------------------------------------------------------------ 编辑 Scope *@
 @foreach (var scope in Model.Scopes)
 {
     var resources = string.Join('\n', scope.Resources);
-    <dialog class="ah-modal" id="dlg-edit-@scope.Name" aria-labelledby="dlg-edit-title-@scope.Name"
-            data-dialog-autoopen="@(Model.IsEditFailure(scope.Name) ? "true" : "false")">
+    <ah-dialog id="dlg-edit-@scope.Name" title="编辑 Scope" auto-open="@(Model.IsEditFailure(scope.Name) ? "true" : "false")">
         <form method="post" asp-page-handler="save">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditName" value="@scope.Name" />
 
-            <div class="ah-modal-head">
-                <h2 id="dlg-edit-title-@scope.Name">编辑 Scope</h2>
-                <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
-                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-
-            <div class="ah-modal-body">
+        <ah-dialog-body>
                 @if (Model.IsEditFailure(scope.Name) && !string.IsNullOrEmpty(Model.FormError))
                 {
                     <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
@@ -326,23 +275,14 @@
                 </div>
 
                 <div class="ah-alert ah-alert--warning" style="margin-top:14px">
-                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="@AdminNav.Icons.Alert" />
-                    </svg>
+                    <ah-icon path="@AdminNav.Icons.Alert" size="16" />
                     <div class="ah-alert-body">
                         <strong>当前有 @Model.ReferenceText(scope.Name) 引用此 Scope</strong>
                         <span>修改显示名或说明会立即反映到用户同意页，不需要客户端配合改动。</span>
                     </div>
                 </div>
-            </div>
-
-            <div class="ah-modal-foot">
-                <button type="button" class="ah-btn" data-dialog-close>取消</button>
-                <div class="ah-modal-foot-end">
-                    <button type="submit" class="ah-btn ah-btn--primary">保存</button>
-                </div>
-            </div>
+        </ah-dialog-body>
+        <ah-dialog-foot submit="保存" />
         </form>
-    </dialog>
+    </ah-dialog>
 }

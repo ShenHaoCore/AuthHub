@@ -315,6 +315,49 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 - **一次性机密只出现一次**：客户端明文密钥、MFA 恢复码都用 `TempData`
   （Data Protection 加密、HttpOnly、读取即删）跨重定向展示一次。
 
+### 视图组件：四个自定义 TagHelper
+
+改后台视图前先看一眼 `src/AuthHub.Api/TagHelpers/`。图标与弹窗外壳不手写，
+统一走 `<ah-*>` 标签，`Pages/_ViewImports.cshtml` 里用 `@addTagHelper *, AuthHub.Api` 注册。
+
+| 标签 | 产出 | 关键属性 |
+|------|------|----------|
+| `<ah-icon path size />` | `<svg class="ah-icon" …>` | `path` 取 `AdminNav.Icons.*`；`size` 默认 16 |
+| `<ah-dialog id title auto-open size>` | `<dialog class="ah-modal">` + 标题栏 | `auto-open` **按字符串原样透传**；`size="lg"` → `ah-modal-lg` |
+| `<ah-dialog-body>` | `<div class="ah-modal-body">` | 无 |
+| `<ah-dialog-foot dismiss submit />` | `.ah-modal-foot` + 取消/提交按钮 | `dismiss` 默认「取消」；不传 `submit` 则只读 |
+
+**为什么用 TagHelper 而不是 partial 视图**：弹窗的 head / body / foot 之间夹着任意表单内容，
+partial 承载不了子内容；而 TagHelper 能在**编译期**校验属性名——写错属性名直接编译失败，
+partial 写错模型属性要等运行期才炸。
+
+**这族类的形态**（`AuthHubTagHelperBase` + 四个子类）是刻意的：基类只提供 `Icon()` / `Button()`
+两个绘制原语，四个子类各自覆写 `Process()` 决定怎么消费它。新增一种"重复的 HTML 骨架"时照这个模式加子类，
+不要去改基类加 `switch`。
+
+几条不写下来一定会踩的约定：
+
+- **`auto-open` 必须是显式的字符串 `"true"` / `"false"`**。绑成 `bool` 属性 Razor 会渲染成
+  `"True"`，而前端按值判断 → 所有弹窗一起弹出来（这是本仓库真实发生过的故障）。
+  不传时**整条属性都不输出**，只读弹窗就靠这个。两条集成测试从正反两面钉住它。
+- **标题 id 与 `aria-labelledby` 由同一个 `{id}-title` 表达式生成**。别在视图里手写
+  `<dialog aria-labelledby=…>`——手写的那个必然与生成器脱钩，弹窗会静默失去无障碍名称。
+  一条集成测试会遍历所有弹窗断言这两者互相命中。
+- **标题栏被排在 `<form>` 之前**（`PreContent`）。改造前它在 `<form>` 内部，是 `<dialog>` 的唯一子元素。
+  两者布局完全等价：`authhub.css` 里 `dialog.ah-modal` **不是** flex 容器，也没有任何
+  `>` 子选择器，全 CSS 里唯一涉及 `form` 的规则是 `.ah-menu form { margin: 0 }`；
+  关闭按钮是 `type="button"`，放在表单外不影响提交。
+- **`data-dialog-close` 会渲染成 `data-dialog-close=""`**。`TagBuilder` 表达不了 HTML 的无值属性；
+  两者在 DOM 里是同一个东西（HTML 解析器把无值属性规范化成空串），`authhub.js` 用
+  `querySelectorAll('[data-dialog-close]')` 按存在性匹配。
+- 底部「取消」按钮在 `<form>` 内部，**必须是 `type="button"`**，否则点它会提交表单并触发校验失败。
+  由 `DialogFootTagHelper` 统一保证，并有测试断言。
+
+> 重构这层的安全网是"逐页比对渲染结果"：把视图改动 stash 掉，用同一套集成测试夹具
+> 先渲染一份基线，再恢复改动渲染第二份，然后施加一组**已声明的等价改写**
+> （svg 属性归一、`data-dialog-close` 归一、标题 id 归一、`<form>` 外壳与隐藏域位置归一），
+> 要求两边**逐行完全相等**。剩下任何差异都是没被解释的真回归——比"看一遍 diff 觉得都对"可靠。
+
 ### 几个在后台里被显式处理掉的陷阱
 
 | 陷阱 | 处理方式 |
@@ -337,14 +380,14 @@ dotnet build AuthHub.slnx
 # 单元测试：66 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：50 项
+# 集成测试：86 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
 | `AuthHub.UnitTests` | 66 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"） |
-| `AuthHub.IntegrationTests` | 65 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用） |
+| `AuthHub.IntegrationTests` | 86 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。

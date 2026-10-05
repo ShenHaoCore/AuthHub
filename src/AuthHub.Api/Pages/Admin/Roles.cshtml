@@ -12,10 +12,7 @@
     </div>
     <div class="ah-page-header-actions">
         <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create-role">
-            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Plus" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Plus" size="15" />
             新建角色
         </button>
     </div>
@@ -25,10 +22,7 @@
     @if (!string.IsNullOrEmpty(Model.FormError))
     {
         <div class="ah-alert ah-alert--danger" role="alert">
-            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Alert" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Alert" size="16" />
             <div class="ah-alert-body">
                 <strong>操作未完成</strong>
                 <span>@Model.FormError</span>
@@ -37,10 +31,7 @@
     }
 
     <div class="ah-alert ah-alert--info">
-        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="@AdminNav.Icons.Info" />
-        </svg>
+        <ah-icon path="@AdminNav.Icons.Info" size="16" />
         <div class="ah-alert-body">
             <strong>为什么权限不能在这里勾选</strong>
             <span>
@@ -111,32 +102,20 @@
                                         <button type="button" class="ah-act-btn" title="查看权限"
                                                 aria-label="查看 @name 的权限"
                                                 data-dialog-open="#dlg-perm-@name">
-                                            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                 stroke-linejoin="round" aria-hidden="true">
-                                                <path d="@AdminNav.Icons.Roles" />
-                                            </svg>
+                                            <ah-icon path="@AdminNav.Icons.Roles" size="15" />
                                         </button>
 
                                         <button type="button" class="ah-act-btn" title="编辑说明"
                                                 aria-label="编辑 @name"
                                                 data-dialog-open="#dlg-edit-role-@name">
-                                            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                 stroke-linejoin="round" aria-hidden="true">
-                                                <path d="@AdminNav.Icons.Edit" />
-                                            </svg>
+                                            <ah-icon path="@AdminNav.Icons.Edit" size="15" />
                                         </button>
 
                                         @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(name))
                                         {
                                             <button type="button" class="ah-act-btn" disabled
                                                     title="内置角色不允许删除" aria-label="内置角色不允许删除">
-                                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                     stroke-linejoin="round" aria-hidden="true">
-                                                    <path d="@AdminNav.Icons.Trash" />
-                                                </svg>
+                                                <ah-icon path="@AdminNav.Icons.Trash" size="15" />
                                             </button>
                                         }
                                         else
@@ -147,11 +126,7 @@
                                                 <input type="hidden" name="TargetRoleName" value="@name" />
                                                 <button type="submit" class="ah-act-btn ah-act-danger" title="删除角色"
                                                         aria-label="删除 @name">
-                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                         stroke-linejoin="round" aria-hidden="true">
-                                                        <path d="@AdminNav.Icons.Trash" />
-                                                    </svg>
+                                                    <ah-icon path="@AdminNav.Icons.Trash" size="15" />
                                                 </button>
                                             </form>
                                         }
@@ -220,22 +195,11 @@
 @* ------------------------------------------------------------ 新建角色 *@
 @* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
    "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
-<dialog class="ah-modal" id="dlg-create-role" aria-labelledby="dlg-create-role-title"
-        data-dialog-autoopen="@(Model.AutoOpenCreate ? "true" : "false")">
+<ah-dialog id="dlg-create-role" title="新建角色" auto-open="@(Model.AutoOpenCreate ? "true" : "false")">
     <form method="post" asp-page-handler="create">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
-        <div class="ah-modal-head">
-            <h2 id="dlg-create-role-title">新建角色</h2>
-            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
-                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
-
-        <div class="ah-modal-body">
+        <ah-dialog-body>
             @if (Model.AutoOpenCreate && !string.IsNullOrEmpty(Model.FormError))
             {
                 <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
@@ -258,16 +222,10 @@
                 <input class="ah-input" id="create-role-desc" name="NewRoleDescription" type="text"
                        autocomplete="off" value="@Model.NewRoleDescription" placeholder="这个角色负责什么" />
             </div>
-        </div>
-
-        <div class="ah-modal-foot">
-            <button type="button" class="ah-btn" data-dialog-close>取消</button>
-            <div class="ah-modal-foot-end">
-                <button type="submit" class="ah-btn ah-btn--primary">创建角色</button>
-            </div>
-        </div>
+        </ah-dialog-body>
+        <ah-dialog-foot submit="创建角色" />
     </form>
-</dialog>
+</ah-dialog>
 
 @* ----------------------------------- 每行：权限树（只读）+ 编辑说明 *@
 @foreach (var role in Model.Roles)
@@ -275,26 +233,12 @@
     var roleName = role.Name ?? string.Empty;
     var editFailed = Model.IsEditFailure(roleName);
 
-    <dialog class="ah-modal ah-modal-lg" id="dlg-perm-@roleName"
-            aria-labelledby="dlg-perm-title-@roleName">
-        <div class="ah-modal-head">
-            <h2 id="dlg-perm-title-@roleName">@roleName 的权限</h2>
-            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
-                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
-
-        <div class="ah-modal-body">
+    <ah-dialog id="dlg-perm-@roleName" title="@roleName 的权限" size="lg">
+        <ah-dialog-body>
             @if (role.Permissions.Count == 0)
             {
                 <div class="ah-alert ah-alert--warning">
-                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="@AdminNav.Icons.Alert" />
-                    </svg>
+                    <ah-icon path="@AdminNav.Icons.Alert" size="16" />
                     <div class="ah-alert-body">
                         <strong>该角色没有任何权限映射</strong>
                         <span>
@@ -338,33 +282,16 @@
                 勾选框为只读展示。权限由 <code>AuthHub.Domain/Constants/RolePermissionMap.cs</code> 决定，
                 修改后需重新部署；权限点还会被展开成 <code>authhub:permission</code> 声明写入会话与令牌。
             </div>
-        </div>
+        </ah-dialog-body>
+        <ah-dialog-foot dismiss="关闭" />
+    </ah-dialog>
 
-        <div class="ah-modal-foot">
-            <div class="ah-modal-foot-end">
-                <button type="button" class="ah-btn" data-dialog-close>关闭</button>
-            </div>
-        </div>
-    </dialog>
-
-    <dialog class="ah-modal" id="dlg-edit-role-@roleName"
-            aria-labelledby="dlg-edit-role-title-@roleName"
-            data-dialog-autoopen="@(editFailed ? "true" : "false")">
+    <ah-dialog id="dlg-edit-role-@roleName" title="编辑角色 · @roleName" auto-open="@(editFailed ? "true" : "false")">
         <form method="post" asp-page-handler="save">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditRoleName" value="@roleName" />
 
-            <div class="ah-modal-head">
-                <h2 id="dlg-edit-role-title-@roleName">编辑角色 · @roleName</h2>
-                <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
-                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-
-            <div class="ah-modal-body">
+        <ah-dialog-body>
                 @if (editFailed && !string.IsNullOrEmpty(Model.FormError))
                 {
                     <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
@@ -387,14 +314,8 @@
                            value="@(editFailed ? Model.EditRoleDescription : role.Description)"
                            placeholder="这个角色负责什么" />
                 </div>
-            </div>
-
-            <div class="ah-modal-foot">
-                <button type="button" class="ah-btn" data-dialog-close>取消</button>
-                <div class="ah-modal-foot-end">
-                    <button type="submit" class="ah-btn ah-btn--primary">保存</button>
-                </div>
-            </div>
+        </ah-dialog-body>
+        <ah-dialog-foot submit="保存" />
         </form>
-    </dialog>
+    </ah-dialog>
 }
