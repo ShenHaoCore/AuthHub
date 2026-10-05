@@ -296,6 +296,10 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
   因此所有交互都写在 `wwwroot/js/authhub.js` 里，用 `data-*` 属性声明行为：
   `data-dialog-open` / `data-dialog-close`、`data-confirm`、`data-copy`、`data-tab`、`data-menu-toggle`。
   `style-src` 允许 `'unsafe-inline'`，所以行内 `style` 属性与 `<noscript><style>` 可以用。
+  **唯一的例外**：`/scalar` 前缀（API 文档 UI）的 `script-src` 额外放行 `'unsafe-inline'` ——
+  Scalar 的页面模板自带一段内联初始化脚本，拦掉它页面就是一片空白（返回 200、资源全通，
+  纯接口断言发现不了）；.NET 集成拿不到 nonce，放宽范围被中间件限制在这一条路径上，
+  且有两条护栏测试钉住"基准策略不得扩散 unsafe-inline"。
 - **零外部依赖**：不引用任何 CDN（字体、图标、QR 库都没有）。图标是 `AdminNav.Icons` 里的
   24×24 SVG path 数据，直接内联进标记。集成测试会断言后台页面里不存在站外 `src` / `href`。
 - **渐进增强**：脚本被禁用（或被 CSP 拦下）时，`_AdminLayout.cshtml` 里的 `<noscript><style>`
@@ -429,7 +433,7 @@ userinfo → 受保护 API → scope 门禁 → 管理员权限声明 → 撤销
 | 令牌端点限流 | `/connect/*` 前缀单独限流，**默认额度更严**（60/min）；其余接口放宽 10 倍 |
 | 会话 Cookie | `HttpOnly` + `SameSite=Lax` + 按需 `Secure`；密码/角色变更经安全戳 5 分钟内失效 |
 | CSRF | 登录、同意等表单带防伪令牌（`[ValidateAntiForgeryToken]`）；API 写操作不靠表单 |
-| 响应头 | `X-Content-Type-Options`、`X-Frame-Options: DENY`、CSP（`frame-ancestors 'none'`） |
+| 响应头 | `X-Content-Type-Options`、`X-Frame-Options: DENY`、CSP（`frame-ancestors 'none'`；`script-src 'self'`，仅 `/scalar` 文档 UI 因 Scalar 的内联初始化脚本额外放行 `'unsafe-inline'`） |
 | 异常信息 | 生产环境异常详情只进日志，响应只给 `traceId`；开发环境才附 `exception` |
 | 客户端密钥 | 经 OpenIddict 哈希后入库，不落明文；支持 `rotate-secret` 轮换 |
 | CORS | 未配置来源时收紧到同源；显式禁止 `AllowAnyOrigin()` + `AllowCredentials()` 组合 |
