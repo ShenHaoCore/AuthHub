@@ -1,0 +1,32 @@
+<Project>
+
+  <!--
+    全解决方案共用的编译设置。
+    注意：TargetFramework 在这里统一定义，单个 csproj 不再重复声明。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!--
+      被刻意关闭的分析器规则（均已在代码中说明取舍，不是“看不见就当没有”）：
+        CS1591 - 要求所有公开成员都有 XML 注释；本项目已为主要类型写注释，但不强制到每个属性。
+        CA1848 - 要求用源生成器 LoggerMessage 代替 ILogger 扩展方法。
+                 本项目日志量级很小，引入大量 partial 方法反而降低可读性。
+        CA1873 - 日志参数可能被无谓求值（多由 CA1848 的写法引发），随 CA1848 一并关闭。
+        CA1861 - 不要把常量数组作为实参传递（微性能优化），此处数组很小且可读性优先。
+        CA1859 - 尽量使用具体返回类型（微性能优化），接口返回类型可读性更好。
+        CA1716 - 避免使用其它 .NET 语言（VB.NET）的保留字作为标识符（Error / to 等）。
+                 本项目及其调用方均为 C#，这些命名在 C# 中清晰且惯用。
+        CA1000 - 不要在泛型类型中声明静态成员（如 PagedResult<T>.Empty），属惯用写法。
+    -->
+    <NoWarn>$(NoWarn);CS1591;CA1848;CA1873;CA1861;CA1859;CA1716;CA1000</NoWarn>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

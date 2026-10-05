@@ -1,0 +1,35 @@
+# 构建产物：镜像里会重新编译，带进去只会让构建上下文变大、还可能让 COPY 落到旧产物上
+**/bin/
+**/obj/
+**/publish/
+**/TestResults/
+**/coverage*/
+
+# 版本控制与 IDE
+.git/
+.gitignore
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# 测试工程不参与镜像构建（Dockerfile 只 COPY src/）
+tests/
+
+# 本地运行产物：数据库文件、日志、密钥、证书
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.log
+logs/
+*.pfx
+*.key
+DataProtection-Keys/
+secrets.json
+.env
+
+# 开发期临时脚本与探针
+# （.tmp/ 下有连服务跑的端到端脚本，属于开发工具，不进镜像）
+.tmp/

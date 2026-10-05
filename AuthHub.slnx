@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AuthHub.Api/AuthHub.Api.csproj" />
+    <Project Path="src/AuthHub.Application/AuthHub.Application.csproj" />
+    <Project Path="src/AuthHub.Domain/AuthHub.Domain.csproj" />
+    <Project Path="src/AuthHub.Infrastructure/AuthHub.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AuthHub.IntegrationTests/AuthHub.IntegrationTests.csproj" />
+    <Project Path="tests/AuthHub.UnitTests/AuthHub.UnitTests.csproj" />
+  </Folder>
+</Solution>

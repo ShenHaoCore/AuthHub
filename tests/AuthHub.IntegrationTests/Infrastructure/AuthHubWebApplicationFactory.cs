@@ -1,0 +1,94 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace AuthHub.IntegrationTests.Infrastructure;
+
+/// <summary>
+/// 集成测试宿主。
+///
+/// 关键点：Program.cs 在 <c>builder.Build()</c> 之前就读取了一批配置
+/// （数据库提供程序、连接串、是否强制 HTTPS、是否播种……）。
+/// WebApplicationFactory 的 <c>ConfigureAppConfiguration</c> 对最小托管（minimal hosting）
+/// 是延迟生效的，来不及影响这些“早期读取”，因此这里改用**环境变量**覆盖
+/// （WebApplication.CreateBuilder 构造时就会读入环境变量）。
+///
+/// 由于环境变量是进程级的，集成测试程序集整体关闭了并行执行，见 AssemblyInfo.cs。
+/// </summary>
+public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
+{
+    private readonly string _databasePath;
+
+    public AuthHubWebApplicationFactory(IReadOnlyDictionary<string, string>? overrides = null)
+    {
+        _databasePath = Path.Combine(Path.GetTempPath(), $"authhub-it-{Guid.NewGuid():N}.db");
+
+        var settings = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Database__Provider"] = "Sqlite",
+            ["ConnectionStrings__DefaultConnection"] = $"Data Source={_databasePath}",
+            ["AuthHub__Issuer"] = "http://localhost/",
+            ["AuthHub__Security__RequireHttps"] = "false",
+            ["AuthHub__Features__EnableSwagger"] = "false",
+            ["AuthHub__Features__EnablePasswordFlow"] = "false",
+            ["AuthHub__Seeding__Enabled"] = "true",
+            ["AuthHub__Seeding__MigrateOnStartup"] = "true",
+            ["AuthHub__RateLimiting__TokenRequestsPerMinute"] = "1000",
+            ["AuthHub__RateLimiting__LoginRequestsPerMinute"] = "1000",
+            ["AuthHub__Seed__AdminPassword"] = "Admin@12345",
+            ["AuthHub__Seed__DemoPassword"] = "Alice@12345",
+            ["AuthHub__Seed__WebClientSecret"] = "web-secret",
+            ["AuthHub__Seed__M2mClientSecret"] = "m2m-secret",
+        };
+
+        if (overrides is not null)
+        {
+            foreach (var (key, value) in overrides)
+            {
+                settings[key] = value;
+            }
+        }
+
+        foreach (var (key, value) in settings)
+        {
+            Environment.SetEnvironmentVariable(key, value);
+        }
+    }
+
+    /// <summary>示例 M2M 客户端（种子数据）。</summary>
+    public const string M2mClientId = "m2m-service";
+
+    /// <summary>示例 M2M 客户端密钥（种子数据）。</summary>
+    public const string M2mClientSecret = "m2m-secret";
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (!disposing)
+        {
+            return;
+        }
+
+        // SQLite 文件库用完即删，避免临时目录堆积
+        foreach (var suffix in new[] { string.Empty, "-shm", "-wal" })
+        {
+            try
+            {
+                var path = _databasePath + suffix;
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch (IOException)
+            {
+                // 文件仍被占用时忽略：临时目录会由操作系统回收
+            }
+        }
+    }
+}

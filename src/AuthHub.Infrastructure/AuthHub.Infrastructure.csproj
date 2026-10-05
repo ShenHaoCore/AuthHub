@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AuthHub.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Infrastructure 需要 ASP.NET Core 共享框架，原因：
+      1) Microsoft.AspNetCore.Identity.EntityFrameworkCore 的
+         AddEntityFrameworkStores<TContext>() 返回 IdentityBuilder，定义在 ASP.NET Core Identity 内；
+      2) Identity 的 Cookie 方案（IdentityConstants.ApplicationScheme）属于 Web 层概念。
+      数据库 / 仓储 / OpenIddict 管理器实现本身不依赖 HTTP，无业务逻辑。
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.31" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.31" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.31" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.31">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.31">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="5.8.0" />
+    <PackageReference Include="OpenIddict.Server.AspNetCore" Version="5.8.0" />
+    <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="5.8.0" />
+    <!--
+      OpenIddict.Validation.ServerIntegration 提供 UseLocalServer()：
+      本服务同时是签发方与校验方，用服务端密钥在进程内直接校验令牌，
+      无需走 introspection 回环请求。
+    -->
+    <PackageReference Include="OpenIddict.Validation.ServerIntegration" Version="5.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AuthHub.Application\AuthHub.Application.csproj" />
+    <ProjectReference Include="..\AuthHub.Domain\AuthHub.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

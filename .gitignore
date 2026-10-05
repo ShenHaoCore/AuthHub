@@ -1,0 +1,83 @@
+# ---------------------------------------------------------------- .NET 构建产物
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+.vscode/
+.idea/
+*.ncb
+*.sdf
+*.opensdf
+*.cache
+*.pdb
+*.ilk
+*.meta
+*.obj
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ---------------------------------------------------------------- 测试与覆盖率
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+TestResults/
+*.received.*
+
+# ---------------------------------------------------------------- 发布产物
+publish/
+*.publishsettings
+PublishProfiles/
+publish-*/*
+
+# ---------------------------------------------------------------- 数据库与运行时文件
+# SQLite 本地开发库（由 EnsureCreated 生成）
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+# 应用生成的日志目录
+logs/
+*.log
+
+# ---------------------------------------------------------------- 密钥与证书（绝不入库）
+# RSA / 签名证书
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+*.crt
+*.cer
+# Data Protection 密钥环（默认落在用户目录，此处兜底所有常见位置）
+keys/
+DataProtection-Keys/
+dp-keys/
+# .NET 用户机密
+secrets.json
+*.secrets.json
+# 环境变量文件（含敏感值）
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------- 本地临时文件
+oidapi*.txt
+oidval.txt
+nuget-*.txt
+*.tmp
+*.bak
+*.orig
+*~
+*.swp
+Thumbs.db
+desktop.ini

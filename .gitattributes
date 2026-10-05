@@ -1,0 +1,25 @@
+# 统一换行符策略。
+#
+# 为什么需要它：本机是 Windows，不加约束的话 git 会把仓库里的 LF 转换成 CRLF
+# 写进工作区；而 CI（ubuntu-latest）与 Docker 构建都跑在 Linux 上。
+# 两边混用会导致：莫名其妙的整文件 diff、以及 shell 脚本进容器后报
+# "bad interpreter: /bin/sh^M" 这类问题。
+#
+# 因此约定：**仓库里一律 LF**，由检出方自行按平台处理。
+* text=auto eol=lf
+
+# Windows 上双击运行的批处理必须保留 CRLF，否则 cmd 解析会出问题
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 明确的二进制类型：别做任何换行符或编码转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.pfx binary
+*.snk binary
+*.zip binary
