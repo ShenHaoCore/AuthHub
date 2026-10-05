@@ -29,8 +29,16 @@ public class AuditLogsModel : PageModel
 {
     private const int DefaultPageSize = 25;
 
-    /// <summary>查询条件里接受的日期格式（HTML <c>type="date"</c> 的取值格式）。</summary>
+    /// <summary>快捷范围链接里输出的日期格式（也是筛选框 placeholder 展示的格式）。</summary>
     private const string DateFormat = "yyyy-MM-dd";
+
+    /// <summary>
+    /// 日期筛选接受的写法。原生浏览器的日期控件把值提交成 yyyy-MM-dd，
+    /// 但输入框是普通文本框，管理员键盘手输时更常见 yyyy/M/d 这种省零写法 ——
+    /// 这里三种分隔符、月日 1~2 位都收，避免"输了个 2026/10/6 被拒"的无谓摩擦。
+    /// </summary>
+    private static readonly string[] AcceptedDateFormats =
+        { "yyyy-MM-dd", "yyyy-M-d", "yyyy/M/d", "yyyy.M.d" };
 
     private readonly IAuditLogService _audit;
     private readonly IUserAdminService _users;
@@ -230,7 +238,7 @@ public class AuditLogsModel : PageModel
         return matches.Items[0].Id;
     }
 
-    /// <summary>解析 <c>yyyy-MM-dd</c>；为空或格式错误时返回 null 并记录提示。</summary>
+    /// <summary>解析日期筛选条件；为空或格式错误时返回 null 并记录提示。</summary>
     private DateTimeOffset? ParseDate(string? value, string label)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -240,7 +248,7 @@ public class AuditLogsModel : PageModel
 
         if (DateTimeOffset.TryParseExact(
                 value.Trim(),
-                DateFormat,
+                AcceptedDateFormats,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out var parsed))
@@ -249,7 +257,7 @@ public class AuditLogsModel : PageModel
         }
 
         FilterWarning = string.IsNullOrEmpty(FilterWarning)
-            ? $"{label}「{value}」格式不正确（应为 yyyy-MM-dd），该条件已忽略。"
+            ? $"{label}「{value}」格式不正确（应为 yyyy-MM-dd，如 2026-10-06），该条件已忽略。"
             : string.Concat(FilterWarning, " ", $"{label}「{value}」格式不正确，该条件已忽略。");
 
         return null;
