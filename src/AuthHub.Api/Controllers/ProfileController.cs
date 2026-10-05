@@ -17,6 +17,7 @@ namespace AuthHub.Api.Controllers;
 ///   2) 令牌内的 <c>authhub:permission</c> 声明可用于更细粒度的判断（见 /api/profile/permissions）；
 ///   3) 写操作额外要求 <c>api:write</c>（见 POST /api/profile/echo）。
 /// </summary>
+[Tags("受保护资源示例")]
 [Route("api/profile")]
 [Authorize(Policy = AuthHubConstants.Policies.ApiAccess)]
 [Produces("application/json")]
@@ -30,6 +31,8 @@ public class ProfileController : ApiControllerBase
     }
 
     /// <summary>返回令牌所代表的身份概要。</summary>
+    [EndpointSummary("查询令牌身份概要")]
+    [EndpointDescription("返回令牌的主体、客户端、角色、权限与 Scope。")]
     [HttpGet]
     public IActionResult Get()
         => Ok(new
@@ -45,11 +48,15 @@ public class ProfileController : ApiControllerBase
         });
 
     /// <summary>令牌中的全部声明，便于排查 claims 映射问题。</summary>
+    [EndpointSummary("查询令牌原始声明")]
+    [EndpointDescription("返回令牌里的全部 claim，便于排查映射问题。")]
     [HttpGet("claims")]
     public IActionResult GetClaims()
         => Ok(User.Claims.Select(c => new { type = c.Type, value = c.Value }));
 
     /// <summary>需要 api:write 的写操作示例（只读令牌访问会返回 403）。</summary>
+    [EndpointSummary("写操作示例")]
+    [EndpointDescription("需要 api:write；只有只读权限的令牌会返回 403。")]
     [HttpPost("echo")]
     public IActionResult Echo([FromBody] EchoRequest request)
     {

@@ -29,6 +29,7 @@ namespace AuthHub.Api.Controllers;
 /// 该控制器不加 [ApiController]：它需要返回 HTML（登录/同意页）与 302 重定向，
 /// 而不是 ProblemDetails JSON。
 /// </summary>
+[Tags("OIDC 协议")]
 public class AuthorizationController : Controller
 {
     private readonly IOpenIddictApplicationManager _applicationManager;
@@ -73,6 +74,8 @@ public class AuthorizationController : Controller
     /// 而同意表单回传的是完整原始请求参数，攻击者无法凭空构造。
     /// 登录表单（/account/login）则强制校验防伪令牌，见 AccountController。
     /// </summary>
+    [EndpointSummary("授权端点")]
+    [EndpointDescription("GET 发起授权；POST 提交同意页（同意或拒绝）。未登录会跳转登录页。")]
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
     [IgnoreAntiforgeryToken]
@@ -197,6 +200,8 @@ public class AuthorizationController : Controller
     /// 这样安排还有额外收益：授权码兑换与刷新令牌时都能重新检查账号状态
     /// （是否被停用 / 锁定 / 需要重新验证），而不是无条件相信当初授权时捕获的声明。
     /// </summary>
+    [EndpointSummary("令牌端点")]
+    [EndpointDescription("支持授权码、刷新令牌、客户端凭证与密码流程（密码流程默认关闭）。")]
     [HttpPost("~/connect/token")]
     [IgnoreAntiforgeryToken]
     [Produces("application/json")]
@@ -382,6 +387,8 @@ public class AuthorizationController : Controller
     // ------------------------------------------------------------------ 用户信息端点
 
     /// <summary>返回当前 Access Token 对应用户的信息（OIDC UserInfo）。</summary>
+    [EndpointSummary("用户信息端点")]
+    [EndpointDescription("按 Access Token 的 Scope 返回对应用户声明（profile / email / roles）。")]
     [HttpGet("~/connect/userinfo")]
     [HttpPost("~/connect/userinfo")]
     [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
@@ -435,6 +442,8 @@ public class AuthorizationController : Controller
     /// 登出：清除本服务的 Identity 会话；若请求带了 post_logout_redirect_uri，
     /// 由 OpenIddict 校验白名单后跳回客户端。
     /// </summary>
+    [EndpointSummary("OIDC 登出端点")]
+    [EndpointDescription("清除本服务会话；带 post_logout_redirect_uri 时按白名单跳回客户端。")]
     [HttpGet("~/connect/logout")]
     [HttpPost("~/connect/logout")]
     [IgnoreAntiforgeryToken]

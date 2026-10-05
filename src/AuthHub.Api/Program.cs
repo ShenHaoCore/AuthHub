@@ -409,7 +409,13 @@ app.UseAuthorization();
 //
 // 没有这一行时，用户打开 https://host:port/ 会得到 404（根路径没有任何路由），
 // 无从判断该往哪走 —— 而这是任何人第一次访问站点时最自然的入口。
-app.MapGet("/", () => Results.Redirect("/admin"));
+//
+// 这里显式标注文档元数据：不标的话它会以程序集名（AuthHub.Api）自成一组出现在
+// API 文档侧边栏里，与其它中文分组格格不入。
+app.MapGet("/", () => Results.Redirect("/admin"))
+    .WithTags("站点入口")
+    .WithSummary("站点入口")
+    .WithDescription("302 跳转到管理后台 /admin；未登录会继续跳登录页。");
 
 app.MapControllers();
 app.MapRazorPages();
