@@ -311,7 +311,6 @@ builder.Services.AddTransient<SecurityHeadersMiddleware>();
 // 注意用的是 AddControllersWithViews() 而不是 AddControllers()：
 // 登录 / 两步验证表单上的 [ValidateAntiForgeryToken] 由 MVC ViewFeatures 里的
 // ValidateAntiforgeryTokenAuthorizationFilter 实现，该服务只在带视图的 MVC 构建器中注册。
-// 本项目没有任何 .cshtml，但为了保留这个声明式、不易遗漏的安全特性，仍走带视图的注册。
 builder.Services.AddControllersWithViews(options =>
 {
     // FluentValidation 自动校验（规则集中定义在 Application 层）
@@ -322,6 +321,20 @@ builder.Services.AddControllersWithViews(options =>
     // 枚举以字符串输出，便于前端与日志阅读
     options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
+
+// 管理后台页面（Razor Pages）。
+//
+// 本项目的浏览器页面分两类：
+//   1) 协议页（登录 / 两步验证 / 同意授权）：OIDC 流程的一部分，由 Pages/HtmlPages.cs
+//      用字符串产出 HTML，零视图依赖，便于集成测试直接断言页面内容；
+//   2) 管理后台：页面多、表格与表单密集，用 Razor Pages + 共享布局
+//      （Pages/Shared/_AdminLayout.cshtml）。这类页面继续手写 HTML 会产生数千行
+//      字符串拼接，因此这里引入视图引擎 —— 这是对早期"零视图依赖"取舍的一次修订，
+//      协议页保持原样不受影响。
+//
+// 安全性：Razor Pages 的 POST 处理器默认自动校验防伪令牌，
+// 无需逐个挂 [ValidateAntiForgeryToken]（这正是当初选 AddControllersWithViews 的原因）。
+builder.Services.AddRazorPages();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
@@ -364,6 +377,18 @@ if (requireHttps)
     app.UseHttpsRedirection();
 }
 
+// 静态资源（wwwroot 下的 CSS / JS / favicon）。
+//
+// 必须显式挂载：.NET 8 的 WebApplication 不会自动注册 StaticFile 中间件，
+// 少了这一行后台会变成"没有样式 + 按钮点了没反应"（所有 .css/.js 都是 404），
+// 而 /admin 本身仍然返回 200 —— 只看状态码根本发现不了，因此集成测试里专门有
+// 一组用例逐一断言这些资源可取。
+//
+// 位置刻意放在限流与请求日志之前：静态资源是终端处理、不经过认证，
+// 先命中它们就不会在每次页面加载时去消耗登录 / 令牌接口的限流额度，
+// 也不会把请求日志刷满 .css/.js 的噪声。
+app.UseStaticFiles();
+
 app.UseSerilogRequestLogging();
 
 // 重要：OpenIddict 的端点由认证中间件处理（5.x 不再需要 app.UseOpenIddict()），
@@ -376,6 +401,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapRazorPages();
 app.MapHealthChecks("/health");
 
 if (enableApiDocs)

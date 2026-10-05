@@ -1,0 +1,226 @@
+@page "/admin"
+@model AuthHub.Api.Pages.Admin.IndexModel
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">仪表盘</h1>
+        <p class="ah-page-sub">
+            运行概览。数字直接取自与 <code>/api/*</code> 相同的一组应用服务，口径一致；
+            所有时间均为 <strong>UTC</strong>。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        <a class="ah-btn ah-btn--sm" href="/admin">刷新</a>
+    </div>
+</div>
+
+<div class="ah-stack">
+    <div class="ah-grid ah-grid-4">
+        <div class="ah-stat">
+            <span class="ah-stat-icon" aria-hidden="true">
+                <svg class="ah-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="@AdminNav.Icons.Users" />
+                </svg>
+            </span>
+            <div>
+                <div class="ah-stat-label">用户总数</div>
+                <div class="ah-stat-value">@Model.UserCount</div>
+                <div class="ah-stat-foot">已停用 @Model.InactiveUserCount 个</div>
+            </div>
+        </div>
+
+        <div class="ah-stat">
+            <span class="ah-stat-icon ah-tone-info" aria-hidden="true">
+                <svg class="ah-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="@AdminNav.Icons.Clients" />
+                </svg>
+            </span>
+            <div>
+                <div class="ah-stat-label">OAuth 客户端</div>
+                <div class="ah-stat-value">@Model.ClientCount</div>
+                <div class="ah-stat-foot">对外提供 @Model.ScopeCount 个 Scope</div>
+            </div>
+        </div>
+
+        <div class="ah-stat">
+            <span class="ah-stat-icon ah-tone-success" aria-hidden="true">
+                <svg class="ah-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="@AdminNav.Icons.Roles" />
+                </svg>
+            </span>
+            <div>
+                <div class="ah-stat-label">角色</div>
+                <div class="ah-stat-value">@Model.RoleCount</div>
+                <div class="ah-stat-foot">@Model.PermissionCount 个权限点</div>
+            </div>
+        </div>
+
+        <div class="ah-stat">
+            <span class="ah-stat-icon ah-tone-warning" aria-hidden="true">
+                <svg class="ah-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="@AdminNav.Icons.Audit" />
+                </svg>
+            </span>
+            <div>
+                <div class="ah-stat-label">近 24 小时审计事件</div>
+                <div class="ah-stat-value">@Model.AuditEventsLast24Hours</div>
+                <div class="ah-stat-foot">近 7 天登录失败 @Model.FailedLoginsLast7Days 次</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ah-grid ah-grid-sidebar">
+        <div class="ah-card">
+            <div class="ah-card-header">
+                <div>
+                    <h2 class="ah-card-title">近 7 天审计事件</h2>
+                    <p class="ah-card-sub">按 UTC 自然日统计，包含当天</p>
+                </div>
+                <div class="ah-card-header-actions">
+                    <a class="ah-btn ah-btn--sm" href="/admin/audit-logs">查看全部</a>
+                </div>
+            </div>
+            <div class="ah-card-body">
+                @if (Model.DailyAudit.All(point => point.IsEmpty))
+                {
+                    <div class="ah-empty">
+                        <strong>暂无审计事件</strong>
+                        <span>登录、令牌签发、管理操作等都会记录到审计日志。</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="ah-chart" role="img" aria-label="近 7 天每天的审计事件数量">
+                        @foreach (var point in Model.DailyAudit)
+                        {
+                            <div class="ah-chart-col" title="@point.Label：@point.Count 条">
+                                <span class="ah-chart-value">@point.Count</span>
+                                <div class="ah-chart-bar-track">
+                                    <div class="ah-chart-bar@(point.IsEmpty ? " ah-chart-bar-empty" : string.Empty)"
+                                         style="height:@Math.Max(point.Percent, point.IsEmpty ? 2 : 4)%"></div>
+                                </div>
+                                <span class="ah-chart-label">@point.Label</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="ah-card">
+            <div class="ah-card-header">
+                <div>
+                    <h2 class="ah-card-title">协议端点</h2>
+                    <p class="ah-card-sub">供下游应用集成时使用</p>
+                </div>
+            </div>
+            <div class="ah-card-body">
+                <dl class="ah-dl">
+                    <dt>发现文档</dt>
+                    <dd><a href="/.well-known/openid-configuration" target="_blank" rel="noopener noreferrer">/.well-known/openid-configuration</a></dd>
+                    <dt>公钥集</dt>
+                    <dd><a href="/.well-known/jwks" target="_blank" rel="noopener noreferrer">/.well-known/jwks</a></dd>
+                    <dt>授权</dt>
+                    <dd><code>/connect/authorize</code></dd>
+                    <dt>令牌</dt>
+                    <dd><code>/connect/token</code></dd>
+                    <dt>用户信息</dt>
+                    <dd><code>/connect/userinfo</code></dd>
+                    <dt>撤销</dt>
+                    <dd><code>/connect/revoke</code></dd>
+                    <dt>登出</dt>
+                    <dd><code>/connect/logout</code></dd>
+                    <dt>健康检查</dt>
+                    <dd><a href="/health" target="_blank" rel="noopener noreferrer">/health</a></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <div>
+                <h2 class="ah-card-title">最近审计事件</h2>
+                <p class="ah-card-sub">按时间倒序，最多 @Model.RecentAudit.Count 条</p>
+            </div>
+            <div class="ah-card-header-actions">
+                <a class="ah-btn ah-btn--sm" href="/admin/audit-logs">全部记录</a>
+            </div>
+        </div>
+
+        @if (Model.RecentAudit.Count == 0)
+        {
+            <div class="ah-card-body">
+                <div class="ah-empty">
+                    <strong>暂无审计事件</strong>
+                    <span>尝试登录一次，或让下游应用走一遍授权码流程。</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ah-card-body ah-card-body-flush">
+                <div class="ah-table-wrap">
+                    <table class="ah-table">
+                        <thead>
+                            <tr>
+                                <th>时间（UTC）</th>
+                                <th>事件</th>
+                                <th>结果</th>
+                                <th>用户</th>
+                                <th>客户端</th>
+                                <th>IP</th>
+                                <th>明细</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.RecentAudit)
+                            {
+                                <tr>
+                                    <td class="ah-cell-mono ah-cell-nowrap">@AuditDisplay.FormatUtc(item.CreatedAt)</td>
+                                    <td>
+                                        <span class="ah-badge @AuditDisplay.Tone(item.Action, item.Succeeded)">
+                                            @AuditDisplay.Label(item.Action)
+                                        </span>
+                                        <div class="ah-cell-sub"><code>@item.Action</code></div>
+                                    </td>
+                                    <td>
+                                        @if (item.Succeeded)
+                                        {
+                                            <span class="ah-badge ah-badge--success"><span class="ah-dot"></span>成功</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge ah-badge--danger"><span class="ah-dot"></span>失败</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(item.UserName))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.UserName</span>
+                                        }
+                                    </td>
+                                    <td class="ah-cell-mono">
+                                        @(string.IsNullOrEmpty(item.ClientId) ? "—" : item.ClientId)
+                                    </td>
+                                    <td class="ah-cell-mono ah-cell-nowrap">
+                                        @(string.IsNullOrEmpty(item.IpAddress) ? "—" : item.IpAddress)
+                                    </td>
+                                    <td title="@item.Details">@AuditDisplay.Shorten(item.Details)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</div>

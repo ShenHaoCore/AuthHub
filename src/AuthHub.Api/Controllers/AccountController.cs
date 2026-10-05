@@ -137,6 +137,27 @@ public class AccountController : Controller
         return Redirect(safeReturnUrl);
     }
 
+    // ------------------------------------------------------------------ 登出
+
+    /// <summary>
+    /// 退出登录（管理后台顶栏的用户菜单）。
+    ///
+    /// 与 <c>/connect/logout</c> 的区别：那个是 OIDC 的 RP-Initiated Logout 端点，
+    /// 会按 post_logout_redirect_uri 白名单把用户送回客户端；这里只是清掉本服务的会话，
+    /// 然后停在"已退出"提示页。
+    ///
+    /// 用 POST + 防伪令牌而不是 GET：GET 登出可以被任意页面用一张图片触发。
+    /// </summary>
+    [HttpPost("logout")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Logout()
+    {
+        await _accountService.SignOutAsync(HttpContext.RequestAborted);
+        Response.Cookies.Delete(PendingTwoFactorCookie);
+
+        return Redirect("/account/loggedout");
+    }
+
     // ------------------------------------------------------------------ 提示页
 
     [HttpGet("loggedout")]

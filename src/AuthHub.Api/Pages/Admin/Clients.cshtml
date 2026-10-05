@@ -1,0 +1,566 @@
+@page "/admin/clients"
+@model AuthHub.Api.Pages.Admin.ClientsModel
+@{
+    var newGrantSelection = Model.AutoOpenCreate
+        ? Model.NewGrantTypes
+        : new[] { "authorization_code", "refresh_token" };
+
+    var newScopeSelection = Model.AutoOpenCreate
+        ? Model.NewScopes
+        : new[] { AuthHubConstants.Scopes.OpenId, AuthHubConstants.Scopes.Profile, AuthHubConstants.Scopes.ApiRead };
+}
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">客户端</h1>
+        <p class="ah-page-sub">
+            注册下游应用（OAuth 2.0 Client）。密钥只以哈希存储，明文仅在创建与轮换时返回一次。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create-client">
+            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Plus" />
+            </svg>
+            注册客户端
+        </button>
+    </div>
+</div>
+
+<div class="ah-stack">
+    @if (!string.IsNullOrEmpty(Model.FormError))
+    {
+        <div class="ah-alert ah-alert--danger" role="alert">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Alert" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>操作未完成</strong>
+                <span>@Model.FormError</span>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.RevealedSecret))
+    {
+        <div class="ah-alert ah-alert--warning" role="alert">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Key" />
+            </svg>
+            <div class="ah-alert-body" style="flex:1">
+                <strong>客户端密钥（@Model.RevealedSecretClientId）</strong>
+                <span>
+                    这是明文密钥**唯一**一次出现的机会 —— 刷新页面后就不再显示，
+                    也不存在任何能读回明文的接口。请立即复制并转交调用方。
+                </span>
+                <div class="ah-secret" style="margin-top:10px">
+                    <code id="revealed-secret">@Model.RevealedSecret</code>
+                    <button type="button" class="ah-btn ah-btn--sm" data-copy="#revealed-secret"
+                            data-copy-label="复制">
+                        复制
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <form method="get" action="/admin/clients" class="ah-toolbar" role="search">
+                <div class="ah-search">
+                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="@AdminNav.Icons.Search" />
+                    </svg>
+                    <input class="ah-input" type="search" name="q" value="@Model.Search"
+                           placeholder="搜索 ClientId / 显示名" aria-label="搜索客户端" />
+                </div>
+                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
+                <a class="ah-btn" href="/admin/clients">重置</a>
+                <div class="ah-toolbar-end">
+                    <span class="ah-pagination-info">共 @Model.Clients.Total 个客户端</span>
+                </div>
+            </form>
+        </div>
+
+        @if (Model.Clients.Items.Count == 0)
+        {
+            <div class="ah-card-body">
+                <div class="ah-empty">
+                    <span class="ah-empty-icon" aria-hidden="true">
+                        <svg class="ah-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="@AdminNav.Icons.Clients" />
+                        </svg>
+                    </span>
+                    <strong>没有匹配的客户端</strong>
+                    <span>换一个关键词，或注册一个新的客户端。</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ah-card-body ah-card-body-flush">
+                <div class="ah-table-wrap">
+                    <table class="ah-table">
+                        <thead>
+                            <tr>
+                                <th>客户端</th>
+                                <th>类型</th>
+                                <th>授权类型</th>
+                                <th>Scope</th>
+                                <th>重定向地址</th>
+                                <th>密钥</th>
+                                <th class="ah-col-actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var client in Model.Clients.Items)
+                            {
+                                var isPublic = string.Equals(client.ClientType, "public", StringComparison.Ordinal);
+                                <tr>
+                                    <td>
+                                        <div class="ah-cell-main ah-cell-mono">@client.ClientId</div>
+                                        <div class="ah-cell-sub">@(string.IsNullOrWhiteSpace(client.DisplayName) ? "（无显示名）" : client.DisplayName)</div>
+                                    </td>
+                                    <td>
+                                        @if (isPublic)
+                                        {
+                                            <span class="ah-badge ah-badge--info">public</span>
+                                        }
+                                        else if (string.Equals(client.ClientType, "confidential", StringComparison.Ordinal))
+                                        {
+                                            <span class="ah-badge ah-badge--primary">confidential</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge">未指定</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(client.ApplicationType))
+                                        {
+                                            <div class="ah-cell-sub">@client.ApplicationType</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="ah-tag-list">
+                                            @foreach (var grant in client.GrantTypes)
+                                            {
+                                                <span class="ah-badge">@grant</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="ah-tag-list">
+                                            @foreach (var scope in client.AllowedScopes)
+                                            {
+                                                <span class="ah-badge ah-badge--success">@scope</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (client.RedirectUris.Count == 0)
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="ah-cell-sub ah-cell-mono">
+                                                @string.Join("  ·  ", client.RedirectUris)
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (client.HasSecret)
+                                        {
+                                            <span class="ah-badge ah-badge--success">已配置</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge">无（公共客户端）</span>
+                                        }
+                                    </td>
+                                    <td class="ah-col-actions">
+                                        <div class="ah-act">
+                                            <button type="button" class="ah-act-btn" title="编辑配置"
+                                                    aria-label="编辑 @client.ClientId"
+                                                    data-dialog-open="#dlg-edit-client-@client.ClientId">
+                                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                     stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="@AdminNav.Icons.Edit" />
+                                                </svg>
+                                            </button>
+
+                                            @if (isPublic)
+                                            {
+                                                <button type="button" class="ah-act-btn" disabled
+                                                        title="public 客户端不使用密钥，无需轮换"
+                                                        aria-label="public 客户端无需轮换密钥">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Key" />
+                                                    </svg>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <form method="post" asp-page-handler="rotateSecret"
+                                                      data-confirm="将重新生成 @client.ClientId 的客户端密钥，旧密钥立即失效，依赖旧密钥的调用方会立刻失败。继续？">
+                                                    <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                    <input type="hidden" name="TargetClientId" value="@client.ClientId" />
+                                                    <button type="submit" class="ah-act-btn" title="轮换客户端密钥"
+                                                            aria-label="轮换 @client.ClientId 的密钥">
+                                                        <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                             stroke-linejoin="round" aria-hidden="true">
+                                                            <path d="@AdminNav.Icons.Key" />
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                            }
+
+                                            <form method="post" asp-page-handler="delete"
+                                                  data-confirm="将删除客户端 @client.ClientId。使用它的应用会立即无法登录，已签发的令牌也会在下次校验时被拒绝。继续？">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetClientId" value="@client.ClientId" />
+                                                <button type="submit" class="ah-act-btn ah-act-danger" title="删除客户端"
+                                                        aria-label="删除 @client.ClientId">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Trash" />
+                                                    </svg>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="ah-card-footer">
+                <partial name="_Pagination" model="Model.Pagination" />
+            </div>
+        }
+    </div>
+</div>
+
+@* ------------------------------------------------------------ 注册客户端 *@
+<dialog class="ah-modal ah-modal-lg" id="dlg-create-client" aria-labelledby="dlg-create-client-title"
+        data-dialog-autoopen="@Model.AutoOpenCreate">
+    <form method="post" asp-page-handler="create">
+        <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+
+        <div class="ah-modal-head">
+            <h2 id="dlg-create-client-title">注册客户端</h2>
+            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="ah-modal-body">
+            @if (Model.AutoOpenCreate && !string.IsNullOrEmpty(Model.FormError))
+            {
+                <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                    <span>@Model.FormError</span>
+                </div>
+            }
+
+            <div class="ah-grid ah-grid-2">
+                <div class="ah-field">
+                    <label class="ah-label" for="create-client-id">ClientId<span class="ah-req">*</span></label>
+                    <input class="ah-input" id="create-client-id" name="NewClientId" type="text" required
+                           autocomplete="off" value="@Model.NewClientId" placeholder="my-app" />
+                    <div class="ah-hint">至少 3 位，只能含字母、数字与 <code>.</code> <code>_</code> <code>-</code>。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="create-display-name">显示名</label>
+                    <input class="ah-input" id="create-display-name" name="NewDisplayName" type="text"
+                           autocomplete="off" value="@Model.NewDisplayName" placeholder="会显示在同意授权页" />
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="create-client-type">客户端类型</label>
+                    <select class="ah-select" id="create-client-type" name="NewClientType">
+                        <option value="" selected="@(string.IsNullOrEmpty(Model.NewClientType))">自动推断（推荐）</option>
+                        <option value="public" selected="@(Model.NewClientType == "public")">public（SPA / 移动端，无密钥）</option>
+                        <option value="confidential" selected="@(Model.NewClientType == "confidential")">confidential（持密钥）</option>
+                    </select>
+                    <div class="ah-hint">public 客户端不得配置密钥，安全性由 PKCE 保证。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="create-app-type">应用类型</label>
+                    <select class="ah-select" id="create-app-type" name="NewApplicationType">
+                        <option value="" selected="@(string.IsNullOrEmpty(Model.NewApplicationType))">自动推断</option>
+                        <option value="web" selected="@(Model.NewApplicationType == "web")">web</option>
+                        <option value="native" selected="@(Model.NewApplicationType == "native")">native</option>
+                    </select>
+                    <div class="ah-hint">纯机器客户端（仅 client_credentials）可留空。</div>
+                </div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-secret">客户端密钥</label>
+                <input class="ah-input" id="create-secret" name="NewClientSecret" type="text"
+                       autocomplete="off" value="@Model.NewClientSecret" placeholder="留空则自动生成一个强随机密钥" />
+                <div class="ah-hint">留空时系统自动生成并在创建后一次性展示。生产环境请勿手写弱口令。</div>
+            </div>
+
+            <fieldset class="ah-fieldset">
+                <legend class="ah-legend">授权类型</legend>
+                <div class="ah-check-row">
+                    @foreach (var grant in ClientsModel.GrantTypeOptions)
+                    {
+                        var isChecked = newGrantSelection.Contains(grant, StringComparer.Ordinal);
+                        <label class="ah-check">
+                            <input type="checkbox" name="NewGrantTypes" value="@grant" checked="@isChecked" />
+                            <span>
+                                @grant
+                                <span class="ah-check-desc">
+                                    @switch (grant)
+                                    {
+                                        case "authorization_code":
+                                            <text>授权码流程（用户登录，配合 PKCE）</text>
+                                            break;
+                                        case "refresh_token":
+                                            <text>刷新令牌（配合授权码流程使用）</text>
+                                            break;
+                                        case "client_credentials":
+                                            <text>客户端凭证（机器对机器，必须 confidential）</text>
+                                            break;
+                                        case "password":
+                                            <text>资源所有者密码流程 —— OAuth 2.1 已移除；服务端默认关闭，仅内部迁移用</text>
+                                            break;
+                                        default:
+                                            <text>隐式流程 —— OAuth 2.1 已移除，不建议新客户端使用</text>
+                                            break;
+                                    }
+                                </span>
+                            </span>
+                        </label>
+                    }
+                </div>
+            </fieldset>
+
+            <fieldset class="ah-fieldset">
+                <legend class="ah-legend">允许的 Scope</legend>
+                <div class="ah-check-row">
+                    @foreach (var option in Model.ScopeOptions)
+                    {
+                        var isChecked = newScopeSelection.Contains(option.Name, StringComparer.Ordinal);
+                        <label class="ah-check">
+                            <input type="checkbox" name="NewScopes" value="@option.Name" checked="@isChecked" />
+                            <span>
+                                @option.Name
+                                @if (option.IsProtocol)
+                                {
+                                    <span class="ah-badge ah-badge--info" style="margin-left:4px">协议</span>
+                                }
+                                <span class="ah-check-desc">@option.DisplayName</span>
+                            </span>
+                        </label>
+                    }
+                </div>
+                <div class="ah-hint">
+                    至少要包含 <code>openid</code>，否则无法签发 ID Token；需要刷新令牌时还要加上
+                    <code>offline_access</code>。
+                </div>
+            </fieldset>
+
+            <div class="ah-grid ah-grid-2">
+                <div class="ah-field">
+                    <label class="ah-label" for="create-redirect-uris">重定向地址</label>
+                    <textarea class="ah-textarea" id="create-redirect-uris" name="NewRedirectUris"
+                              placeholder="https://app.example.com/callback">@Model.NewRedirectUris</textarea>
+                    <div class="ah-hint">每行一个。必须是绝对 URI；非本机地址必须用 https。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="create-post-logout-uris">登出后跳转地址</label>
+                    <textarea class="ah-textarea" id="create-post-logout-uris" name="NewPostLogoutRedirectUris"
+                              placeholder="https://app.example.com/">@Model.NewPostLogoutRedirectUris</textarea>
+                    <div class="ah-hint">每行一个。配置后该客户端获得 <code>/connect/logout</code> 端点权限。</div>
+                </div>
+            </div>
+
+            <fieldset class="ah-fieldset">
+                <legend class="ah-legend">安全要求</legend>
+                <div class="ah-check">
+                    <label class="ah-check">
+                        <input type="checkbox" name="NewRequirePkce" value="true" checked="@Model.NewRequirePkce" />
+                        <span>
+                            强制 PKCE
+                            <span class="ah-check-desc">
+                                授权码流程必须携带 code_challenge。public 客户端会被强制开启，
+                                因为它们的授权码一旦被拦截就能直接兑换令牌。
+                            </span>
+                        </span>
+                    </label>
+                </div>
+                <div class="ah-check" style="margin-top:10px">
+                    <label class="ah-check">
+                        <input type="checkbox" name="NewRequireConsent" value="true" checked="@Model.NewRequireConsent" />
+                        <span>
+                            每次授权都要求用户确认
+                            <span class="ah-check-desc">
+                                不勾选表示首次同意后长期有效（consent_type=implicit），
+                                适合第一方应用；第三方应用建议勾选。
+                            </span>
+                        </span>
+                    </label>
+                </div>
+            </fieldset>
+        </div>
+
+        <div class="ah-modal-foot">
+            <button type="button" class="ah-btn" data-dialog-close>取消</button>
+            <div class="ah-modal-foot-end">
+                <button type="submit" class="ah-btn ah-btn--primary">注册客户端</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+
+@* ------------------------------------------------ 每行一个编辑弹窗 *@
+@foreach (var client in Model.Clients.Items)
+{
+    var failed = Model.IsEditFailure(client.ClientId);
+    var editDisplayName = failed ? Model.EditDisplayName : client.DisplayName;
+    var editRedirectUris = failed ? Model.EditRedirectUris : string.Join('\n', client.RedirectUris);
+    var editPostLogoutUris = failed ? Model.EditPostLogoutRedirectUris : string.Join('\n', client.PostLogoutRedirectUris);
+    var editGrants = failed ? Model.EditGrantTypes : client.GrantTypes.ToArray();
+    var editScopes = failed ? Model.EditScopes : client.AllowedScopes.ToArray();
+    var editPkce = failed ? Model.EditRequirePkce : client.Requirements.Contains("pkce", StringComparer.OrdinalIgnoreCase);
+    var editConsent = failed ? Model.EditRequireConsent : string.Equals(client.ConsentType, "explicit", StringComparison.Ordinal);
+
+    <dialog class="ah-modal ah-modal-lg" id="dlg-edit-client-@client.ClientId"
+            aria-labelledby="dlg-edit-client-title-@client.ClientId"
+            data-dialog-autoopen="@failed">
+        <form method="post" asp-page-handler="save">
+            <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+            <input type="hidden" name="EditClientId" value="@client.ClientId" />
+
+            <div class="ah-modal-head">
+                <h2 id="dlg-edit-client-title-@client.ClientId">编辑客户端 · @client.ClientId</h2>
+                <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="ah-modal-body">
+                @if (failed && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                        <span>@Model.FormError</span>
+                    </div>
+                }
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-display-@client.ClientId">显示名</label>
+                    <input class="ah-input" id="edit-display-@client.ClientId" name="EditDisplayName" type="text"
+                           value="@editDisplayName" />
+                </div>
+
+                <fieldset class="ah-fieldset">
+                    <legend class="ah-legend">授权类型</legend>
+                    <div class="ah-check-row">
+                        @foreach (var grant in ClientsModel.GrantTypeOptions)
+                        {
+                            var isChecked = editGrants.Contains(grant, StringComparer.Ordinal);
+                            <label class="ah-check">
+                                <input type="checkbox" name="EditGrantTypes" value="@grant" checked="@isChecked" />
+                                <span>@grant</span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+
+                <fieldset class="ah-fieldset">
+                    <legend class="ah-legend">允许的 Scope</legend>
+                    <div class="ah-check-row">
+                        @foreach (var option in Model.ScopeOptionsFor(client))
+                        {
+                            var isChecked = editScopes.Contains(option.Name, StringComparer.Ordinal);
+                            <label class="ah-check">
+                                <input type="checkbox" name="EditScopes" value="@option.Name" checked="@isChecked" />
+                                <span>
+                                    @option.Name
+                                    @if (option.IsProtocol)
+                                    {
+                                        <span class="ah-badge ah-badge--info" style="margin-left:4px">协议</span>
+                                    }
+                                    <span class="ah-check-desc">@option.DisplayName</span>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                    <div class="ah-hint">
+                        Scope 是整组覆盖：未勾选的会在保存后从该客户端移除。
+                        <code>openid</code> 与 <code>offline_access</code> 虽然不落数据库，但同样必须勾选，
+                        否则客户端将无法签发 ID Token / 刷新令牌。
+                    </div>
+                </fieldset>
+
+                <div class="ah-grid ah-grid-2">
+                    <div class="ah-field">
+                        <label class="ah-label" for="edit-redirect-@client.ClientId">重定向地址</label>
+                        <textarea class="ah-textarea" id="edit-redirect-@client.ClientId" name="EditRedirectUris">@editRedirectUris</textarea>
+                        <div class="ah-hint">每行一个，必须是绝对 URI（非本机地址须 https）。</div>
+                    </div>
+
+                    <div class="ah-field">
+                        <label class="ah-label" for="edit-postlogout-@client.ClientId">登出后跳转地址</label>
+                        <textarea class="ah-textarea" id="edit-postlogout-@client.ClientId" name="EditPostLogoutRedirectUris">@editPostLogoutUris</textarea>
+                        <div class="ah-hint">每行一个。</div>
+                    </div>
+                </div>
+
+                <fieldset class="ah-fieldset">
+                    <legend class="ah-legend">安全要求</legend>
+                    <label class="ah-check">
+                        <input type="checkbox" name="EditRequirePkce" value="true" checked="@editPkce" />
+                        <span>
+                            强制 PKCE
+                            <span class="ah-check-desc">取消勾选会让授权码流程失去拦截防护，请确认调用方确实无法支持。</span>
+                        </span>
+                    </label>
+                    <div class="ah-check" style="margin-top:10px">
+                        <label class="ah-check">
+                            <input type="checkbox" name="EditRequireConsent" value="true" checked="@editConsent" />
+                            <span>
+                                每次授权都要求用户确认
+                                <span class="ah-check-desc">对应 consent_type：勾选为 explicit，不勾选为 implicit。</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div class="ah-hint" style="margin-top:12px">
+                    客户端类型与密钥不在此处修改：密钥轮换请用列表中的钥匙按钮（会立即失效旧密钥）。
+                </div>
+            </div>
+
+            <div class="ah-modal-foot">
+                <button type="button" class="ah-btn" data-dialog-close>取消</button>
+                <div class="ah-modal-foot-end">
+                    <button type="submit" class="ah-btn ah-btn--primary">保存</button>
+                </div>
+            </div>
+        </form>
+    </dialog>
+}

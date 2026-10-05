@@ -1,0 +1,460 @@
+@page "/admin/users"
+@model AuthHub.Api.Pages.Admin.UsersModel
+@using AuthHub.Domain.Constants
+@{
+    // 新建弹窗的默认角色：首次进入默认勾选 User，提交失败时保留用户刚才的选择
+    var newRoleSelection = Model.AutoOpenCreate
+        ? Model.NewRoles
+        : new[] { AuthHubConstants.Roles.User };
+}
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">用户</h1>
+        <p class="ah-page-sub">
+            创建与维护账号、分配角色、锁定账号或强制下线。角色变更会刷新安全戳，
+            该用户的现有会话与令牌会立即失效。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        @if (User.HasClaim(AuthHubConstants.ClaimTypes.Permission, AuthHubConstants.Permissions.RolesManage))
+        {
+            <a class="ah-btn ah-btn--sm" href="/admin/roles">角色与权限</a>
+        }
+        <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create">
+            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Plus" />
+            </svg>
+            新建用户
+        </button>
+    </div>
+</div>
+
+<div class="ah-stack">
+    @if (!string.IsNullOrEmpty(Model.FormError))
+    {
+        <div class="ah-alert ah-alert--danger" role="alert">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Alert" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>操作未完成</strong>
+                <span>@Model.FormError</span>
+            </div>
+        </div>
+    }
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <form method="get" action="/admin/users" class="ah-toolbar" role="search">
+                <div class="ah-search">
+                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="@AdminNav.Icons.Search" />
+                    </svg>
+                    <input class="ah-input" type="search" name="q" value="@Model.Search"
+                           placeholder="搜索用户名 / 邮箱 / 显示名" aria-label="搜索用户" />
+                </div>
+
+                <select class="ah-select" name="role" aria-label="按角色筛选" style="width:auto;min-width:150px">
+                    <option value="">全部角色</option>
+                    @foreach (var role in Model.AllRoles)
+                    {
+                        <option value="@role.Name" selected="@(string.Equals(role.Name, Model.RoleFilter, StringComparison.OrdinalIgnoreCase))">@role.Name</option>
+                    }
+                </select>
+
+                <select class="ah-select" name="active" aria-label="按状态筛选" style="width:auto;min-width:130px">
+                    <option value="">全部状态</option>
+                    <option value="true" selected="@(Model.ActiveFilter == "true")">仅已启用</option>
+                    <option value="false" selected="@(Model.ActiveFilter == "false")">仅已停用</option>
+                </select>
+
+                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
+                <a class="ah-btn" href="/admin/users">重置</a>
+            </form>
+        </div>
+
+        @if (Model.Users.Items.Count == 0)
+        {
+            <div class="ah-card-body">
+                <div class="ah-empty">
+                    <span class="ah-empty-icon" aria-hidden="true">
+                        <svg class="ah-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="@AdminNav.Icons.Users" />
+                        </svg>
+                    </span>
+                    <strong>没有匹配的用户</strong>
+                    <span>换一个关键词，或清空筛选条件后重试。</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ah-card-body ah-card-body-flush">
+                <div class="ah-table-wrap">
+                    <table class="ah-table">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>邮箱</th>
+                                <th>角色</th>
+                                <th>状态</th>
+                                <th>MFA</th>
+                                <th>最近登录（UTC）</th>
+                                <th class="ah-col-actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in Model.Users.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="ah-cell-main">@user.DisplayName</div>
+                                        <div class="ah-cell-sub">@("@" + user.UserName)</div>
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(user.Email))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div>@user.Email</div>
+                                            <div style="margin-top:3px">
+                                                @if (user.EmailConfirmed)
+                                                {
+                                                    <span class="ah-badge ah-badge--success">已验证</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="ah-badge ah-badge--warning">未验证</span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (user.Roles.Count == 0)
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="ah-tag-list">
+                                                @foreach (var role in user.Roles)
+                                                {
+                                                    <span class="ah-badge ah-badge--primary">@role</span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!user.IsActive)
+                                        {
+                                            <span class="ah-badge ah-badge--danger"><span class="ah-dot"></span>已停用</span>
+                                        }
+                                        else if (user.LockedOut)
+                                        {
+                                            <span class="ah-badge ah-badge--warning"><span class="ah-dot"></span>已锁定</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge ah-badge--success"><span class="ah-dot"></span>正常</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (user.TwoFactorEnabled)
+                                        {
+                                            <span class="ah-badge ah-badge--info">已启用</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-cell-sub">未启用</span>
+                                        }
+                                    </td>
+                                    <td class="ah-cell-mono ah-cell-nowrap">
+                                        @(user.LastLoginAt is null ? "—" : AuditDisplay.FormatUtc(user.LastLoginAt.Value))
+                                    </td>
+                                    <td class="ah-col-actions">
+                                        <div class="ah-act">
+                                            <button type="button" class="ah-act-btn" title="编辑资料与角色"
+                                                    aria-label="编辑 @user.UserName"
+                                                    data-dialog-open="#dlg-edit-@user.Id">
+                                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                     stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="@AdminNav.Icons.Edit" />
+                                                </svg>
+                                            </button>
+
+                                            <form method="post" asp-page-handler="lock">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetId" value="@user.Id" />
+                                                <input type="hidden" name="Locked" value="@(!user.LockedOut)" />
+                                                <button type="submit" class="ah-act-btn"
+                                                        title="@(user.LockedOut ? "解除锁定" : "锁定账号")"
+                                                        aria-label="@(user.LockedOut ? "解除锁定" : "锁定账号") @user.UserName">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@(user.LockedOut ? AdminNav.Icons.Unlock : AdminNav.Icons.Lock)" />
+                                                    </svg>
+                                                </button>
+                                            </form>
+
+                                            <form method="post" asp-page-handler="revokeTokens"
+                                                  data-confirm="将撤销 @user.UserName 的全部令牌与授权，该用户需要重新登录。继续？">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetId" value="@user.Id" />
+                                                <button type="submit" class="ah-act-btn" title="强制下线（撤销全部令牌）"
+                                                        aria-label="强制下线 @user.UserName">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Refresh" />
+                                                    </svg>
+                                                </button>
+                                            </form>
+
+                                            <form method="post" asp-page-handler="delete"
+                                                  data-confirm="将永久删除用户 @user.UserName，此操作不可撤销。继续？">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetId" value="@user.Id" />
+                                                <button type="submit" class="ah-act-btn ah-act-danger" title="删除用户"
+                                                        aria-label="删除 @user.UserName">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Trash" />
+                                                    </svg>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="ah-card-footer">
+                <partial name="_Pagination" model="Model.Pagination" />
+            </div>
+        }
+    </div>
+</div>
+
+@* ------------------------------------------------------------ 新建用户 *@
+<dialog class="ah-modal" id="dlg-create" aria-labelledby="dlg-create-title"
+        data-dialog-autoopen="@Model.AutoOpenCreate">
+    <form method="post" asp-page-handler="create">
+        <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+
+        <div class="ah-modal-head">
+            <h2 id="dlg-create-title">新建用户</h2>
+            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="ah-modal-body">
+            @if (Model.AutoOpenCreate && !string.IsNullOrEmpty(Model.FormError))
+            {
+                <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                    <span>@Model.FormError</span>
+                </div>
+            }
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-username">用户名<span class="ah-req">*</span></label>
+                <input class="ah-input" id="create-username" name="NewUserName" type="text" required
+                       autocomplete="off" value="@Model.NewUserName" />
+                <div class="ah-hint">登录标识，创建后不可修改。</div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-email">邮箱<span class="ah-req">*</span></label>
+                <input class="ah-input" id="create-email" name="NewEmail" type="email" required
+                       autocomplete="off" value="@Model.NewEmail" />
+                <div class="ah-hint">管理员创建的账号邮箱视为已验证。</div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-display">显示名</label>
+                <input class="ah-input" id="create-display" name="NewDisplayName" type="text"
+                       autocomplete="off" value="@Model.NewDisplayName" placeholder="留空则与用户名相同" />
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-password">初始密码<span class="ah-req">*</span></label>
+                <input class="ah-input" id="create-password" name="NewPassword" type="password" required
+                       autocomplete="new-password" />
+                <div class="ah-hint">
+                    至少 8 位，且需包含大写字母、小写字母、数字与特殊字符，至少 4 个不同字符。
+                    请通过安全渠道转交本人，并要求其首次登录后修改。
+                </div>
+            </div>
+
+            <fieldset class="ah-fieldset">
+                <legend class="ah-legend">角色</legend>
+                <div class="ah-check-row">
+                    @foreach (var role in Model.AllRoles)
+                    {
+                        var isChecked = newRoleSelection.Contains(role.Name ?? string.Empty, StringComparer.Ordinal);
+                        <label class="ah-check">
+                            <input type="checkbox" name="NewRoles" value="@role.Name" checked="@isChecked" />
+                            <span>
+                                @role.Name
+                                <span class="ah-check-desc">@(role.Description ?? "—")</span>
+                            </span>
+                        </label>
+                    }
+                </div>
+                <div class="ah-hint">不选择任何角色时，账号会进入 <code>User</code> 角色（无管理权限）。</div>
+            </fieldset>
+        </div>
+
+        <div class="ah-modal-foot">
+            <button type="button" class="ah-btn" data-dialog-close>取消</button>
+            <div class="ah-modal-foot-end">
+                <button type="submit" class="ah-btn ah-btn--primary">创建用户</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+
+@* ------------------------------------------------- 每行一个编辑弹窗 *@
+@foreach (var user in Model.Users.Items)
+{
+    var failed = Model.IsEditFailure(user.Id);
+    var editEmail = failed ? Model.EditEmail : user.Email;
+    var editDisplay = failed ? Model.EditDisplayName : user.DisplayName;
+    var editPhone = failed ? Model.EditPhoneNumber : user.PhoneNumber;
+    var editActive = failed ? Model.EditIsActive : user.IsActive;
+    var editConfirmed = failed ? Model.EditEmailConfirmed : user.EmailConfirmed;
+    var editRoles = failed ? Model.EditRoles : user.Roles.ToArray();
+
+    <dialog class="ah-modal ah-modal-lg" id="dlg-edit-@user.Id"
+            aria-labelledby="dlg-edit-title-@user.Id"
+            data-dialog-autoopen="@failed">
+        <form method="post" asp-page-handler="save">
+            <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+            <input type="hidden" name="EditId" value="@user.Id" />
+
+            <div class="ah-modal-head">
+                <h2 id="dlg-edit-title-@user.Id">编辑用户 · @user.UserName</h2>
+                <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="ah-modal-body">
+                @if (failed && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                        <span>@Model.FormError</span>
+                    </div>
+                }
+
+                <div class="ah-grid ah-grid-2">
+                    <div class="ah-field">
+                        <label class="ah-label" for="edit-email-@user.Id">邮箱<span class="ah-req">*</span></label>
+                        <input class="ah-input" id="edit-email-@user.Id" name="EditEmail" type="email" required
+                               value="@editEmail" />
+                    </div>
+
+                    <div class="ah-field">
+                        <label class="ah-label" for="edit-display-@user.Id">显示名<span class="ah-req">*</span></label>
+                        <input class="ah-input" id="edit-display-@user.Id" name="EditDisplayName" type="text" required
+                               value="@editDisplay" />
+                    </div>
+
+                    <div class="ah-field">
+                        <label class="ah-label" for="edit-phone-@user.Id">手机号</label>
+                        <input class="ah-input" id="edit-phone-@user.Id" name="EditPhoneNumber" type="text"
+                               value="@editPhone" placeholder="用于短信验证码通道" />
+                    </div>
+
+                    <div class="ah-field">
+                        <label class="ah-label" for="edit-username-@user.Id">用户名</label>
+                        <input class="ah-input" id="edit-username-@user.Id" type="text" value="@user.UserName" readonly />
+                        <div class="ah-hint">用户名是登录标识，创建后不可修改。</div>
+                    </div>
+                </div>
+
+                <fieldset class="ah-fieldset">
+                    <legend class="ah-legend">状态</legend>
+                    <div class="ah-check-row">
+                        <label class="ah-check">
+                            <input type="checkbox" name="EditIsActive" value="true" checked="@editActive" />
+                            <span>
+                                账号启用
+                                <span class="ah-check-desc">取消勾选即停用：立即拉长锁定期并刷新安全戳，已有会话失效。</span>
+                            </span>
+                        </label>
+
+                        <label class="ah-check">
+                            <input type="checkbox" name="EditEmailConfirmed" value="true" checked="@editConfirmed" />
+                            <span>
+                                邮箱已验证
+                                <span class="ah-check-desc">未验证时不影响登录（除非开启 RequireConfirmedEmail）。</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <fieldset class="ah-fieldset">
+                    <legend class="ah-legend">角色</legend>
+                    <div class="ah-check-row">
+                        @foreach (var role in Model.AllRoles)
+                        {
+                            var isChecked = editRoles.Contains(role.Name ?? string.Empty, StringComparer.Ordinal);
+                            <label class="ah-check">
+                                <input type="checkbox" name="EditRoles" value="@role.Name" checked="@isChecked" />
+                                <span>
+                                    @role.Name
+                                    <span class="ah-check-desc">@(role.Description ?? "—")</span>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                    <div class="ah-hint">
+                        角色决定该用户能访问哪些接口（权限点见「角色与权限」页）。
+                        仅在角色确实变化时才会刷新安全戳 —— 只改资料不会把用户踢下线。
+                    </div>
+                </fieldset>
+
+                @if (user.TwoFactorEnabled)
+                {
+                    <div class="ah-alert ah-alert--info" style="margin-top:14px">
+                        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="@AdminNav.Icons.Info" />
+                        </svg>
+                        <div class="ah-alert-body">
+                            <strong>该账号已启用两步验证</strong>
+                            <span>若要重置其 MFA，需由用户本人在「我的账户」中关闭后重新绑定，或重置 Authenticator 密钥。</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="ah-modal-foot">
+                <button type="button" class="ah-btn" data-dialog-close>取消</button>
+                <div class="ah-modal-foot-end">
+                    <button type="submit" class="ah-btn ah-btn--primary">保存</button>
+                </div>
+            </div>
+        </form>
+    </dialog>
+}

@@ -1,0 +1,232 @@
+@using AuthHub.Api.Pages.Admin
+@using AuthHub.Domain.Constants
+@inject IConfiguration Configuration
+@inject IWebHostEnvironment HostEnvironment
+@{
+    var navKey = ViewData["NavKey"] as string;
+    var title = ViewData["Title"] as string ?? "管理后台";
+    var crumbs = AdminNav.Breadcrumb(navKey, title);
+
+    var displayName = User.FindFirst(AuthHubConstants.ClaimTypes.DisplayName)?.Value
+        ?? User.Identity?.Name
+        ?? "未登录";
+    var userName = User.Identity?.Name ?? string.Empty;
+
+    // Program.cs 把 IdentityOptions.ClaimsIdentity.EmailClaimType 设成了 OIDC 标准的 "email"
+    var email = User.FindFirst("email")?.Value;
+
+    var initial = displayName.Length > 0 ? displayName[..1].ToUpperInvariant() : "?";
+
+    // 与 Program.cs 的读取方式保持一致：未显式配置时按环境推断
+    var apiDocsEnabled = Configuration.GetValue(
+        "AuthHub:Features:EnableApiDocs",
+        HostEnvironment.IsDevelopment());
+
+    // 侧边栏条目：按当前身份持有的权限过滤（只做界面收敛，访问控制仍在各页面的策略上）
+    var navEntries = new List<(string Group, AdminNavItem Item, string Css, string? AriaCurrent)>();
+    foreach (var group in AdminNav.Groups)
+    {
+        var visible = group.Items.Where(item => AdminNav.IsVisible(item, User)).ToArray();
+        for (var index = 0; index < visible.Length; index++)
+        {
+            var item = visible[index];
+            var isActive = string.Equals(item.Key, navKey, StringComparison.Ordinal);
+
+            navEntries.Add((
+                index == 0 ? group.Title : string.Empty,
+                item,
+                isActive ? "ah-nav-item is-active" : "ah-nav-item",
+                isActive ? "page" : null));
+        }
+    }
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>@title · AuthHub</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/css/authhub.css" />
+    <noscript>
+        @* 渐进增强的兜底：脚本被禁用（或被 CSP 意外拦下）时，
+           页内标签条点了不会有反应，且带 hidden 的面板也无法再被切换出来 ——
+           因此这里隐藏标签条、强制展开全部面板，保证内容依然可见、表单依然可提交。
+           CSP 的 style-src 允许 'unsafe-inline'（只禁了内联脚本），所以这段 <style> 是有效且合规的。 *@
+        <style>
+            .ah-tabs { display: none; }
+            [data-tab-panel][hidden] { display: block !important; }
+        </style>
+    </noscript>
+</head>
+<body class="ah-body">
+    <div class="ah-backdrop" aria-hidden="true"></div>
+
+    <div class="ah-shell">
+        <aside class="ah-sidebar" id="ah-sidebar">
+            <a class="ah-brand" href="/admin">
+                <span class="ah-brand-mark">AH</span>
+                <span>
+                    <span class="ah-brand-text">AuthHub</span>
+                    <span class="ah-brand-sub">统一认证授权中心</span>
+                </span>
+            </a>
+
+            <nav class="ah-nav" aria-label="主导航">
+                @foreach (var entry in navEntries)
+                {
+                    if (!string.IsNullOrEmpty(entry.Group))
+                    {
+                        <div class="ah-nav-group">@entry.Group</div>
+                    }
+
+                    <a class="@entry.Css" href="@entry.Item.Href" aria-current="@entry.AriaCurrent">
+                        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true">
+                            <path d="@entry.Item.IconPath" />
+                        </svg>
+                        <span>@entry.Item.Title</span>
+                    </a>
+                }
+            </nav>
+        </aside>
+
+        <div class="ah-main">
+            <header class="ah-topbar">
+                <button type="button" class="ah-icon-btn" id="ah-sidebar-toggle"
+                        aria-label="切换侧边栏" aria-controls="ah-sidebar">
+                    <svg class="ah-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="@AdminNav.Icons.Menu" />
+                    </svg>
+                </button>
+
+                <nav class="ah-breadcrumb" aria-label="面包屑">
+                    @for (var index = 0; index < crumbs.Count; index++)
+                    {
+                        var crumb = crumbs[index];
+                        if (index > 0)
+                        {
+                            <span class="ah-sep" aria-hidden="true">/</span>
+                        }
+
+                        if (crumb.Href is null)
+                        {
+                            <span class="ah-crumb-current" aria-current="page">@crumb.Text</span>
+                        }
+                        else
+                        {
+                            <a href="@crumb.Href">@crumb.Text</a>
+                        }
+                    }
+                </nav>
+
+                <div class="ah-topbar-spacer"></div>
+
+                @if (apiDocsEnabled)
+                {
+                    <a class="ah-icon-btn" href="/scalar/v1" target="_blank" rel="noopener"
+                       title="API 文档（Scalar）" aria-label="API 文档">
+                        <svg class="ah-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="@AdminNav.Icons.Code" />
+                        </svg>
+                    </a>
+                }
+
+                <div class="ah-user">
+                    <button type="button" class="ah-user-btn" data-menu-toggle="ah-user-menu"
+                            aria-haspopup="menu" aria-expanded="false" aria-controls="ah-user-menu">
+                        <span class="ah-avatar" aria-hidden="true">@initial</span>
+                        <span class="ah-user-name">@displayName</span>
+                        <svg class="ah-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="M6 9l6 6 6-6" />
+                        </svg>
+                    </button>
+
+                    <div class="ah-menu" id="ah-user-menu" role="menu" hidden>
+                        <div class="ah-menu-header">
+                            <strong>@displayName</strong>
+                            <span>@(string.IsNullOrEmpty(email) ? userName : email)</span>
+                        </div>
+
+                        <a class="ah-menu-item" role="menuitem" href="/admin/profile">
+                            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <path d="@AdminNav.Icons.Profile" />
+                            </svg>
+                            <span>我的账户</span>
+                        </a>
+
+                        <a class="ah-menu-item" role="menuitem" href="/admin/profile#password">
+                            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <path d="@AdminNav.Icons.Key" />
+                            </svg>
+                            <span>修改密码</span>
+                        </a>
+
+                        <div class="ah-menu-divider"></div>
+
+                        <form method="post" action="/account/logout">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="ah-menu-item ah-menu-item-danger" role="menuitem">
+                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                     aria-hidden="true">
+                                    <path d="@AdminNav.Icons.Logout" />
+                                </svg>
+                                <span>退出登录</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </header>
+
+            <main class="ah-content">
+                <div class="ah-toast-host">
+                    @if (TempData["Success"] is string successMessage && !string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="ah-toast ah-toast--success" role="status" data-autohide="4500">
+                            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <path d="@AdminNav.Icons.Check" />
+                            </svg>
+                            <span>@successMessage</span>
+                        </div>
+                    }
+
+                    @if (TempData["Error"] is string errorMessage && !string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="ah-toast ah-toast--danger" role="alert">
+                            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <path d="@AdminNav.Icons.Alert" />
+                            </svg>
+                            <span>@errorMessage</span>
+                        </div>
+                    }
+                </div>
+
+                @RenderBody()
+            </main>
+
+            <footer class="ah-footer">
+                AuthHub · OpenID Connect 1.0 / OAuth 2.0 统一认证授权中心
+            </footer>
+        </div>
+    </div>
+
+    <script src="/js/authhub.js"></script>
+</body>
+</html>

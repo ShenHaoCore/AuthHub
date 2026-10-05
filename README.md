@@ -15,6 +15,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 - [快速开始](#快速开始)
 - [种子数据](#种子数据)
 - [端点清单](#端点清单)
+- [管理后台（UI）](#管理后台ui)
 - [测试](#测试)
 - [错误响应约定](#错误响应约定)
 - [安全设计要点](#安全设计要点)
@@ -38,6 +39,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | 8 | 客户端 CRUD（密钥哈希存储、支持轮换） | `ClientsController`、`OpenIddictClientAdminService` |
 | 9 | Scope 管理 | `ScopesController`、`ScopeService` |
 | 10 | 令牌撤销与黑名单（未过期 JWT 立即失效） | `TokensController`、`EnableTokenEntryValidation` |
+| 11 | **管理后台 UI**（Razor Pages，ABP 版式）：仪表盘、用户、角色与权限、客户端、Scope、审计日志、我的账户 | `src/AuthHub.Api/Pages/`、`wwwroot/` |
 
 附带：审计日志（`AuditLogs` 表 + `/api/audit-logs`）、限流、安全响应头、健康检查、OpenAPI 文档（Scalar UI）。
 
@@ -57,7 +59,9 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Serilog | 8.x | Console + 按天滚动文件，可平滑接入 Seq / ELK |
 | Swashbuckle | 6.9.0 | **只用于生成 OpenAPI 文档 JSON**（引的是 `Swashbuckle.AspNetCore.SwaggerGen`，未使用其 Swagger UI） |
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 27 项 |
+| Razor Pages | 8.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
+| 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
+| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 50 项 |
 
 ---
 
@@ -69,10 +73,12 @@ AuthHub.slnx
 │   ├── AuthHub.Domain/           8 个文件   实体、常量、角色-权限映射（不依赖任何框架）
 │   ├── AuthHub.Application/     31 个文件   用例编排、接口、DTO、校验器、Result 体系
 │   ├── AuthHub.Infrastructure/  23 个文件   EF Core、迁移、OpenIddict 适配、各类实现
-│   └── AuthHub.Api/             24 个文件   控制器、HTML 页面、中间件、DI 组装、Program.cs
+│   └── AuthHub.Api/             34 个 .cs + 11 个 .cshtml + 5 个静态资源
+│                                            控制器、协议页、管理后台（Razor Pages）、
+│                                            中间件、DI 组装、Program.cs、wwwroot
 ├── tests/
 │   ├── AuthHub.UnitTests/        4 个文件   领域规则、Result、校验器、AccountService（Moq）
-│   └── AuthHub.IntegrationTests/ 7 个文件   WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 文档端点
+│   └── AuthHub.IntegrationTests/ 9 个文件   WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 文档端点 / 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
@@ -85,6 +91,17 @@ Api ──▶ Application ──▶ Domain
  │                        ▲
  └──▶ Infrastructure ─────┘   （Api → Infrastructure 仅用于 DI 注册，不直接使用其类型）
 ```
+
+**两类浏览器页面走两条不同的路**（这是刻意的，不是历史遗留）：
+
+| | 协议页：登录 / 2FA / 同意授权 / 提示 | 管理后台：`/admin/*` |
+|---|---|---|
+| 产出方式 | `Pages/HtmlPages.cs` 用字符串拼装 HTML | Razor Pages（`Pages/Admin/*.cshtml` + `_AdminLayout.cshtml`） |
+| 为什么 | 它们是 OIDC 流程的一环，页面内容全部来自当前授权请求。字符串拼装让"表单字段 ↔ 协议参数"的对应关系一眼可见，集成测试也能直接断言页面上出现了哪些参数与 scope | 7 个页面上百个字段，结构高度相似（工具栏 + 表格 + 模态表单）。手写字符串会变成数千行拼接；视图引擎在这里省下的成本远超它的间接层 |
+| 样式 | `wwwroot/css/authhub-auth.css` | `wwwroot/css/authhub.css` |
+
+两者共用同一份设计令牌 `wwwroot/css/authhub-tokens.css`，因此登录页与后台是同一套视觉语言
+（深色侧边栏 + 浅色卡片 + 蓝色主色，ABP LeptonX 的版式）。
 
 **几处有意的分层取舍**（不是疏漏，写下来避免后来人"顺手修正"）：
 
@@ -129,6 +146,7 @@ dotnet run --project src/AuthHub.Api
 
 | 地址 | 说明 |
 |------|------|
+| <https://localhost:5001/admin> | **管理后台**（Razor Pages，ABP 版式；开发环境用 `admin` / `Admin@12345` 登录） |
 | <https://localhost:5001/scalar/v1> | Scalar 交互式 API 文档（Development 默认开启，可交互授权）；文档 JSON 在 `/openapi/v1.json` |
 | <https://localhost:5001/.well-known/openid-configuration> | OIDC 发现文档 |
 | <https://localhost:5001/health> | 健康检查 |
@@ -239,6 +257,67 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 
 ---
 
+## 管理后台（UI）
+
+登录后访问 **`/admin`**（开发环境内置账号 `admin` / `Admin@12345`）。
+版式参考 **ABP Framework 的 LeptonX 主题**：深色固定侧边栏 + 浅色内容区，
+页面是"卡片头放工具栏、卡片体放表格、卡片尾放分页"的形态，
+危险操作走模态二次确认，成功/失败用右上角轻提示。
+
+| 页面 | 路径 | 能做什么 |
+|------|------|----------|
+| 仪表盘 | `/admin` | 用户 / 客户端 / Scope / 角色计数，近 7 天审计事件柱状图，协议端点速查，最近事件流 |
+| 用户 | `/admin/users` | 搜索与筛选、新建、编辑资料、分配角色、锁定 / 解锁、强制下线（撤销全部令牌）、删除 |
+| 角色与权限 | `/admin/roles` | 角色列表 + 权限矩阵（权限 × 内置角色）、新建角色、改说明、删除；权限树只读 |
+| 客户端 | `/admin/clients` | 注册 / 编辑 OAuth 客户端、勾选授权类型与 Scope、轮换密钥（明文只显示一次）、删除 |
+| Scope | `/admin/scopes` | 新建 / 编辑 / 删除 Scope、维护关联资源（进入令牌 `aud`）、查看被多少客户端引用 |
+| 审计日志 | `/admin/audit-logs` | 按动作 / 用户 / 客户端 / 时间区间查询，快捷范围（今天 / 7 天 / 30 天），折叠查看 User-Agent |
+| 我的账户 | `/admin/profile` | 档案与权限总览、修改密码、启用 / 关闭 TOTP 两步验证（含恢复码）、测试邮件 / 短信通道 |
+
+### 权限模型
+
+侧边栏按权限收敛，但**真正的访问控制在服务端策略上**，不依赖前端是否隐藏了入口
+（`AuthHubConstants.Policies.Ui.*`，见 `AuthorizationPolicyExtensions.AddUiPermissionPolicy`）：
+
+| 策略 | 要求 |
+|------|------|
+| `Ui.Authenticated` | 只要登录（`/admin/profile`，普通用户也要能改自己的密码） |
+| `Ui.Admin` | 仪表盘：持有 6 个管理权限中的任意一个 |
+| `Ui.UsersManage` / `RolesManage` / `ClientsManage` / `ScopesManage` / `TokensRevoke` / `AuditRead` | 对应的 `authhub:permission` 声明（由 `RolePermissionMap` 从角色推导） |
+
+> **一个容易踩的坑**：`Program.cs` 把 `DefaultChallengeScheme` 指向了 OpenIddict Validation
+> （为的是 `/api/*` 未带令牌时返回 401 而不是 302）。所以后台的 UI 策略**必须显式只挂会话 Cookie 方案**，
+> 否则浏览器访问 `/admin` 会拿到 `401 + WWW-Authenticate`，用户看到一片空白而不是登录页。
+> 集成测试里有一条用例专门钉住这个行为。
+
+### 前端约定（改动前请先读）
+
+- **CSP 是 `script-src 'self'`**，行内 `<script>` 与 `on*` 事件属性会被浏览器静默拦截。
+  因此所有交互都写在 `wwwroot/js/authhub.js` 里，用 `data-*` 属性声明行为：
+  `data-dialog-open` / `data-dialog-close`、`data-confirm`、`data-copy`、`data-tab`、`data-menu-toggle`。
+  `style-src` 允许 `'unsafe-inline'`，所以行内 `style` 属性与 `<noscript><style>` 可以用。
+- **零外部依赖**：不引用任何 CDN（字体、图标、QR 库都没有）。图标是 `AdminNav.Icons` 里的
+  24×24 SVG path 数据，直接内联进标记。集成测试会断言后台页面里不存在站外 `src` / `href`。
+- **渐进增强**：脚本被禁用（或被 CSP 拦下）时，`_AdminLayout.cshtml` 里的 `<noscript><style>`
+  会隐藏标签条并强制展开全部面板，内容依然可读、表单依然可提交。
+- **表单走 PRG**（Post-Redirect-Get）：成功 302 回列表 + `TempData["Success"]` 轻提示；
+  失败原地重渲染并用 `data-dialog-autoopen` 重新打开弹窗，保留用户已填的值。
+- **一次性机密只出现一次**：客户端明文密钥、MFA 恢复码都用 `TempData`
+  （Data Protection 加密、HttpOnly、读取即删）跨重定向展示一次。
+
+### 几个在后台里被显式处理掉的陷阱
+
+| 陷阱 | 处理方式 |
+|------|----------|
+| 编辑客户端时若只提交数据库里的 scope，会把 `openid` / `offline_access` 静默删掉（它们不落 Scope 表） | 把它们作为"协议 Scope"一并列出参与往返；客户端独有的 scope 也单独成组，保证不会被无声丢掉 |
+| 每次保存用户资料都刷新安全戳 → 把用户踢下线 | 只在角色集合**确实变化**时才调 `AssignRolesAsync` |
+| 未改动的字段也会被写进审计 → 假审计记录 | `UnchangedAsNull`：与当前值相同的字段传 `null`（服务端的"不修改"语义） |
+| 权限是代码内固定映射（`RolePermissionMap`），不是数据库配置 | 权限树/矩阵只读（`disabled`），并用提示说明"为什么这里不能勾选" |
+| 按天分桶的审计统计在闭区间下会漏算/重算边界毫秒 | 一天的结束取"次日零点减 1 tick"（仓储用的是 `>=` 与 `<=`） |
+| 弹窗 id 里直接嵌了 Scope 名（可能含 `:`，如 `api:read`），`querySelector('#x:y')` 会抛 `SyntaxError` | `authhub.js` 的 `byIdOrSelector` 回退到 `getElementById`（它接收任意 id 字面量、不做解析） |
+
+---
+
 ## 测试
 
 ```bash
@@ -248,17 +327,21 @@ dotnet build AuthHub.slnx
 # 单元测试：66 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：27 项
+# 集成测试：50 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
 | `AuthHub.UnitTests` | 66 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"） |
-| `AuthHub.IntegrationTests` | 27 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、旧 Swagger 路径已下线、未开启时不暴露） |
+| `AuthHub.IntegrationTests` | 50 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
+
+> 后台的会话用例走的是 `TestServer.CreateHandler()` + 自建 Cookie 容器
+> （`Infrastructure/CookieSession.cs`），**刻意不复用 fixture 上那个共享 `Client`** ——
+> 否则登录后残留的会话 Cookie 会让"未登录应返回 401"那几条断言随机失败。
 
 > **注意**：集成测试会占用 `src/AuthHub.Api/bin` 下的 DLL。如果本机正跑着
 > `dotnet run`（或在 Visual Studio 里调试），先停掉它，否则会拿到
@@ -487,6 +570,53 @@ Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PK
 客户端凭证流程预填 `m2m-service`。**机密客户端的密钥不写进代码**，
 需要在 UI 的认证面板里手工填写。
 
+### 11. 为管理后台引入 Razor Pages（对"零视图依赖"取舍的修订）
+
+早期版本的注释里写着"为什么不用 Razor：本项目的定位是 OIDC 服务端 + 管理 API"。
+那是只有 4 个协议页时的判断。加上 7 个管理页面之后，这个结论不再成立：
+
+| | 协议页（4 个） | 管理后台（7 个页面、上百个字段） |
+|---|---|---|
+| 手写字符串 | 每个页面一个 `StringBuilder` 方法，可读性尚可 | 会变成数千行拼接，改一个字段要动好几处 |
+| 集成测试断言 | 直接对 HTML 字符串断言参数与 scope，很直接 | 断言关键内容即可，不需要逐字段验证视觉 |
+| 防伪令牌 | 手工 `IssueAntiforgeryToken()` | Razor Pages 的 POST 处理器**默认自动校验**，不需要逐个挂 `[ValidateAntiForgeryToken]` |
+
+因此：**后台改用 Razor Pages，协议页保持纯字符串**。这也是 `Program.cs` 里
+`AddRazorPages()` / `MapRazorPages()` 的来由。顺带一提，当初选 `AddControllersWithViews()`
+而非 `AddControllers()` 就是为了让 `[ValidateAntiForgeryToken]` 能正常工作（见第 6 条），
+现在两条路都受益。
+
+### 12. `.NET 8` 的 `WebApplication` 不会自动挂 `UseStaticFiles()`
+
+这个坑很隐蔽，值得单独记一笔：**`/admin` 会正常返回 200，但 `wwwroot` 下的
+CSS / JS / favicon 全是 404**。页面结构完整、文字齐全，只是没有样式、按钮点了没反应 ——
+只看状态码完全发现不了。
+
+修复就是在管道里显式加一行 `app.UseStaticFiles()`（位置刻意放在限流与请求日志之前：
+静态资源是终端处理、不经过认证，先命中就不会在每次页面加载时消耗登录接口的限流额度，
+也不会把请求日志刷满 `.css` / `.js`）。集成测试里有一组用例逐一断言这 5 个资源可取。
+
+### 13. SQLite 上 `DateTimeOffset` 的比较无法翻译
+
+EF Core 的 SQLite 提供程序能翻译 `DateTimeOffset` 的**排序**，却翻译不了**比较**：
+
+```
+System.InvalidOperationException: The LINQ expression 'DbSet<AuditLog>()
+    .Where(a => (DateTimeOffset?)a.CreatedAt >= __from_0)' could not be translated.
+```
+
+于是 `AuditLogRepository` 里"按时间区间筛选"这段代码在 SQL Server 上一切正常，
+换到 SQLite 就 500（表现是"仪表盘的近 7 天统计炸了"）。集成测试跑在 SQLite 上，
+所以这个缺陷在第一次跑测试时就被抓出来了。
+
+修复：在 `AuthHubDbContext` 里对 **SQLite 专用**地把自定义实体的 `DateTimeOffset`
+属性改为按 `UtcTicks`（`long`）存储 —— 语义不变（库里本来就是 UTC 时刻），
+比较与排序都能被原生翻译，而 SQL Server 仍使用原生 `datetimeoffset` 列类型，
+生产库结构与既有迁移完全不受影响。只处理我们自己的三张实体表，
+不碰 OpenIddict 的实体（它有自己的时间存储策略）。
+
+副作用：切换后 SQLite 上的既有数据读不出来，开发 / 测试库删掉重建即可。
+
 ---
 
 ## 部署
@@ -554,7 +684,12 @@ docker run --rm -p 8080:8080 \
 - [ ] **OpenTelemetry**：分布式追踪（导出到 OTLP）。
 - [ ] **CI 安全扫描**：`dotnet list package --vulnerable` 与 OWASP Dependency Check
       （见 `.github/workflows/ci.yml`）。
-- [ ] **管理后台 UI**：目前只有 API 与 Scalar 文档，没有管理界面。
+- [x] **管理后台 UI**：已完成（Razor Pages，7 个页面，见 [管理后台（UI）](#管理后台ui)）。
+      后续可补：审计日志导出 CSV、客户端「测试连接」、
+      用户的 MFA 重置（目前需用户本人在「我的账户」里关闭后重新绑定）。
 - [ ] **MFA 渠道补齐**：邮件与短信当前是"写日志"实现（`LoggingEmailSender` / `LoggingSmsSender`），
       接真实 SMTP / 短信服务商时替换 `IEmailSender` / `ISmsSender` 的注册即可，业务代码无需改动。
+- [ ] **MFA 绑定的二维码**：目前「我的账户」只给出密钥与 `otpauth://` URI，让用户在 App 里手动输入。
+      加二维码需要引绘图依赖（如 QRCoder）或在前端内置一个 QR 编码器，
+      与当前"零外部依赖"的取舍冲突，因此暂缓。
 - [ ] **密钥轮换流程**：证书轮换需要在 JWKS 中短暂并存新旧公钥，目前未实现。

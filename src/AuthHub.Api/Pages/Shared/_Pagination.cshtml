@@ -1,0 +1,41 @@
+@model AuthHub.Api.Pages.Shared.PaginationModel
+@if (Model.Total > 0)
+{
+    <div class="ah-pagination">
+        <span class="ah-pagination-info">
+            共 <strong>@Model.Total</strong> 条 · 当前 @Model.FirstItemNumber–@Model.LastItemNumber 条
+            @if (Model.TotalPages > 1)
+            {
+                <text> · 第 @Model.Page / @Model.TotalPages 页</text>
+            }
+        </span>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="ah-pagination-pages" aria-label="分页导航">
+                <a class="@Model.PreviousCss" href="@(Model.HasPrevious ? Model.UrlFor(Model.Page - 1) : null)"
+                   aria-label="上一页">上一页</a>
+
+                @foreach (var number in Model.PageNumbers)
+                {
+                    if (number is null)
+                    {
+                        <span class="ah-page-ellipsis" aria-hidden="true">…</span>
+                    }
+                    else if (number == Model.Page)
+                    {
+                        <a class="ah-page-link is-active" href="@Model.UrlFor(number.Value)"
+                           aria-current="page">@number</a>
+                    }
+                    else
+                    {
+                        <a class="ah-page-link" href="@Model.UrlFor(number.Value)">@number</a>
+                    }
+                }
+
+                <a class="@Model.NextCss" href="@(Model.HasNext ? Model.UrlFor(Model.Page + 1) : null)"
+                   aria-label="下一页">下一页</a>
+            </nav>
+        }
+    </div>
+}

@@ -1,0 +1,398 @@
+@page "/admin/roles"
+@model AuthHub.Api.Pages.Admin.RolesModel
+@using AuthHub.Domain.Constants
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">角色与权限</h1>
+        <p class="ah-page-sub">
+            角色的权限由代码内的 <code>RolePermissionMap</code> 固定映射 —— 内置角色直接对应服务端的授权策略，
+            因此界面上不可编辑。要调整权限，请修改该映射表并重新部署。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create-role">
+            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Plus" />
+            </svg>
+            新建角色
+        </button>
+    </div>
+</div>
+
+<div class="ah-stack">
+    @if (!string.IsNullOrEmpty(Model.FormError))
+    {
+        <div class="ah-alert ah-alert--danger" role="alert">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Alert" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>操作未完成</strong>
+                <span>@Model.FormError</span>
+            </div>
+        </div>
+    }
+
+    <div class="ah-alert ah-alert--info">
+        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="@AdminNav.Icons.Info" />
+        </svg>
+        <div class="ah-alert-body">
+            <strong>为什么权限不能在这里勾选</strong>
+            <span>
+                权限点是服务端授权策略的组成部分，允许运行时改写等于开放了一条提权路径。
+                新增权限的完整做法：在 <code>AuthHubConstants.Permissions</code> 里加常量 →
+                在 <code>RolePermissionMap</code> 里挂到角色上 → 建同名策略（<code>AuthHubConstants.Policies</code>）→ 在控制器/页面上引用。
+            </span>
+        </div>
+    </div>
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <div>
+                <h2 class="ah-card-title">角色列表</h2>
+                <p class="ah-card-sub">共 @Model.Roles.Count 个角色</p>
+            </div>
+        </div>
+
+        <div class="ah-card-body ah-card-body-flush">
+            <div class="ah-table-wrap">
+                <table class="ah-table">
+                    <thead>
+                        <tr>
+                            <th>角色</th>
+                            <th>类型</th>
+                            <th>权限</th>
+                            <th class="ah-col-num">用户数</th>
+                            <th class="ah-col-actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var role in Model.Roles)
+                        {
+                            var name = role.Name ?? string.Empty;
+                            <tr>
+                                <td>
+                                    <div class="ah-cell-main">@name</div>
+                                    <div class="ah-cell-sub">@(string.IsNullOrWhiteSpace(role.Description) ? "（无说明）" : role.Description)</div>
+                                </td>
+                                <td>
+                                    @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(name))
+                                    {
+                                        <span class="ah-badge ah-badge--primary">内置</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="ah-badge">自定义</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (role.Permissions.Count == 0)
+                                    {
+                                        <span class="ah-cell-sub">无权限映射</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="ah-tag-list">
+                                            @foreach (var permission in role.Permissions)
+                                            {
+                                                <span class="ah-badge ah-badge--success">@permission</span>
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                                <td class="ah-col-num">@role.UserCount</td>
+                                <td class="ah-col-actions">
+                                    <div class="ah-act">
+                                        <button type="button" class="ah-act-btn" title="查看权限"
+                                                aria-label="查看 @name 的权限"
+                                                data-dialog-open="#dlg-perm-@name">
+                                            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                 stroke-linejoin="round" aria-hidden="true">
+                                                <path d="@AdminNav.Icons.Roles" />
+                                            </svg>
+                                        </button>
+
+                                        <button type="button" class="ah-act-btn" title="编辑说明"
+                                                aria-label="编辑 @name"
+                                                data-dialog-open="#dlg-edit-role-@name">
+                                            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                 stroke-linejoin="round" aria-hidden="true">
+                                                <path d="@AdminNav.Icons.Edit" />
+                                            </svg>
+                                        </button>
+
+                                        @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(name))
+                                        {
+                                            <button type="button" class="ah-act-btn" disabled
+                                                    title="内置角色不允许删除" aria-label="内置角色不允许删除">
+                                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                     stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="@AdminNav.Icons.Trash" />
+                                                </svg>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <form method="post" asp-page-handler="delete"
+                                                  data-confirm="将删除角色 @name。若仍有用户属于该角色，删除后这些用户会失去对应权限。继续？">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetRoleName" value="@name" />
+                                                <button type="submit" class="ah-act-btn ah-act-danger" title="删除角色"
+                                                        aria-label="删除 @name">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Trash" />
+                                                    </svg>
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <div>
+                <h2 class="ah-card-title">权限矩阵</h2>
+                <p class="ah-card-sub">行 = 权限点，列 = 内置角色；✓ 表示该角色拥有此权限</p>
+            </div>
+        </div>
+        <div class="ah-card-body ah-card-body-flush">
+            <div class="ah-table-wrap">
+                <table class="ah-table ah-matrix">
+                    <thead>
+                        <tr>
+                            <th>权限</th>
+                            @foreach (var role in Model.BuiltInRoles)
+                            {
+                                <th style="text-align:center">@role.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var group in Model.PermissionGroups)
+                        {
+                            @foreach (var permission in group.Permissions)
+                            {
+                                <tr>
+                                    <td>
+                                        <div>@(string.IsNullOrWhiteSpace(permission.Description) ? permission.Name : permission.Description)</div>
+                                        <div class="ah-cell-sub"><code>@permission.Name</code></div>
+                                    </td>
+                                    @foreach (var role in Model.BuiltInRoles)
+                                    {
+                                        <td class="ah-matrix-cell">
+                                            @if (Model.HasPermission(role.Name, permission.Name))
+                                            {
+                                                <span class="ah-yes" title="拥有">✓</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="ah-no" title="未拥有">—</span>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ------------------------------------------------------------ 新建角色 *@
+<dialog class="ah-modal" id="dlg-create-role" aria-labelledby="dlg-create-role-title"
+        data-dialog-autoopen="@Model.AutoOpenCreate">
+    <form method="post" asp-page-handler="create">
+        <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+
+        <div class="ah-modal-head">
+            <h2 id="dlg-create-role-title">新建角色</h2>
+            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="ah-modal-body">
+            @if (Model.AutoOpenCreate && !string.IsNullOrEmpty(Model.FormError))
+            {
+                <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                    <span>@Model.FormError</span>
+                </div>
+            }
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-role-name">角色名<span class="ah-req">*</span></label>
+                <input class="ah-input" id="create-role-name" name="NewRoleName" type="text" required
+                       autocomplete="off" value="@Model.NewRoleName" />
+                <div class="ah-hint">
+                    建议使用英文名（会作为令牌里的 <code>role</code> 声明）。
+                    自定义角色当前不绑定任何权限，需要在 <code>RolePermissionMap</code> 中补充映射。
+                </div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-role-desc">说明</label>
+                <input class="ah-input" id="create-role-desc" name="NewRoleDescription" type="text"
+                       autocomplete="off" value="@Model.NewRoleDescription" placeholder="这个角色负责什么" />
+            </div>
+        </div>
+
+        <div class="ah-modal-foot">
+            <button type="button" class="ah-btn" data-dialog-close>取消</button>
+            <div class="ah-modal-foot-end">
+                <button type="submit" class="ah-btn ah-btn--primary">创建角色</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+
+@* ----------------------------------- 每行：权限树（只读）+ 编辑说明 *@
+@foreach (var role in Model.Roles)
+{
+    var roleName = role.Name ?? string.Empty;
+    var editFailed = Model.IsEditFailure(roleName);
+
+    <dialog class="ah-modal ah-modal-lg" id="dlg-perm-@roleName"
+            aria-labelledby="dlg-perm-title-@roleName">
+        <div class="ah-modal-head">
+            <h2 id="dlg-perm-title-@roleName">@roleName 的权限</h2>
+            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="ah-modal-body">
+            @if (role.Permissions.Count == 0)
+            {
+                <div class="ah-alert ah-alert--warning">
+                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="@AdminNav.Icons.Alert" />
+                    </svg>
+                    <div class="ah-alert-body">
+                        <strong>该角色没有任何权限映射</strong>
+                        <span>
+                            @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(roleName))
+                            {
+                                <text>这是内置角色，但 RolePermissionMap 中未给它挂任何权限。</text>
+                            }
+                            else
+                            {
+                                <text>这是自定义角色。请在 RolePermissionMap 中补上映射，重新部署后生效。</text>
+                            }
+                        </span>
+                    </div>
+                </div>
+            }
+
+            @foreach (var group in Model.PermissionGroups)
+            {
+                <div class="ah-perm-group">
+                    <div class="ah-perm-group-head">
+                        <span>@group.Title</span>
+                        <span class="ah-perm-count ah-badge">@group.Permissions.Count 项</span>
+                    </div>
+                    <div class="ah-perm-items">
+                        @foreach (var permission in group.Permissions)
+                        {
+                            var granted = Model.HasPermission(roleName, permission.Name);
+                            <label class="ah-perm-item">
+                                <input type="checkbox" disabled checked="@granted" />
+                                <span>
+                                    @(string.IsNullOrWhiteSpace(permission.Description) ? permission.Name : permission.Description)
+                                    <code>@permission.Name</code>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="ah-hint" style="margin-top:12px">
+                勾选框为只读展示。权限由 <code>AuthHub.Domain/Constants/RolePermissionMap.cs</code> 决定，
+                修改后需重新部署；权限点还会被展开成 <code>authhub:permission</code> 声明写入会话与令牌。
+            </div>
+        </div>
+
+        <div class="ah-modal-foot">
+            <div class="ah-modal-foot-end">
+                <button type="button" class="ah-btn" data-dialog-close>关闭</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog class="ah-modal" id="dlg-edit-role-@roleName"
+            aria-labelledby="dlg-edit-role-title-@roleName"
+            data-dialog-autoopen="@editFailed">
+        <form method="post" asp-page-handler="save">
+            <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+            <input type="hidden" name="EditRoleName" value="@roleName" />
+
+            <div class="ah-modal-head">
+                <h2 id="dlg-edit-role-title-@roleName">编辑角色 · @roleName</h2>
+                <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="ah-modal-body">
+                @if (editFailed && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                        <span>@Model.FormError</span>
+                    </div>
+                }
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-role-name-@roleName">角色名</label>
+                    <input class="ah-input" id="edit-role-name-@roleName" type="text" value="@roleName" readonly />
+                    <div class="ah-hint">
+                        角色名是权限映射与策略的键，创建后不可修改；内置角色名更不能改，
+                        否则授权策略会立即失配。
+                    </div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-role-desc-@roleName">说明</label>
+                    <input class="ah-input" id="edit-role-desc-@roleName" name="EditRoleDescription" type="text"
+                           value="@(editFailed ? Model.EditRoleDescription : role.Description)"
+                           placeholder="这个角色负责什么" />
+                </div>
+            </div>
+
+            <div class="ah-modal-foot">
+                <button type="button" class="ah-btn" data-dialog-close>取消</button>
+                <div class="ah-modal-foot-end">
+                    <button type="submit" class="ah-btn ah-btn--primary">保存</button>
+                </div>
+            </div>
+        </form>
+    </dialog>
+}
