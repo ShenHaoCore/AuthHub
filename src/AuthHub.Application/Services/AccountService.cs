@@ -68,7 +68,7 @@ public sealed class AccountService : IAccountService
         var createResult = await _userManager.CreateAsync(user, request.Password);
         if (!createResult.Succeeded)
         {
-            return Result.Failure<UserProfileDto>(MapIdentityErrors(createResult));
+            return Result.Failure<UserProfileDto>(createResult.ToError());
         }
 
         // 新用户默认进入 User 角色（无管理权限）
@@ -256,7 +256,7 @@ public sealed class AccountService : IAccountService
         var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
         if (!result.Succeeded)
         {
-            return Result.Failure(MapIdentityErrors(result));
+            return Result.Failure(result.ToError());
         }
 
         // 刷新会话 Cookie 中的安全戳，使其他设备上的旧会话失效
@@ -479,17 +479,5 @@ public sealed class AccountService : IAccountService
             // 邮件通道不可用不能导致注册失败
             _logger.LogWarning(ex, "发送邮箱确认邮件失败，用户 {UserId}", user.Id);
         }
-    }
-
-    private static Error MapIdentityErrors(IdentityResult result, string fallbackCode = "IdentityError")
-    {
-        if (result.Succeeded) return Error.None;
-
-        var errors = result.Errors
-            .GroupBy(e => e.Code)
-            .ToDictionary(g => g.Key, g => g.Select(e => e.Description).ToArray());
-
-        var message = string.Join(" ", result.Errors.Select(e => e.Description));
-        return Error.Validation(string.IsNullOrWhiteSpace(message) ? "操作失败。" : message, errors);
     }
 }

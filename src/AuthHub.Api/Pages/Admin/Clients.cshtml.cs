@@ -30,9 +30,15 @@ public sealed record ScopeOption(string Name, string? DisplayName, bool IsProtoc
 ///    Data Protection 加密、HttpOnly，不会落到浏览器可读的位置）。
 /// </summary>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.ClientsManage)]
-public class ClientsModel : PageModel
+public class ClientsModel : AdminPageModel
 {
     private const int DefaultPageSize = 20;
+
+    /// <summary>一次性明文密钥的 TempData 键（读取即删除）。</summary>
+    private const string SecretValueKey = "ClientSecretValue";
+
+    /// <summary>明文密钥所属客户端的 TempData 键。</summary>
+    private const string SecretClientIdKey = "ClientSecretClientId";
 
     private readonly IClientAdminService _clients;
     private readonly IScopeAdminService _scopes;
@@ -52,8 +58,6 @@ public class ClientsModel : PageModel
     public string? Search { get; set; }
 
     // ------------------------------------------------------------------ 表单字段（POST）
-
-    [BindProperty] public string? ReturnUrl { get; set; }
 
     [BindProperty] public string? NewClientId { get; set; }
 
@@ -108,24 +112,17 @@ public class ClientsModel : PageModel
         "authorization_code", "refresh_token", "client_credentials", "password", "implicit"
     };
 
-    public string? FormError { get; private set; }
-
-    /// <summary>POST 失败时需要重新打开的弹窗：create / edit。</summary>
-    public string? OpenDialog { get; private set; }
-
     /// <summary>一次性展示的明文密钥（创建 / 轮换后）。</summary>
     public string? RevealedSecret { get; private set; }
 
     /// <summary>明文密钥所属的客户端。</summary>
     public string? RevealedSecretClientId { get; private set; }
 
-    public bool AutoOpenCreate => string.Equals(OpenDialog, "create", StringComparison.Ordinal);
+    // ------------------------------------------------------------------ 基类钩子（见 AdminPageModel）
 
-    public string CurrentUrl => $"{Request.Path}{Request.QueryString}";
+    protected override string ListPath => "/admin/clients";
 
-    public bool IsEditFailure(string clientId)
-        => string.Equals(OpenDialog, "edit", StringComparison.Ordinal)
-           && string.Equals(EditClientId, clientId, StringComparison.Ordinal);
+    protected override string? EditingId => EditClientId;
 
     public Pages.Shared.PaginationModel Pagination => new()
     {
@@ -154,13 +151,13 @@ public class ClientsModel : PageModel
         ViewData["NavKey"] = "clients";
 
         // 读取即删除：密钥只展示这一次
-        if (TempData["ClientSecretValue"] is string secret)
+        if (TempData[SecretValueKey] is string secret)
         {
             RevealedSecret = secret;
-            RevealedSecretClientId = TempData["ClientSecretClientId"] as string;
+            RevealedSecretClientId = TempData[SecretClientIdKey] as string;
         }
 
-        await LoadAsync(cancellationToken);
+        await LoadDataAsync(cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：新建
@@ -169,7 +166,7 @@ public class ClientsModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(NewClientId))
         {
-            return await FailAsync("create", Error.Validation("ClientId 不能为空。"), cancellationToken);
+            return await FailAsync(CreateDialog, Error.Validation("ClientId 不能为空。"), cancellationToken);
         }
 
         var grantTypes = NewGrantTypes.Length > 0
@@ -183,8 +180,8 @@ public class ClientsModel : PageModel
         var result = await _clients.CreateAsync(
             new CreateClientRequest(
                 ClientId: NewClientId.Trim(),
-                DisplayName: string.IsNullOrWhiteSpace(NewDisplayName) ? null : NewDisplayName.Trim(),
-                ClientSecret: string.IsNullOrWhiteSpace(NewClientSecret) ? null : NewClientSecret.Trim(),
+                DisplayName: TrimToNull(NewDisplayName),
+                ClientSecret: TrimToNull(NewClientSecret),
                 ApplicationType: string.IsNullOrWhiteSpace(NewApplicationType) ? null : NewApplicationType,
                 ClientType: string.IsNullOrWhiteSpace(NewClientType) ? null : NewClientType,
                 RedirectUris: SplitLines(NewRedirectUris),
@@ -197,7 +194,7 @@ public class ClientsModel : PageModel
 
         if (result.IsFailure)
         {
-            return await FailAsync("create", result.Error, cancellationToken);
+            return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
         return RedirectWithSecret(
@@ -212,13 +209,13 @@ public class ClientsModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(EditClientId))
         {
-            return await FailAsync("edit", Error.Validation("缺少 ClientId。"), cancellationToken);
+            return await FailAsync(EditDialog, Error.Validation("缺少 ClientId。"), cancellationToken);
         }
 
         var result = await _clients.UpdateAsync(
             EditClientId,
             new UpdateClientRequest(
-                DisplayName: string.IsNullOrWhiteSpace(EditDisplayName) ? null : EditDisplayName.Trim(),
+                DisplayName: TrimToNull(EditDisplayName),
                 RedirectUris: SplitLines(EditRedirectUris),
                 PostLogoutRedirectUris: SplitLines(EditPostLogoutRedirectUris),
                 GrantTypes: EditGrantTypes,
@@ -229,11 +226,10 @@ public class ClientsModel : PageModel
 
         if (result.IsFailure)
         {
-            return await FailAsync("edit", result.Error, cancellationToken);
+            return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已保存客户端 {EditClientId} 的配置。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已保存客户端 {EditClientId} 的配置。");
     }
 
     // ------------------------------------------------------------------ POST：轮换密钥
@@ -272,13 +268,12 @@ public class ClientsModel : PageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已删除客户端 {TargetClientId}。该客户端已签发的令牌会在下次校验时被拒绝。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已删除客户端 {TargetClientId}。该客户端已签发的令牌会在下次校验时被拒绝。");
     }
 
     // ------------------------------------------------------------------ 内部辅助
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    protected override async Task LoadDataAsync(CancellationToken cancellationToken)
     {
         var scopes = await _scopes.GetAllAsync(cancellationToken);
 
@@ -300,42 +295,19 @@ public class ClientsModel : PageModel
         Clients = await _clients.QueryAsync(CurrentPage, DefaultPageSize, Search, cancellationToken);
     }
 
-    /// <summary>把多行文本切成去重后的数组（重定向地址、Scope 等按行输入）。</summary>
-    private static string[] SplitLines(string? value)
-        => string.IsNullOrWhiteSpace(value)
-            ? Array.Empty<string>()
-            : value.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-
-    private IActionResult RedirectBack()
-        => Redirect(!string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl)
-            ? ReturnUrl
-            : "/admin/clients");
-
     /// <summary>带着一次性明文密钥回到列表页做展示。</summary>
     private IActionResult RedirectWithSecret(string clientId, string? secret, string message)
     {
-        TempData["Success"] = string.IsNullOrWhiteSpace(secret)
+        SetSuccessMessage(string.IsNullOrWhiteSpace(secret)
             ? message
-            : $"{message} 明文密钥只在下方显示这一次，请立即转交调用方。";
+            : $"{message} 明文密钥只在下方显示这一次，请立即转交调用方。");
 
         if (!string.IsNullOrWhiteSpace(secret))
         {
-            TempData["ClientSecretValue"] = secret;
-            TempData["ClientSecretClientId"] = clientId;
+            TempData[SecretValueKey] = secret;
+            TempData[SecretClientIdKey] = clientId;
         }
 
         return RedirectBack();
-    }
-
-    private async Task<IActionResult> FailAsync(string? dialog, Error error, CancellationToken cancellationToken)
-    {
-        await LoadAsync(cancellationToken);
-
-        FormError = error.Message;
-        OpenDialog = dialog;
-
-        return Page();
     }
 }

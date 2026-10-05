@@ -1,6 +1,7 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Clients;
 using AuthHub.Application.Interfaces;
+using AuthHub.Domain.Constants;
 using AuthHub.Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -103,7 +104,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
                 Error.Validation($"不支持的授权类型：{string.Join(", ", invalid)}。"));
         }
 
-        var scopes = (request.Scopes ?? new[] { "profile", "api:read" })
+        var scopes = (request.Scopes ?? new[] { AuthHubConstants.Scopes.Profile, AuthHubConstants.Scopes.ApiRead })
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -372,6 +373,12 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
     }
 
     /// <summary>
+    /// 「拿不到真实哈希、但客户端确实是 confidential」时的哨兵值。
+    /// 只参与 <see cref="PreserveSecretAsync"/> 的“别把已有密钥改没”判断，不能当哈希用。
+    /// </summary>
+    private const string UnknownSecretHash = "unknown";
+
+    /// <summary>
     /// 读取客户端密钥的哈希值。OpenIddict 的 Manager API 刻意不暴露密钥，
     /// 因此这里下探到 EF Store；若当前使用的不是 EF Store，
     /// 则退化为“confidential 即视为已配置密钥”。
@@ -382,7 +389,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         if (store is null || application is not OpenIddictEntityFrameworkCoreApplication entity)
         {
             var clientType = await _applicationManager.GetClientTypeAsync(application, cancellationToken);
-            return clientType == Oidc.ClientTypes.Confidential ? "unknown" : null;
+            return clientType == Oidc.ClientTypes.Confidential ? UnknownSecretHash : null;
         }
 
         return await store.GetClientSecretAsync(entity, cancellationToken);
@@ -394,7 +401,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
     /// </summary>
     private async Task PreserveSecretAsync(object application, string? secretHashBefore, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(secretHashBefore) || secretHashBefore == "unknown")
+        if (string.IsNullOrEmpty(secretHashBefore) || secretHashBefore == UnknownSecretHash)
         {
             return;
         }

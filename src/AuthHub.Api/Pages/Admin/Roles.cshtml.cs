@@ -23,7 +23,7 @@ public sealed record PermissionGroup(string Title, IReadOnlyList<PermissionDescr
 /// 页面上也把这条路径写清楚了，避免运维以为界面漏了保存按钮。
 /// </summary>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.RolesManage)]
-public class RolesModel : PageModel
+public class RolesModel : AdminPageModel
 {
     private readonly IRoleAdminService _roles;
 
@@ -31,8 +31,6 @@ public class RolesModel : PageModel
     {
         _roles = roles;
     }
-
-    [BindProperty] public string? ReturnUrl { get; set; }
 
     [BindProperty] public string? NewRoleName { get; set; }
 
@@ -50,19 +48,14 @@ public class RolesModel : PageModel
     /// <summary>权限目录（按分组整理）。</summary>
     public IReadOnlyList<PermissionGroup> PermissionGroups { get; private set; } = Array.Empty<PermissionGroup>();
 
-    public string? FormError { get; private set; }
+    // ------------------------------------------------------------------ 基类钩子（见 AdminPageModel）
 
-    /// <summary>POST 失败时需要重新打开的弹窗：create / edit。</summary>
-    public string? OpenDialog { get; private set; }
+    protected override string ListPath => "/admin/roles";
 
-    public bool AutoOpenCreate => string.Equals(OpenDialog, "create", StringComparison.Ordinal);
+    protected override string? EditingId => EditRoleName;
 
-    public string CurrentUrl => $"{Request.Path}{Request.QueryString}";
-
-    /// <summary>该行的编辑弹窗是否需要自动打开。</summary>
-    public bool IsEditFailure(string roleName)
-        => string.Equals(OpenDialog, "edit", StringComparison.Ordinal)
-           && string.Equals(EditRoleName, roleName, StringComparison.OrdinalIgnoreCase);
+    /// <summary>角色按名称查找，比较标识时不区分大小写。</summary>
+    protected override StringComparison EditingIdComparison => StringComparison.OrdinalIgnoreCase;
 
     /// <summary>指定角色是否拥有该权限（用于权限树与权限矩阵）。</summary>
     public bool HasPermission(string roleName, string permission)
@@ -97,7 +90,7 @@ public class RolesModel : PageModel
         ViewData["Title"] = "角色与权限";
         ViewData["NavKey"] = "roles";
 
-        await LoadAsync(cancellationToken);
+        await LoadDataAsync(cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：新建角色
@@ -106,23 +99,21 @@ public class RolesModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(NewRoleName))
         {
-            return await FailAsync("create", Error.Validation("角色名不能为空。"), cancellationToken);
+            return await FailAsync(CreateDialog, Error.Validation("角色名不能为空。"), cancellationToken);
         }
 
         var result = await _roles.CreateAsync(
-            new CreateRoleRequest(NewRoleName.Trim(), string.IsNullOrWhiteSpace(NewRoleDescription) ? null : NewRoleDescription.Trim()),
+            new CreateRoleRequest(NewRoleName.Trim(), TrimToNull(NewRoleDescription)),
             cancellationToken);
 
         if (result.IsFailure)
         {
-            return await FailAsync("create", result.Error, cancellationToken);
+            return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = result.Value.IsSystemRole
+        return RedirectBackWithSuccess(result.Value.IsSystemRole
             ? $"已创建角色 {result.Value.Name}；它与内置角色同名，会自动继承 RolePermissionMap 里的权限映射。"
-            : $"已创建角色 {result.Value.Name}。自定义角色目前不绑定任何内置权限，需要在 RolePermissionMap 中补充映射后才会获得权限。";
-
-        return RedirectBack();
+            : $"已创建角色 {result.Value.Name}。自定义角色目前不绑定任何内置权限，需要在 RolePermissionMap 中补充映射后才会获得权限。");
     }
 
     // ------------------------------------------------------------------ POST：修改说明
@@ -131,21 +122,20 @@ public class RolesModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(EditRoleName))
         {
-            return await FailAsync("edit", Error.Validation("缺少角色名。"), cancellationToken);
+            return await FailAsync(EditDialog, Error.Validation("缺少角色名。"), cancellationToken);
         }
 
         var result = await _roles.UpdateAsync(
             EditRoleName,
-            new UpdateRoleRequest(string.IsNullOrWhiteSpace(EditRoleDescription) ? null : EditRoleDescription.Trim()),
+            new UpdateRoleRequest(TrimToNull(EditRoleDescription)),
             cancellationToken);
 
         if (result.IsFailure)
         {
-            return await FailAsync("edit", result.Error, cancellationToken);
+            return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已更新角色 {result.Value.Name} 的说明。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已更新角色 {result.Value.Name} 的说明。");
     }
 
     // ------------------------------------------------------------------ POST：删除角色
@@ -163,13 +153,12 @@ public class RolesModel : PageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已删除角色 {TargetRoleName}。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已删除角色 {TargetRoleName}。");
     }
 
     // ------------------------------------------------------------------ 内部辅助
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    protected override async Task LoadDataAsync(CancellationToken cancellationToken)
     {
         Roles = await _roles.GetAllAsync(cancellationToken);
 
@@ -190,19 +179,4 @@ public class RolesModel : PageModel
         "审计" => 5,
         _ => 99
     };
-
-    private IActionResult RedirectBack()
-        => Redirect(!string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl)
-            ? ReturnUrl
-            : "/admin/roles");
-
-    private async Task<IActionResult> FailAsync(string? dialog, Error error, CancellationToken cancellationToken)
-    {
-        await LoadAsync(cancellationToken);
-
-        FormError = error.Message;
-        OpenDialog = dialog;
-
-        return Page();
-    }
 }

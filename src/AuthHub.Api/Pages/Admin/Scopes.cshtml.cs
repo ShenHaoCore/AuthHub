@@ -25,7 +25,7 @@ namespace AuthHub.Api.Pages.Admin;
 ///    "scope 不在允许列表里"而失败。所以列表里给出引用计数，删除前明确警告。
 /// </summary>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.ScopesManage)]
-public class ScopesModel : PageModel
+public class ScopesModel : AdminPageModel
 {
     /// <summary>
     /// 统计引用时一次拉取的客户端上限（`IClientAdminService` 内部上限为 200）。
@@ -60,8 +60,6 @@ public class ScopesModel : PageModel
 
     // ------------------------------------------------------------------ 表单字段（POST）
 
-    [BindProperty] public string? ReturnUrl { get; set; }
-
     [BindProperty] public string? NewName { get; set; }
 
     [BindProperty] public string? NewDisplayName { get; set; }
@@ -94,20 +92,13 @@ public class ScopesModel : PageModel
     /// <summary>当前筛选命中的 scope 数量（用于空态文案区分"没有数据"与"没有匹配"）。</summary>
     public int TotalCount { get; private set; }
 
-    public string? FormError { get; private set; }
-
-    /// <summary>POST 失败时需要重新打开的弹窗：create / edit。</summary>
-    public string? OpenDialog { get; private set; }
-
-    public bool AutoOpenCreate => string.Equals(OpenDialog, "create", StringComparison.Ordinal);
-
     public bool HasFilter => !string.IsNullOrWhiteSpace(Search);
 
-    public string CurrentUrl => $"{Request.Path}{Request.QueryString}";
+    // ------------------------------------------------------------------ 基类钩子（见 AdminPageModel）
 
-    public bool IsEditFailure(string name)
-        => string.Equals(OpenDialog, "edit", StringComparison.Ordinal)
-           && string.Equals(EditName, name, StringComparison.Ordinal);
+    protected override string ListPath => "/admin/scopes";
+
+    protected override string? EditingId => EditName;
 
     public static bool IsBuiltIn(string name) => BuiltInScopes.Contains(name);
 
@@ -132,7 +123,7 @@ public class ScopesModel : PageModel
         ViewData["Title"] = "Scope";
         ViewData["NavKey"] = "scopes";
 
-        await LoadAsync(cancellationToken);
+        await LoadDataAsync(cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：新建
@@ -141,24 +132,23 @@ public class ScopesModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(NewName))
         {
-            return await FailAsync("create", Error.Validation("Scope 名称不能为空。"), cancellationToken);
+            return await FailAsync(CreateDialog, Error.Validation("Scope 名称不能为空。"), cancellationToken);
         }
 
         var result = await _scopes.CreateAsync(
             new CreateScopeRequest(
                 Name: NewName.Trim(),
-                DisplayName: string.IsNullOrWhiteSpace(NewDisplayName) ? null : NewDisplayName.Trim(),
-                Description: string.IsNullOrWhiteSpace(NewDescription) ? null : NewDescription.Trim(),
+                DisplayName: TrimToNull(NewDisplayName),
+                Description: TrimToNull(NewDescription),
                 Resources: SplitLines(NewResources)),
             cancellationToken);
 
         if (result.IsFailure)
         {
-            return await FailAsync("create", result.Error, cancellationToken);
+            return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已创建 Scope {result.Value.Name}。还记得把它加进需要它的客户端，否则授权请求会因 scope 未授权而失败。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已创建 Scope {result.Value.Name}。还记得把它加进需要它的客户端，否则授权请求会因 scope 未授权而失败。");
     }
 
     // ------------------------------------------------------------------ POST：保存编辑
@@ -167,7 +157,7 @@ public class ScopesModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(EditName))
         {
-            return await FailAsync("edit", Error.Validation("缺少 Scope 名称。"), cancellationToken);
+            return await FailAsync(EditDialog, Error.Validation("缺少 Scope 名称。"), cancellationToken);
         }
 
         // 服务端的 UpdateScopeRequest 是 "null 表示不修改" 语义（DisplayName/Description 都做了 ?? 兜底），
@@ -175,19 +165,18 @@ public class ScopesModel : PageModel
         var result = await _scopes.UpdateAsync(
             EditName,
             new UpdateScopeRequest(
-                DisplayName: string.IsNullOrWhiteSpace(EditDisplayName) ? null : EditDisplayName.Trim(),
-                Description: string.IsNullOrWhiteSpace(EditDescription) ? null : EditDescription.Trim(),
+                DisplayName: TrimToNull(EditDisplayName),
+                Description: TrimToNull(EditDescription),
                 // 资源列表是整体覆盖：表单里预填了现有值，用户清空即表示"不再关联任何资源"
                 Resources: SplitLines(EditResources)),
             cancellationToken);
 
         if (result.IsFailure)
         {
-            return await FailAsync("edit", result.Error, cancellationToken);
+            return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已保存 Scope {EditName}。资源变更会在下一次签发令牌时生效（已签发令牌的 aud 不变）。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已保存 Scope {EditName}。资源变更会在下一次签发令牌时生效（已签发令牌的 aud 不变）。");
     }
 
     // ------------------------------------------------------------------ POST：删除
@@ -205,13 +194,12 @@ public class ScopesModel : PageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        TempData["Success"] = $"已删除 Scope {TargetName}。仍引用它的客户端需要同步调整，否则授权请求会失败。";
-        return RedirectBack();
+        return RedirectBackWithSuccess($"已删除 Scope {TargetName}。仍引用它的客户端需要同步调整，否则授权请求会失败。");
     }
 
     // ------------------------------------------------------------------ 内部辅助
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    protected override async Task LoadDataAsync(CancellationToken cancellationToken)
     {
         var all = await _scopes.GetAllAsync(cancellationToken);
         TotalCount = all.Count;
@@ -247,28 +235,5 @@ public class ScopesModel : PageModel
         }
 
         ReferenceCounts = counts;
-    }
-
-    /// <summary>把多行文本切成去重后的数组（资源标识按行输入）。</summary>
-    private static string[] SplitLines(string? value)
-        => string.IsNullOrWhiteSpace(value)
-            ? Array.Empty<string>()
-            : value.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-
-    private IActionResult RedirectBack()
-        => Redirect(!string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl)
-            ? ReturnUrl
-            : "/admin/scopes");
-
-    private async Task<IActionResult> FailAsync(string? dialog, Error error, CancellationToken cancellationToken)
-    {
-        await LoadAsync(cancellationToken);
-
-        FormError = error.Message;
-        OpenDialog = dialog;
-
-        return Page();
     }
 }

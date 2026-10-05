@@ -22,8 +22,10 @@ public sealed class OpenIddictConsentService : IConsentService
 {
     private static readonly Dictionary<string, ConsentScopeDescription> BuiltInScopes = new(StringComparer.Ordinal)
     {
-        ["openid"] = new("openid", "身份标识", "以你的身份登录（返回 ID Token）"),
-        ["offline_access"] = new("offline_access", "离线访问", "在你不使用应用时也能代表你访问（发放刷新令牌）")
+        [AuthHubConstants.Scopes.OpenId] =
+            new(AuthHubConstants.Scopes.OpenId, "身份标识", "以你的身份登录（返回 ID Token）"),
+        [AuthHubConstants.Scopes.OfflineAccess] =
+            new(AuthHubConstants.Scopes.OfflineAccess, "离线访问", "在你不使用应用时也能代表你访问（发放刷新令牌）")
     };
 
     private readonly IOpenIddictApplicationManager _applicationManager;

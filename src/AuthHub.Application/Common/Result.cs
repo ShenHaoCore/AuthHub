@@ -68,10 +68,6 @@ public class Result
     public static Result<TValue> Success<TValue>(TValue value) => new(value, true, Error.None);
 
     public static Result<TValue> Failure<TValue>(Error error) => new(default, false, error);
-
-    /// <summary>把失败结果原样传递到另一个泛型 Result（保留错误语义）。</summary>
-    protected static TResult Propagate<TResult>(Result result) where TResult : Result
-        => throw new NotSupportedException("请使用 Result.Failure<T>(error) 构造失败结果。");
 }
 
 /// <summary>带返回值的 Result。</summary>

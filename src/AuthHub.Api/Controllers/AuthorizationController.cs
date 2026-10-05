@@ -86,7 +86,7 @@ public class AuthorizationController : Controller
         var request = HttpContext.GetOpenIddictServerRequest();
         if (request is null)
         {
-            return BadRequest(new { error = Errors.InvalidRequest, error_description = "无法解析 OpenID Connect 授权请求。" });
+            return OAuthError(Errors.InvalidRequest, "无法解析 OpenID Connect 授权请求。");
         }
 
         // 1) 是否已有 Identity 会话（SSO 的关键：有会话就不再要求输入凭证）
@@ -128,7 +128,7 @@ public class AuthorizationController : Controller
         var application = await _applicationManager.FindByClientIdAsync(request.ClientId!, cancellationToken);
         if (application is null)
         {
-            return BadRequest(new { error = Errors.InvalidRequest, error_description = $"未知的 client_id：{request.ClientId}。" });
+            return OAuthError(Errors.InvalidRequest, $"未知的 client_id：{request.ClientId}。");
         }
 
         // 3) 同意逻辑：only explicit 客户端才需要用户确认
@@ -141,7 +141,7 @@ public class AuthorizationController : Controller
             var promptResult = await _consentService.GetPromptAsync(user.Id, request.ClientId!, request.GetScopes().ToArray(), cancellationToken);
             if (promptResult.IsFailure)
             {
-                return BadRequest(new { error = Errors.InvalidRequest, error_description = promptResult.Error.Message });
+                return OAuthError(Errors.InvalidRequest, promptResult.Error.Message);
             }
 
             var prompt = promptResult.Value;
@@ -212,7 +212,7 @@ public class AuthorizationController : Controller
         var request = HttpContext.GetOpenIddictServerRequest();
         if (request is null)
         {
-            return BadRequest(new { error = Errors.InvalidRequest, error_description = "无法解析令牌请求。" });
+            return OAuthError(Errors.InvalidRequest, "无法解析令牌请求。");
         }
 
         if (request.IsAuthorizationCodeGrantType() || request.IsRefreshTokenGrantType())
@@ -230,11 +230,7 @@ public class AuthorizationController : Controller
             return await PasswordGrantAsync(request, cancellationToken);
         }
 
-        return BadRequest(new
-        {
-            error = Errors.UnsupportedGrantType,
-            error_description = $"不支持的 grant_type：{request.GrantType}。"
-        });
+        return OAuthError(Errors.UnsupportedGrantType, $"不支持的 grant_type：{request.GrantType}。");
     }
 
     /// <summary>
@@ -574,6 +570,16 @@ public class AuthorizationController : Controller
         var returnUrl = Request.PathBase + Request.Path + Request.QueryString;
         return Redirect($"/account/login?returnUrl={Uri.EscapeDataString(returnUrl.ToString())}");
     }
+
+    /// <summary>
+    /// OAuth 2.0 规范的错误响应体：<c>{"error": "...", "error_description": "..."}</c>。
+    ///
+    /// 刻意**不**用 RFC 7807 的 ProblemDetails：这两个字段是规范要求的形状，调用方按
+    /// <c>error</c> 的取值分支（ProblemDetails 只服务 <c>/api/*</c> 那套内部约定）。
+    /// 收在一个工厂里，避免 5 处匿名对象各自漂移。
+    /// </summary>
+    private static IActionResult OAuthError(string error, string description)
+        => new BadRequestObjectResult(new { error, error_description = description });
 
     private IActionResult ForbidWithError(string error, string description)
         => Forbid(
