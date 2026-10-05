@@ -95,25 +95,11 @@ public sealed class PaginationModel
             return null;
         }
 
-        var parts = new List<string>();
+        // 保留当前筛选条件（去掉旧的 page），再把目标页码追加到末尾
+        var parameters = Query
+            .Where(pair => !string.Equals(pair.Key, "page", StringComparison.OrdinalIgnoreCase))
+            .Append(new KeyValuePair<string, string?>("page", page.ToString(CultureInfo.InvariantCulture)));
 
-        foreach (var (key, value) in Query)
-        {
-            if (string.IsNullOrWhiteSpace(value) ||
-                string.Equals(key, "page", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            parts.Add(string.Format(
-                CultureInfo.InvariantCulture,
-                "{0}={1}",
-                Uri.EscapeDataString(key),
-                Uri.EscapeDataString(value)));
-        }
-
-        parts.Add(string.Format(CultureInfo.InvariantCulture, "page={0}", page));
-
-        return string.Format(CultureInfo.InvariantCulture, "{0}?{1}", Path, string.Join('&', parts));
+        return QueryStringBuilder.Append(Path, parameters);
     }
 }

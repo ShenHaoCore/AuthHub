@@ -424,6 +424,39 @@ userinfo → 受保护 API → scope 门禁 → 管理员权限声明 → 撤销
 浏览器页面（`/account/*`、`/connect/*`）仍走 302 跳转，只有 `/api/*` 返回 JSON ——
 对 SPA、脚本、网关来说，"被 302 到 HTML 登录页"是最难排查的失败模式之一。
 
+### 所有错误共用一个出口
+
+上表之外，**400 只有一种形状**。这件事值得单独说，因为踩过：
+
+| 出错路径 | 由谁产出 |
+|----------|----------|
+| 控制器里的业务失败（`Result`） | `ApiControllerBase.Problem` |
+| 认证 / 授权失败（`/api/*`） | `AuthHubAuthorizationResultHandler` |
+| **请求体绑定失败**（`[ApiController]` 自动 400） | `ApiBehaviorOptions.InvalidModelStateResponseFactory` |
+| **FluentValidation 规则不通过** | `ValidationFilter`（把错误写进 `ModelState` 后复用同一个工厂） |
+| 未处理异常（500） | `ExceptionHandlingMiddleware` |
+
+它们全部经由 `ApiProblemWriter` 产出，因此字段集恒定是
+`title / status / detail / instance / code / traceId`（校验失败再加 `errors`），
+Content-Type 恒定是 `application/problem+json`。
+
+不这么做会怎样（实测过的原始状态）：
+
+```jsonc
+// POST /api/account/register  body = "{}"  —— 绑定失败，走框架默认
+{ "type": "...15.5.1", "title": "One or more validation errors occurred.", "status": 400,
+  "errors": { "Email": ["The Email field is required."] },
+  "traceId": "00-7ed0…-97f1…-00" }       // ← 没有 code，traceId 是 W3C traceparent
+//                                 Content-Type: application/json   ← 不是 problem+json
+```
+
+同一时刻业务校验失败那条路却有 `code`、有中文标题 —— 两条 400 契约不同，
+下游按 `code` 分支时会静默漏掉一半。统一之后两条路径的顶层字段**完全相同**，
+`ApiErrorContractTests` 守着这一点（它同时盯 Content-Type 与字段集）。
+
+边界：绑定失败时框架给的字段级文案是英文（`The X field is required.`）。
+中文化需要成体系地配 DataAnnotations 本地化资源，不属于"统一出口"这件事，因此暂不处理。
+
 ---
 
 ## 安全设计要点
@@ -523,6 +556,13 @@ return new ObjectResult(problem) { ContentTypes = { "application/problem+json" }
 修法：错误响应改用自定义 `IActionResult`（`ProblemDetailsResult`）直接写响应流，
 绕开内容协商 —— Content-Type 由我们说了算。
 
+**这个坑踩了两次**：第一次修的是控制器（`ApiControllerBase`）与认证层
+（`AuthHubAuthorizationResultHandler`）；`ValidationFilter` 当时仍留着
+`new ObjectResult(problem) { ContentTypes = { "application/problem+json" } }`，
+于是校验失败的响应一直是 `application/json`，而状态码、错误码、文案全对，
+只有 Content-Type 不对 —— 谁也不会想到去查它。现在三处统一走 `ApiProblemWriter`，
+`ApiErrorContractTests` 把 Content-Type 也钉住了。
+
 ### 6. `[ValidateAntiForgeryToken]` 需要 `AddControllersWithViews()`
 
 用 `AddControllers()` 时，`ValidateAntiforgeryTokenAuthorizationFilter` 未注册，请求直接 500：
@@ -531,8 +571,8 @@ return new ObjectResult(problem) { ContentTypes = { "application/problem+json" }
 No service for type 'Microsoft.AspNetCore.Mvc.ViewFeatures.Filters.ValidateAntiforgeryTokenAuthorizationFilter'
 ```
 
-本项目没有任何 `.cshtml`（页面由 `Pages/HtmlPages.cs` 拼 HTML），但为了保留这个声明式、
-不易遗漏的安全特性，仍走带视图的 MVC 注册。
+本项目里**协议页**（登录 / 两步验证 / 同意授权）不走 Razor（见 `Pages/HtmlPages.cs`），
+但管理后台是 Razor Pages，且为了留住这个声明式、不易遗漏的安全特性，仍走带视图的 MVC 注册。
 
 ### 7. `openid` / `offline_access` 不落 Scope 表
 

@@ -1,6 +1,7 @@
 using AuthHub.Api.Extensions;
 using AuthHub.Api.Filters;
 using AuthHub.Api.Middleware;
+using AuthHub.Api.Models;
 using AuthHub.Api.Services;
 using AuthHub.Application;
 using AuthHub.Application.Interfaces;
@@ -315,6 +316,14 @@ builder.Services.AddControllersWithViews(options =>
 {
     // FluentValidation 自动校验（规则集中定义在 Application 层）
     options.Filters.Add<ValidationFilter>();
+})
+.ConfigureApiBehaviorOptions(options =>
+{
+    // [ApiController] 的**请求体绑定失败**默认走框架自己的 ValidationProblemDetails：
+    // 英文标题、没有 code 字段、traceId 用的是 W3C traceparent。于是同一个服务里
+    // 出现两套 400 契约 —— 下游按 code 分支时会静默漏掉一半。
+    // 这里换成与 FluentValidation 失败、认证失败、500 完全相同的出口，见 ApiProblemWriter。
+    options.InvalidModelStateResponseFactory = ApiProblemWriter.InvalidModelStateResponse;
 })
 .AddJsonOptions(options =>
 {
