@@ -7,15 +7,18 @@
 
   <ItemGroup>
     <!--
-      只引 SwaggerGen（而非完整的 Swashbuckle.AspNetCore）：这里只用它生成 OpenAPI 文档 JSON，
-      交互式 UI 已改用 Scalar，因此不再需要 Swashbuckle 自带的 SwaggerUI 静态资源。
+      OpenAPI 文档生成器：.NET 9 起由框架自带（AddOpenApi / MapOpenApi）。
+      它原生读取 [Tags] / [EndpointSummary] / [EndpointDescription] 这些端点元数据，
+      且输出路径默认就是 Scalar 约定的 openapi/{documentName}.json，
+      因此不再需要 Swashbuckle 之类的第三方生成器。
     -->
-    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.9.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.20" />
 
     <!--
       Scalar：OpenAPI 文档的交互式 UI（替代 Swagger UI）。
-      对 net8.0 目标没有任何传递依赖，UI 资源（JS/CSS）内嵌在程序集里、由本地路由提供，
-      不从 CDN 加载 —— 因此在离线/内网环境可用，也不会被本站的 CSP（script-src 'self'）拦截。
+      包本身零第三方依赖（nuspec 里各 TFM 的依赖组都是空的），UI 资源（JS/CSS）内嵌在
+      程序集里、由本地路由提供，不从 CDN 加载 —— 因此在离线/内网环境可用，
+      也不会被本站的 CSP（script-src 'self'）拦截。它只消费一个文档 URL，与生成器无关。
     -->
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.6" />
 
@@ -31,7 +34,7 @@
       而 Infrastructure 里的引用带 PrivateAssets=all，不会流动到 Api。
       同时它让 DesignTimeDbContextFactory 之外的常规路径（从启动项目解析 DbContext）也可用。
     -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.31">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.20">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

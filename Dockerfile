@@ -3,7 +3,7 @@
 # 构建与运行分两个阶段：SDK 阶段只用于编译，最终镜像只保留运行时与发布产物。
 #
 # 关于 SDK 版本：本仓库的解决方案文件是 .slnx，需要 SDK 9.0.200+ 才认识；
-# 但运行目标框架是 net8.0（见 Directory.Build.props），因此运行时用 8.0 镜像。
+# 运行目标框架是 net9.0（见 Directory.Build.props），因此运行时也用 9.0 镜像。
 # 这里刻意**按项目路径**发布而不是发布 .slnx，避免把"解决方案格式"这个
 # 纯开发期细节耦合进镜像构建。
 
@@ -27,7 +27,7 @@ RUN dotnet publish src/AuthHub.Api/AuthHub.Api.csproj \
         -o /app/publish \
         /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
 # 基础镜像不含 curl，健康检查需要它；顺带建好日志目录并一次性把属主调整好。
@@ -42,7 +42,7 @@ RUN apt-get update \
  && mkdir -p /app/logs \
  && chown -R app:app /app
 
-# 以非 root 运行：8.0 基础镜像已内置 app 用户（uid 1654）
+# 以非 root 运行：aspnet 基础镜像已内置 app 用户（uid 1654）
 USER app
 
 COPY --from=build --chown=app:app /app/publish ./

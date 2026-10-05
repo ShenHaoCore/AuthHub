@@ -57,13 +57,8 @@ public class ApiDocsTests
     /// 文档里每个操作都必须有分组、摘要与描述。
     ///
     /// 这是把 <c>[Tags]</c> / <c>[EndpointSummary]</c> / <c>[EndpointDescription]</c>
-    /// 用起来之后立下的契约，防两种回归：
-    /// <list type="number">
-    ///   <item>新增端点忘了标注 —— 会掉进以程序集名命名的默认分组（"AuthHub.Api"），
-    ///         在 Scalar 侧边栏里与中文分组格格不入；</item>
-    ///   <item>OpenApiExtensions 里的 EndpointMetadataOperationFilter 被删 ——
-    ///         [EndpointSummary] 会被 XML 注释静默覆盖，短摘要变回面向维护者的长注释。</item>
-    /// </list>
+    /// 用起来之后立下的契约，防回归：新增端点忘了标注就会掉进以程序集名命名的默认分组
+    /// （"AuthHub.Api"），在 Scalar 侧边栏里与中文分组格格不入。
     /// </summary>
     [Fact]
     public async Task Every_operation_should_declare_group_summary_and_description()
@@ -97,6 +92,71 @@ public class ApiDocsTests
                 description.GetString().Should().NotBeNullOrWhiteSpace(because: $"{id} 缺少描述（[EndpointDescription]）");
             }
         }
+    }
+
+    /// <summary>
+    /// 文档必须覆盖**全部**控制器，包括两个故意不加 <c>[ApiController]</c> 的
+    /// （登录页 / 提示页 / OIDC 协议端点）。
+    ///
+    /// 为什么值得单独写一条测试：MVC 默认只把 <c>[ApiController]</c> 控制器交给 ApiExplorer，
+    /// 而文档生成器只认 ApiExplorer 里「可见」的端点。以前这件事由 Swashbuckle 的
+    /// <c>SwaggerApplicationConvention</c> 隐式兜着，换成框架内置生成器后必须自己显式声明
+    /// （见 <c>OpenApiExtensions.AddAuthHubOpenApi</c>）。丢掉那个约定的症状是
+    /// **静默少 14 个端点**（含 /connect/token、/connect/userinfo 这些 OIDC 主端点），
+    /// 而其余断言全都照样通过。
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_should_cover_non_api_controllers_too()
+    {
+        using var factory = CreateApiDocsFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+
+        var tags = root.GetProperty("tags").EnumerateArray()
+            .Select(tag => tag.GetProperty("name").GetString())
+            .ToList();
+
+        tags.Should().Contain(["登录与提示页", "OIDC 协议"],
+            because: "这两个分组来自未标注 [ApiController] 的控制器，最容易从文档里消失");
+
+        var paths = root.GetProperty("paths");
+        foreach (var path in new[] { "/connect/token", "/connect/userinfo", "/account/login" })
+        {
+            paths.TryGetProperty(path, out _).Should().BeTrue(
+                because: $"{path} 属于 OIDC / 登录流程，是文档的一部分");
+        }
+    }
+
+    /// <summary>
+    /// 每个分组都必须带描述（Scalar 侧边栏里显示在分组标题下）。
+    ///
+    /// 分组描述来自控制器类上的 XML <c>&lt;summary&gt;</c>，而框架内置的文档生成器
+    /// **不读 XML 注释**（.NET 10 才随源生成器提供），得由
+    /// <c>OpenApiExtensions.ApplyTagDescriptions</c> 自己补 —— 这条测试就是它的护栏。
+    ///
+    /// 例外是 Minimal API 的「站点入口」：它没有控制器类型，也就没有可查的 XML 注释。
+    /// </summary>
+    [Fact]
+    public async Task Every_tag_should_have_a_description()
+    {
+        using var factory = CreateApiDocsFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        var withoutDescription = document.RootElement.GetProperty("tags").EnumerateArray()
+            .Where(tag => tag.GetProperty("name").GetString() != "站点入口")
+            .Where(tag => !tag.TryGetProperty("description", out var description)
+                          || string.IsNullOrWhiteSpace(description.GetString()))
+            .Select(tag => tag.GetProperty("name").GetString())
+            .ToList();
+
+        withoutDescription.Should().BeEmpty(
+            because: "分组描述丢失，说明 ApplyTagDescriptions 被删掉或控制器摘要写漏了");
     }
 
     [Fact]

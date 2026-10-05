@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       # 解决方案文件是 .slnx，需要 SDK 9.0.200+；
-      # 运行目标框架仍是 net8.0（见 Directory.Build.props），两者不冲突。
+      # 运行目标框架是 net9.0（见 Directory.Build.props），同一个 SDK 即可覆盖。
       - name: 安装 .NET SDK
         uses: actions/setup-dotnet@v4
         with:
