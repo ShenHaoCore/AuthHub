@@ -565,6 +565,15 @@ Bearer error="insufficient_access", error_description="The user represented by t
 | 配置项改名 | `AuthHub:Features:EnableSwagger` → `AuthHub:Features:EnableApiDocs`，让名字与实现一致 |
 | 旧路径 | `/swagger/index.html`、`/swagger/v1/swagger.json` 现在都返回 404 |
 
+**为什么没顺手把 Swashbuckle 也从依赖里删掉**：它现在只剩「生成文档」这一半
+（Swagger UI 的中间件与静态资源已清空，代码面只有 `AddSwaggerGen` + `UseSwagger` 两处）。
+ASP.NET Core 内置的运行时文档端点（`AddOpenApi` / `MapOpenApi`）是 **.NET 9** 才有的 API，
+本项目目标框架是 net8.0，而 Scalar 需要一个运行时可取的文档 JSON URL。
+net8.0 上的另一条路 `Microsoft.Extensions.ApiDescription.Server` 是**构建期**生成，
+且它只是个宿主、仍要挂 provider（Swashbuckle / NSwag），换汤不换药。
+即「彻底删掉 Swashbuckle」等价于「升级目标框架到 net9.0+」，不在本次范围。
+
+
 换 UI 的实际理由：Scalar 对 OAuth2 授权码流程的调试更顺手，且它的前端资源
 **内嵌在程序集里、由本地路由提供**（`/scalar/scalar.js`），**不从 CDN 加载** ——
 这对内网/离线部署是硬需求，也才不会撞上本项目自己的 CSP（`script-src 'self'`）。
