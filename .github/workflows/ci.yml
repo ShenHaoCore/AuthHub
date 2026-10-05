@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 解决方案文件是 .slnx，需要 SDK 9.0.200+；
       # 运行目标框架是 net9.0（见 Directory.Build.props），同一个 SDK 即可覆盖。
@@ -90,7 +90,7 @@ jobs:
 
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 .NET SDK
         uses: actions/setup-dotnet@v4
@@ -130,7 +130,7 @@ jobs:
 
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 配置 Buildx
         uses: docker/setup-buildx-action@v3

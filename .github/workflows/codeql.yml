@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 分析器会自动识别仓库里的语言；这里显式声明，防止未来仓库里
       # 出现其他语言时扫描范围悄悄变化
