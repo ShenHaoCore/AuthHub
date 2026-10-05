@@ -103,6 +103,10 @@ public static class OpenApiExtensions
                 .AddPreferredSecuritySchemes([OAuth2SchemeName])
                 // 关闭匿名使用统计：这个服务常部署在内网，不应有任何出网请求。
                 .DisableTelemetry()
+                // 关闭默认字体：Scalar 默认从 fonts.scalar.com 拉取 Inter 字体，
+                // 而本站 CSP 是 font-src 'self'，这些请求必然被拦 —— 内网环境还会
+                // 白白等待 DNS 解析超时。禁用后回退到系统字体栈，视觉差异可忽略。
+                .DisableDefaultFonts()
                 .AddOAuth2Authentication(OAuth2SchemeName, oauth =>
                 {
                     // 交互式授权只预填 public 客户端的 clientId。

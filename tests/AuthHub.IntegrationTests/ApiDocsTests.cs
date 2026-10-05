@@ -102,4 +102,57 @@ public class ApiDocsTests
         (await client.GetAsync("/scalar/v1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await client.GetAsync("/openapi/v1.json")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    // ------------------------------------------------------------------ CSP
+
+    /// <summary>
+    /// Scalar 的页面模板里有一段**内联**的 <c>&lt;script type="module"&gt;</c> 初始化脚本
+    /// （承载文档源与 OAuth2 预填参数），本站的基准 CSP（<c>script-src 'self'</c>）会拦掉它，
+    /// 症状是页面 200、资源全通、但浏览器里一片空白 —— 纯接口断言根本发现不了。
+    /// 因此文档 UI 路径的 CSP 必须放行内联脚本（.NET 集成拿不到 nonce，见中间件注释）。
+    /// </summary>
+    [Fact]
+    public async Task Scalar_page_csp_should_allow_inline_scripts()
+    {
+        using var factory = CreateApiDocsFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/scalar/v1");
+        var csp = response.Headers.GetValues("Content-Security-Policy").Single();
+        var scriptSrc = GetDirective(csp, "script-src");
+
+        scriptSrc.Should().NotBeNull(because: "只有显式声明 script-src 才谈得上放行内联脚本");
+        scriptSrc.Should().Contain("'unsafe-inline'");
+    }
+
+    /// <summary>
+    /// 上面那条放宽的护栏：放行内联脚本只允许发生在 <c>/scalar</c> 之下。
+    /// 登录页与 API 响应必须维持基准策略 —— 防止有人"修不好就全局放宽"。
+    /// 注意 style-src 一直含 <c>'unsafe-inline'</c>（行内样式），因此必须按
+    /// <c>script-src</c> 指令段断言，不能对整条策略做字符串包含判断。
+    /// </summary>
+    [Fact]
+    public async Task Strict_csp_should_stay_in_effect_outside_the_docs_ui()
+    {
+        using var factory = CreateApiDocsFactory();
+        using var client = factory.CreateClient();
+
+        foreach (var path in new[] { "/account/login", "/health", "/openapi/v1.json" })
+        {
+            var response = await client.GetAsync(path);
+
+            response.Headers.TryGetValues("Content-Security-Policy", out var values).Should()
+                .BeTrue(because: $"基准策略必须覆盖 {path}");
+            var scriptSrc = GetDirective(values!.Single(), "script-src");
+
+            scriptSrc.Should().NotBeNull(because: $"{path} 应有显式的 script-src");
+            scriptSrc.Should().NotContain("'unsafe-inline'",
+                because: $"{path} 不属于文档 UI，内联脚本必须保持被拦");
+        }
+    }
+
+    /// <summary>从 CSP 字符串里取出某条指令的原文（如 <c>script-src 'self'</c>），找不到返回 null。</summary>
+    private static string? GetDirective(string csp, string directiveName) =>
+        csp.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(d => d.StartsWith(directiveName, StringComparison.Ordinal));
 }
