@@ -138,7 +138,7 @@ jobs:
       # 只构建不推送。层缓存走 GHA 缓存：工程文件没变时 restore 会直接命中，
       # 构建时间从几分钟降到几十秒。
       - name: 构建镜像
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
