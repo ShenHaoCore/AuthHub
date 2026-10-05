@@ -28,7 +28,7 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
             ["ConnectionStrings__DefaultConnection"] = $"Data Source={_databasePath}",
             ["AuthHub__Issuer"] = "http://localhost/",
             ["AuthHub__Security__RequireHttps"] = "false",
-            ["AuthHub__Features__EnableSwagger"] = "false",
+            ["AuthHub__Features__EnableApiDocs"] = "false",
             ["AuthHub__Features__EnablePasswordFlow"] = "false",
             ["AuthHub__Seeding__Enabled"] = "true",
             ["AuthHub__Seeding__MigrateOnStartup"] = "true",
