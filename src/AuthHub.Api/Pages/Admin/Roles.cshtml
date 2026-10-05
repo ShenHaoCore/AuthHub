@@ -218,8 +218,10 @@
 </div>
 
 @* ------------------------------------------------------------ 新建角色 *@
+@* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
+   "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
 <dialog class="ah-modal" id="dlg-create-role" aria-labelledby="dlg-create-role-title"
-        data-dialog-autoopen="@Model.AutoOpenCreate">
+        data-dialog-autoopen="@(Model.AutoOpenCreate ? "true" : "false")">
     <form method="post" asp-page-handler="create">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
@@ -347,7 +349,7 @@
 
     <dialog class="ah-modal" id="dlg-edit-role-@roleName"
             aria-labelledby="dlg-edit-role-title-@roleName"
-            data-dialog-autoopen="@editFailed">
+            data-dialog-autoopen="@(editFailed ? "true" : "false")">
         <form method="post" asp-page-handler="save">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditRoleName" value="@roleName" />

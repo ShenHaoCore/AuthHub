@@ -165,6 +165,74 @@ public class AdminUiTests
         }
     }
 
+    // ==================================================================== 弹窗自动开合
+
+    /// <summary>
+    /// 默认进入页面时，任何弹窗都不允许带"自动打开"标记，且标记的取值只能是显式下写字面量。
+    ///
+    /// 这是一条防回归断言，起因是一个真实故障：服务端曾写成
+    /// <c>data-dialog-autoopen="@Model.AutoOpenCreate"</c>，Razor 把 bool 插值渲染成
+    /// <c>"True"</c>/<c>"False"</c> 字面量 —— <b>属性照样存在</b>，于是前端按值判断失效，
+    /// 每个弹窗都被 showModal()：表现就是用户看到的"点菜单进入任一页面，全部弹窗一起弹出来"。
+    ///
+    /// 因此约定两条，缺一不可：值必须是 <c>"true"</c>/<c>"false"</c> 小写；
+    /// 默认状态下必须全是 <c>"false"</c>。
+    /// </summary>
+    [Theory]
+    [InlineData("/admin/users")]
+    [InlineData("/admin/roles")]
+    [InlineData("/admin/clients")]
+    [InlineData("/admin/scopes")]
+    public async Task Admin_pages_should_not_auto_open_any_dialog_by_default(string path)
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync(path));
+
+        var flags = Regex.Matches(html, "data-dialog-autoopen=\"([^\"]*)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+
+        flags.Should().NotContain("true", because: $"{path} 默认不该有任何弹窗自动打开");
+        flags.Should().OnlyContain(flag => flag == "false",
+            because: "取值必须是显式小写字面量；写成 @bool 会渲染成 \"True\"/\"False\"，前端契约随即失效");
+    }
+
+    /// <summary>
+    /// 上面那条的反面：提交失败时必须把出问题的那个弹窗**真的**重新打开，
+    /// 否则用户刚填的内容就白填了（PRG 的失败分支就是靠这个特性保住输入的）。
+    /// </summary>
+    [Fact]
+    public async Task Failed_validation_should_auto_open_the_offending_dialog()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var token = await AntiforgeryTokenAsync(session, "/admin/users");
+
+        // 用户名与邮箱留空 —— 服务端判校验失败，原地重渲染（不 302）
+        var response = await session.PostFormAsync("/admin/users?handler=create", new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = token,
+            ["NewUserName"] = string.Empty,
+            ["NewEmail"] = string.Empty,
+            ["NewPassword"] = string.Empty,
+            ["ReturnUrl"] = "/admin/users"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, because: "校验失败应原地重渲染列表页，而不是重定向");
+
+        var html = await CookieSession.ReadHtmlAsync(response);
+
+        html.Should().Contain("data-dialog-autoopen=\"true\"",
+            because: "新建弹窗必须自动重新打开，用户填过的值才不会丢");
+
+        // @Model.FormError 会经 HTML 编码器输出（非 ASCII 会被转成 &#x....;），所以要解码后再比对文字
+        WebUtility.HtmlDecode(html).Should().Contain("用户名与邮箱为必填项",
+            because: "失败原因要显示在重新打开的弹窗里");
+    }
+
     // ==================================================================== 静态资源
 
     [Theory]

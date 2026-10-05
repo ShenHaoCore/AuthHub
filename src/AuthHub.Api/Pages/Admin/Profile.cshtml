@@ -39,19 +39,23 @@
 else
 {
     <div data-tab-scope>
+        @* aria-selected 不是布尔属性，值必须是 "true"/"false" 字面量。
+           直接写 aria-selected="@(表达式)" 时 Razor 会把 true 渲染成属性名本身
+           （aria-selected="aria-selected"，ARIA 里非法），false 则整个省略。
+           这里显式写成字面量，也就与 authhub.js 里 initTabs 切换时写入的值保持一致。 *@
         <div class="ah-tabs" role="tablist" aria-label="账户设置分区">
             <button type="button" class="ah-tab @(Model.ActiveTab == "profile" ? "is-active" : null)"
-                    data-tab="profile" role="tab" aria-selected="@(Model.ActiveTab == "profile")"
+                    data-tab="profile" role="tab" aria-selected="@(Model.ActiveTab == "profile" ? "true" : "false")"
                     aria-controls="panel-profile" tabindex="@(Model.ActiveTab == "profile" ? "0" : "-1")">
                 档案
             </button>
             <button type="button" class="ah-tab @(Model.ActiveTab == "password" ? "is-active" : null)"
-                    data-tab="password" role="tab" aria-selected="@(Model.ActiveTab == "password")"
+                    data-tab="password" role="tab" aria-selected="@(Model.ActiveTab == "password" ? "true" : "false")"
                     aria-controls="panel-password" tabindex="@(Model.ActiveTab == "password" ? "0" : "-1")">
                 修改密码
             </button>
             <button type="button" class="ah-tab @(Model.ActiveTab == "mfa" ? "is-active" : null)"
-                    data-tab="mfa" role="tab" aria-selected="@(Model.ActiveTab == "mfa")"
+                    data-tab="mfa" role="tab" aria-selected="@(Model.ActiveTab == "mfa" ? "true" : "false")"
                     aria-controls="panel-mfa" tabindex="@(Model.ActiveTab == "mfa" ? "0" : "-1")">
                 两步验证
                 @if (!profile.TwoFactorEnabled)

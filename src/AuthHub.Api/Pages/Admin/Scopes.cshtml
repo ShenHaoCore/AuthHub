@@ -207,8 +207,10 @@
 </div>
 
 @* ------------------------------------------------------------ 新建 Scope *@
+@* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
+   "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
 <dialog class="ah-modal" id="dlg-create" aria-labelledby="dlg-create-title"
-        data-dialog-autoopen="@Model.AutoOpenCreate">
+        data-dialog-autoopen="@(Model.AutoOpenCreate ? "true" : "false")">
     <form method="post" asp-page-handler="create">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
@@ -270,7 +272,7 @@
 {
     var resources = string.Join('\n', scope.Resources);
     <dialog class="ah-modal" id="dlg-edit-@scope.Name" aria-labelledby="dlg-edit-title-@scope.Name"
-            data-dialog-autoopen="@Model.IsEditFailure(scope.Name)">
+            data-dialog-autoopen="@(Model.IsEditFailure(scope.Name) ? "true" : "false")">
         <form method="post" asp-page-handler="save">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditName" value="@scope.Name" />

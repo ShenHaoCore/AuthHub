@@ -253,8 +253,10 @@
 </div>
 
 @* ------------------------------------------------------------ 注册客户端 *@
+@* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
+   "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
 <dialog class="ah-modal ah-modal-lg" id="dlg-create-client" aria-labelledby="dlg-create-client-title"
-        data-dialog-autoopen="@Model.AutoOpenCreate">
+        data-dialog-autoopen="@(Model.AutoOpenCreate ? "true" : "false")">
     <form method="post" asp-page-handler="create">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
@@ -447,7 +449,7 @@
 
     <dialog class="ah-modal ah-modal-lg" id="dlg-edit-client-@client.ClientId"
             aria-labelledby="dlg-edit-client-title-@client.ClientId"
-            data-dialog-autoopen="@failed">
+            data-dialog-autoopen="@(failed ? "true" : "false")">
         <form method="post" asp-page-handler="save">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditClientId" value="@client.ClientId" />
