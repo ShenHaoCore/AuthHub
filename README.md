@@ -34,7 +34,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | 3 | 客户端凭证流程（M2M） | `AuthorizationController.Exchange` |
 | 4 | 刷新令牌 + 旋转 + 重放防护（自动撤销整条授权） | `AuthorizationController.Exchange` |
 | 5 | 单点登录（`prompt=none` 静默签发）与全局登出 | `AuthorizationController` |
-| 6 | MFA：TOTP（验证器 App）、邮箱 / 短信验证码 | `AccountApiController`、`AccountService`、`IEmailSender` / `ISmsSender` |
+| 6 | MFA：TOTP（验证器 App）、邮箱 / 短信验证码 | `AccountApiController`、`AccountService`、`ITwoFactorChannel`（各通道自管目标解析与文案） |
 | 7 | RBAC：角色 → 权限 → 令牌内的 `authhub:permission` 声明 | `RolePermissionMap`、`AuthorizationPolicyExtensions` |
 | 8 | 客户端 CRUD（密钥哈希存储、支持轮换） | `ClientsController`、`OpenIddictClientAdminService` |
 | 9 | Scope 管理 | `ScopesController`、`ScopeService` |
@@ -61,7 +61,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 66 项、集成测试 57 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 73 项、集成测试 86 项 |
 
 ---
 
@@ -71,14 +71,16 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 AuthHub.slnx
 ├── src/
 │   ├── AuthHub.Domain/           8 个文件   实体、常量、角色-权限映射（不依赖任何框架）
-│   ├── AuthHub.Application/     31 个文件   用例编排、接口、DTO、校验器、Result 体系
+│   ├── AuthHub.Application/     34 个文件   用例编排、接口、DTO、校验器、Result 体系、
+│   │                                        MFA 下发通道（ITwoFactorChannel + 两个实现）
 │   ├── AuthHub.Infrastructure/  23 个文件   EF Core、迁移、OpenIddict 适配、各类实现
-│   └── AuthHub.Api/             34 个 .cs + 11 个 .cshtml + 5 个静态资源
+│   └── AuthHub.Api/             39 个 .cs + 11 个 .cshtml + 5 个静态资源
 │                                            控制器、协议页、管理后台（Razor Pages）、
+│                                            视图 TagHelper 组件（TagHelpers/）、
 │                                            中间件、DI 组装、Program.cs、wwwroot
 ├── tests/
 │   ├── AuthHub.UnitTests/        4 个文件   领域规则、Result、校验器、AccountService（Moq）
-│   └── AuthHub.IntegrationTests/ 9 个文件   WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 文档端点 / 管理后台
+│   └── AuthHub.IntegrationTests/ 11 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
@@ -377,7 +379,7 @@ partial 写错模型属性要等运行期才炸。
 # 全解决方案（编译须 0 警告 0 错误）
 dotnet build AuthHub.slnx
 
-# 单元测试：66 项
+# 单元测试：73 项
 dotnet test tests/AuthHub.UnitTests
 
 # 集成测试：86 项
@@ -386,7 +388,7 @@ dotnet test tests/AuthHub.IntegrationTests
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
-| `AuthHub.UnitTests` | 66 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"） |
+| `AuthHub.UnitTests` | 73 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
 | `AuthHub.IntegrationTests` | 86 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
@@ -851,6 +853,10 @@ docker run --rm -p 8080:8080 \
       用户的 MFA 重置（目前需用户本人在「我的账户」里关闭后重新绑定）。
 - [ ] **MFA 渠道补齐**：邮件与短信当前是"写日志"实现（`LoggingEmailSender` / `LoggingSmsSender`），
       接真实 SMTP / 短信服务商时替换 `IEmailSender` / `ISmsSender` 的注册即可，业务代码无需改动。
+      **加一条新通道**（如企业微信、WhatsApp）则是实现一个 `ITwoFactorChannel`
+      （自己解析投递目标 + 自己写文案）再注册一行；`AccountService` 不认识任何通道名。
+      通道的 `Provider` 必须与 Identity 的 TwoFactorTokenProvider 名逐字一致，
+      否则 `GenerateTwoFactorTokenAsync` 找不到 provider —— 有一条单元测试钉住这两个字符串。
 - [ ] **MFA 绑定的二维码**：目前「我的账户」只给出密钥与 `otpauth://` URI，让用户在 App 里手动输入。
       加二维码需要引绘图依赖（如 QRCoder）或在前端内置一个 QR 编码器，
       与当前"零外部依赖"的取舍冲突，因此暂缓。

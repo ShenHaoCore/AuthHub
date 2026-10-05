@@ -29,6 +29,8 @@ public class AccountServiceTests
     private readonly Mock<ITwoFactorTicketProtector> _tickets = new();
     private readonly Mock<IAuditLogService> _audit = new();
     private readonly Mock<ICurrentUser> _currentUser = new();
+    private readonly Mock<IEmailSender> _email = new();
+    private readonly Mock<ISmsSender> _sms = new();
     private readonly AccountService _service;
 
     /// <summary>每个测试用例独享一份用户实例（xUnit 每个用例新建测试类实例）。</summary>
@@ -78,8 +80,14 @@ public class AccountServiceTests
             _signIn.Object,
             _audit.Object,
             _tickets.Object,
-            new Mock<IEmailSender>().Object,
-            new Mock<ISmsSender>().Object,
+            _email.Object,
+            // 通道用**真实实现** + 打桩的 sender：这样"取哪个联系方式、发什么文案"都被测到，
+            // 而不是被一个 mock 通道绕过去。
+            new ITwoFactorChannel[]
+            {
+                new EmailTwoFactorChannel(_email.Object),
+                new PhoneTwoFactorChannel(_sms.Object)
+            },
             _currentUser.Object,
             NullLogger<AccountService>.Instance);
     }
@@ -291,4 +299,138 @@ public class AccountServiceTests
         result.Value.Roles.Should().Contain(AuthHubConstants.Roles.User);
         result.Value.Permissions.Should().BeEmpty();
     }
+
+    // ------------------------------------------------------------------ MFA 下发通道
+
+    private SentEmail? _sentEmail;
+    private SentSms? _sentSms;
+
+    private sealed record SentEmail(string To, string Subject, string Body);
+
+    private sealed record SentSms(string To, string Message);
+
+    /// <summary>
+    /// 通道名必须与 Identity 的 TwoFactorTokenProvider 名逐字一致（内置的是 "Email" / "Phone"）。
+    /// 对不上时 <c>UserManager.GenerateTwoFactorTokenAsync</c> 找不到 provider，
+    /// 用户看到的是"验证码发不出去"，而在代码里这两个字符串看起来毫无关系。
+    /// </summary>
+    [Fact]
+    public void Channel_names_should_match_identitys_built_in_provider_names()
+    {
+        EmailTwoFactorChannel.ProviderName.Should().Be("Email");
+        PhoneTwoFactorChannel.ProviderName.Should().Be("Phone");
+    }
+
+    [Fact]
+    public async Task Send_two_factor_code_over_email_should_deliver_the_generated_code()
+    {
+        GivenSignedInAlice(code: "654321");
+        CaptureEmail();
+
+        var result = await _service.SendTwoFactorCodeAsync("Email");
+
+        result.IsSuccess.Should().BeTrue();
+        _sentEmail.Should().NotBeNull();
+        _sentEmail!.To.Should().Be("alice@example.com", because: "目标取自通道自己解析的联系方式");
+        _sentEmail.Body.Should().Contain("654321", because: "UserManager 生成的验证码必须真的进了文案");
+
+        // 发邮件不该顺带发短信（Moq 的 Verify 不吃 FluentAssertions 的 because:）
+        _sms.Verify(
+            s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Send_two_factor_code_over_sms_should_deliver_the_generated_code()
+    {
+        _alice.PhoneNumber = "13900000000";
+        GivenSignedInAlice(code: "112233");
+        CaptureSms();
+
+        var result = await _service.SendTwoFactorCodeAsync("Phone");
+
+        result.IsSuccess.Should().BeTrue();
+        _sentSms.Should().NotBeNull();
+        _sentSms!.To.Should().Be("13900000000");
+        _sentSms.Message.Should().Contain("112233");
+
+        // 发短信不该顺带发邮件
+        _email.Verify(
+            s => s.SendAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// 「有没有留联系方式」由通道自己判定，不再散在业务类的 switch 守卫里。
+    /// 两条通道都要各自守住 —— 这正是原先最容易只补一半的地方。
+    /// </summary>
+    [Theory]
+    [InlineData("Email")]
+    [InlineData("Phone")]
+    public async Task Send_two_factor_code_without_a_contact_should_fail_as_validation(string provider)
+    {
+        _alice.Email = null;
+        _alice.PhoneNumber = null;
+        GivenSignedInAlice();
+
+        var result = await _service.SendTwoFactorCodeAsync(provider);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Validation);
+        result.Error.Message.Should().Contain(provider);
+    }
+
+    [Fact]
+    public async Task Send_two_factor_code_for_an_unknown_channel_should_fail_as_validation()
+    {
+        GivenSignedInAlice();
+
+        // 校验器只要求 Provider 非空，所以业务层必须自己挡住不存在的通道
+        var result = await _service.SendTwoFactorCodeAsync("WhatsApp");
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Validation);
+        result.Error.Message.Should().Contain("WhatsApp");
+        _email.VerifyNoOtherCalls();
+        _sms.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Send_two_factor_code_for_an_anonymous_user_should_be_unauthorized()
+    {
+        _currentUser.SetupGet(u => u.UserId).Returns((string?)null);
+
+        var result = await _service.SendTwoFactorCodeAsync("Email");
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Unauthorized);
+        _email.VerifyNoOtherCalls();
+    }
+
+    /// <summary>让 GetCurrentUserAsync 命中 _alice，并把 UserManager 生成的验证码固定下来。</summary>
+    private void GivenSignedInAlice(string code = "000000")
+    {
+        _currentUser.SetupGet(u => u.UserId).Returns("user-1");
+        _users.Setup(u => u.FindByIdAsync("user-1")).ReturnsAsync(_alice);
+        _users
+            .Setup(u => u.GenerateTwoFactorTokenAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()))
+            .ReturnsAsync(code);
+    }
+
+    /// <summary>捕获邮件实际发出的收件人 / 主题 / 正文（真实通道 + 打桩 sender，见构造函数）。</summary>
+    private void CaptureEmail() =>
+        _email
+            .Setup(s => s.SendAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, string, CancellationToken>(
+                (to, subject, body, _) => _sentEmail = new SentEmail(to, subject, body))
+            .Returns(Task.CompletedTask);
+
+    /// <summary>同上；短信通道没有主题。</summary>
+    private void CaptureSms() =>
+        _sms
+            .Setup(s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((to, message, _) => _sentSms = new SentSms(to, message))
+            .Returns(Task.CompletedTask);
 }

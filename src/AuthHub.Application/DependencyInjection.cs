@@ -23,6 +23,11 @@ public static class DependencyInjection
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
 
+        // MFA 的下发通道。AccountService 只认 ITwoFactorChannel 集合，
+        // 加通道 = 加一行注册，业务类不动（通道名必须与 Identity 的 provider 名一致）。
+        services.AddScoped<ITwoFactorChannel, EmailTwoFactorChannel>();
+        services.AddScoped<ITwoFactorChannel, PhoneTwoFactorChannel>();
+
         return services;
     }
 }
