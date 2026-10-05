@@ -400,6 +400,17 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// 根路径没有任何页面，直接送到后台入口。
+//
+// 为什么不渲染一个落地页：本站的浏览器入口只有"管理后台"与"协议页"两类，
+// 多一个页面就要多维护一份视觉；而 /admin 的授权策略已经能正确分流
+// （未登录 → 302 登录页，无管理权限 → 302 /account/denied），
+// 单一跳转目标比在根路径上再判断一次登录态更不容易走岔。
+//
+// 没有这一行时，用户打开 https://host:port/ 会得到 404（根路径没有任何路由），
+// 无从判断该往哪走 —— 而这是任何人第一次访问站点时最自然的入口。
+app.MapGet("/", () => Results.Redirect("/admin"));
+
 app.MapControllers();
 app.MapRazorPages();
 app.MapHealthChecks("/health");
