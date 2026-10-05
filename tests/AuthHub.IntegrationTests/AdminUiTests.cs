@@ -260,6 +260,51 @@ public class AdminUiTests
         }
     }
 
+    // ================================================================ 入口与回跳
+
+    /// <summary>
+    /// 根路径必须把人送到后台入口，而不是 404。
+    /// 这是任何人第一次访问站点时最自然的入口；没有这条跳转时，
+    /// 打开 <c>https://host:port/</c> 只会看到 404，无从判断该往哪走。
+    /// </summary>
+    [Fact]
+    public async Task Root_path_should_lead_to_the_admin_entry()
+    {
+        using var session = NewSession();
+
+        var response = await session.GetAsync("/");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Found);
+        response.Headers.Location!.OriginalString.Should().Be("/admin");
+    }
+
+    /// <summary>
+    /// 登录成功后必须回到用户原本要去的页面（returnUrl）。
+    ///
+    /// 这不是可有可无的礼貌：<c>/admin</c> 与 <c>/connect/authorize</c> 都会把未登录用户
+    /// 302 到 <c>/account/login?ReturnUrl=...</c>，回跳一旦失效，用户登录完就落到 <c>/</c> ——
+    /// 那条路以前是 404，看起来像"登录之后站点坏了"。
+    /// </summary>
+    [Fact]
+    public async Task Login_should_redirect_back_to_the_requested_returnUrl()
+    {
+        using var session = NewSession();
+
+        var token = await AntiforgeryTokenAsync(session, "/account/login");
+
+        var response = await session.PostFormAsync("/account/login", new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = token,
+            ["username"] = "admin",
+            ["password"] = "Admin@12345",
+            ["returnUrl"] = "/admin/users"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Found);
+        response.Headers.Location!.OriginalString.Should().Be("/admin/users",
+            because: "登录后应当回到用户原本要访问的页面，而不是落到没有路由的根路径");
+    }
+
     // ==================================================================== 辅助
 
     private CookieSession NewSession() => new(_fixture.Factory.Server);
