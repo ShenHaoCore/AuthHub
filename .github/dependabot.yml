@@ -1,0 +1,35 @@
+version: 2
+
+# 依赖自动更新：每周一各开一批 PR。
+# PR 标题以 "chore(deps)" 开头，merge 前看 CI 是否绿即可。
+
+updates:
+  # NuGet 包：版本目前写在各 csproj 里（ManagePackageVersionsCentrally=false），
+  # Dependabot 从仓库根递归发现工程文件，directory 给 "/" 即可。
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # 一次最多 5 个 PR，避免每周一 pr 淹没收件箱
+    open-pull-requests-limit: 5
+    groups:
+      # 次要/补丁版本合并成一个 PR，减少 PR 数量；主版本（可能有破坏性）单独开
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "dependencies"
+      - "nuget"
+
+  # GitHub Actions 的版本落后同样有风险（镜像被投毒、API 弃用）
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
