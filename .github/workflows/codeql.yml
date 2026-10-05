@@ -38,16 +38,16 @@ jobs:
       # 分析器会自动识别仓库里的语言；这里显式声明，防止未来仓库里
       # 出现其他语言时扫描范围悄悄变化
       - name: 初始化 CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: csharp
           # build-mode: none 尚未覆盖全部 C# 场景，保持默认的 autobuild 路线
 
       # C# 需要真实编译才能完成数据流分析，交给 CodeQL 自己做
       - name: 构建
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: 执行分析
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:csharp"
