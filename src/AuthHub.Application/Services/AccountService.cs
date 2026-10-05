@@ -25,7 +25,7 @@ public sealed class AccountService : IAccountService
     private readonly IAuditLogService _audit;
     private readonly ITwoFactorTicketProtector _tickets;
     private readonly IEmailSender _emailSender;
-    private readonly ISmsSender _smsSender;
+    private readonly IReadOnlyDictionary<string, ITwoFactorChannel> _twoFactorChannels;
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<AccountService> _logger;
 
@@ -35,7 +35,7 @@ public sealed class AccountService : IAccountService
         IAuditLogService audit,
         ITwoFactorTicketProtector tickets,
         IEmailSender emailSender,
-        ISmsSender smsSender,
+        IEnumerable<ITwoFactorChannel> twoFactorChannels,
         ICurrentUser currentUser,
         ILogger<AccountService> logger)
     {
@@ -44,7 +44,11 @@ public sealed class AccountService : IAccountService
         _audit = audit;
         _tickets = tickets;
         _emailSender = emailSender;
-        _smsSender = smsSender;
+        // 按通道名索引。重名直接炸在启动期 —— 否则运行期会静默用后注册的那个覆盖先注册的，
+        // 表现为"某个通道的验证码发到了另一个通道的文案里"，很难查。
+        _twoFactorChannels = twoFactorChannels.ToDictionary(
+            channel => channel.Provider,
+            StringComparer.Ordinal);
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -365,28 +369,20 @@ public sealed class AccountService : IAccountService
             return Result.Failure(Error.Unauthorized("未登录。"));
         }
 
+        // 顺序刻意与改造前一致：**先**生成验证码，**再**找通道。
+        // 反过来写会在 provider 非法时改变 UserManager 的调用时机 —— 那属于未经请求的行为变更。
         var code = await _userManager.GenerateTwoFactorTokenAsync(user, provider);
 
-        switch (provider)
+        if (!_twoFactorChannels.TryGetValue(provider, out var channel) ||
+            channel.ResolveTarget(user) is not { } target)
         {
-            case "Email" when !string.IsNullOrWhiteSpace(user.Email):
-                await _emailSender.SendAsync(
-                    user.Email,
-                    "【AuthHub】登录验证码",
-                    $"您的验证码是 {code}，5 分钟内有效。若非本人操作请立即修改密码。",
-                    cancellationToken);
-                return Result.Success();
-
-            case "Phone" when !string.IsNullOrWhiteSpace(user.PhoneNumber):
-                await _smsSender.SendAsync(
-                    user.PhoneNumber,
-                    $"【AuthHub】验证码 {code}，5 分钟内有效。",
-                    cancellationToken);
-                return Result.Success();
-
-            default:
-                return Result.Failure(Error.Validation($"当前账号未配置 {provider} 通道所需的联系方式。"));
+            // 「通道不存在」与「通道存在但用户没留联系方式」共用同一条消息，是既有响应契约。
+            // 想分开写得更准，要先确认调用方/文档没有依赖这句原文。
+            return Result.Failure(Error.Validation($"当前账号未配置 {provider} 通道所需的联系方式。"));
         }
+
+        await channel.SendAsync(target, code, cancellationToken);
+        return Result.Success();
     }
 
     public async Task<Result<IReadOnlyCollection<string>>> GetTwoFactorProvidersAsync(CancellationToken cancellationToken = default)
