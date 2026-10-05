@@ -498,6 +498,20 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-input::placeholder, .ah-textarea::placeholder { color: #9aa3ad; }
 .ah-input[readonly] { background: #f6f7f9; color: var(--ah-muted); }
 
+/* 日期筛选的日历代理输入框（见 authhub.js 的 initDatePickers）：
+   原生 <input type="date"> 的占位文字由浏览器语言环境决定、页面控制不了，
+   因此筛选框本体是文本框，日历弹在这个透明代理上。必须保持"已渲染"
+   （display:none 会让 showPicker() 抛错），只是不可见、不可交互、不进 tab 序。 */
+.ah-date-proxy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
 .ah-hint { margin-top: 5px; color: var(--ah-muted); font-size: 12px; }
 .ah-hint code { background: #f1f3f5; padding: 1px 5px; border-radius: 4px; }
 

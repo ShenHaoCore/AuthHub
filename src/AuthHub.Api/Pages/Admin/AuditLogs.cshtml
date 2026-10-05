@@ -82,12 +82,18 @@
 
                 <label class="ah-toolbar-field">
                     <span class="ah-toolbar-label">起始</span>
-                    <input class="ah-input" type="date" name="from" value="@Model.FromFilter" aria-label="起始日期" />
+                    @* 不用 <input type="date">：它的占位文字（年/月/日、yyyy/mm/dd、yyyy/mm/日…）
+                       由浏览器按自身语言环境绘制，HTML/CSS 无法控制，不同浏览器里长相不一致。
+                       改成文本框（placeholder 归我们写死）+ 点击时由 authhub.js 弹出原生日历，
+                       显示与体验两头都稳；无 JS 时退化为普通文本框，手输 yyyy-MM-dd 也能用。 *@
+                    <input class="ah-input" type="text" name="from" value="@Model.FromFilter"
+                           placeholder="yyyy-MM-dd" data-date-picker aria-label="起始日期" autocomplete="off" />
                 </label>
 
                 <label class="ah-toolbar-field">
                     <span class="ah-toolbar-label">结束</span>
-                    <input class="ah-input" type="date" name="to" value="@Model.ToFilter" aria-label="结束日期" />
+                    <input class="ah-input" type="text" name="to" value="@Model.ToFilter"
+                           placeholder="yyyy-MM-dd" data-date-picker aria-label="结束日期" autocomplete="off" />
                 </label>
 
                 <button type="submit" class="ah-btn ah-btn--primary">筛选</button>

@@ -13,6 +13,7 @@
      5. data-copy：一键复制（密钥、URI）
      6. 轻提示自动消失
      7. data-tab：页内标签切换
+     8. data-date-picker：文本框日期筛选 —— 点击弹原生日历，显示格式归页面控制
    ========================================================================== */
 
 (function () {
@@ -295,6 +296,67 @@
         }
     }
 
+    /* ------------------------------------------------- 8. 文本框日期筛选 */
+
+    /**
+     * 把用户手输的日期归一成 yyyy-MM-dd（原生日历只认这个格式）。
+     * 兼容连字符 / 斜杠 / 点三种分隔符，月日允许 1~2 位；解析不了返回空串。
+     */
+    function normalizeDateInput(text) {
+        var match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(String(text).trim());
+        if (!match) {
+            return '';
+        }
+
+        var year = match[1];
+        var month = Number(match[2]);
+        var day = Number(match[3]);
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+            return '';
+        }
+
+        return year + '-' + ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
+    }
+
+    function initDatePickers() {
+        all('[data-date-picker]').forEach(function (input) {
+            if (input.getAttribute('data-date-picker-bound') === '1') {
+                return;
+            }
+            input.setAttribute('data-date-picker-bound', '1');
+
+            // 原生日历必须挂在一个 <input type="date"> 上才能弹。做一个 1px 的
+            // 透明代理放在旁边：display:none 的元素 showPicker() 会抛错，
+            // 所以保持渲染、只让它不可见也不可交互（tabIndex=-1 不进 tab 序，
+            // 不设 name 因此不会随表单提交）。
+            var proxy = document.createElement('input');
+            proxy.type = 'date';
+            proxy.className = 'ah-date-proxy';
+            proxy.tabIndex = -1;
+            proxy.setAttribute('aria-hidden', 'true');
+            input.insertAdjacentElement('afterend', proxy);
+
+            on(proxy, 'change', function () {
+                input.value = proxy.value;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            on(input, 'click', function () {
+                // 打开前把文本框里已有的值同步给日历，用户改起来有起点
+                proxy.value = normalizeDateInput(input.value);
+
+                try {
+                    if (typeof proxy.showPicker === 'function') {
+                        proxy.showPicker();
+                    }
+                } catch (error) {
+                    // showPicker 需要"用户激活"且受浏览器策略限制，失败就静默 ——
+                    // 文本框本身仍可手输（后端兼容 yyyy-MM-dd / yyyy/M/d 等写法）
+                }
+            });
+        });
+    }
+
     /* ------------------------------------------------------------- 初始化 */
 
     function init() {
@@ -305,6 +367,7 @@
         initCopy();
         initToasts();
         initTabs();
+        initDatePickers();
     }
 
     if (document.readyState === 'loading') {

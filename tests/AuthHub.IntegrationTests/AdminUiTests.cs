@@ -288,6 +288,42 @@ public class AdminUiTests
     }
 
     [Fact]
+    public async Task Audit_page_should_use_text_date_inputs_with_our_own_format_placeholder()
+    {
+        // 日期筛选框曾用 <input type="date">，其占位文字（年/月/日、yyyy/mm/dd、yyyy/mm/日…）
+        // 由浏览器按自身语言环境绘制，HTML/CSS 控制不了，不同浏览器里长相不一致 ——
+        // 用户看到的 "yyyy/mm/日" 就是这么来的。现在改为普通文本框（placeholder 归我们写）
+        // + 点击弹原生日历（authhub.js 的 data-date-picker）。这条测试把"不再用原生控件"钉住。
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/audit-logs"));
+
+        html.Should().NotContain("type=\"date\"", because: "原生日历控件的占位文字由浏览器语言环境决定，页面无法统一");
+        html.Should().Contain("placeholder=\"yyyy-MM-dd\"", because: "格式提示必须由页面自己写死，所有浏览器显示一致");
+    }
+
+    [Fact]
+    public async Task Audit_page_should_accept_slash_and_short_dates()
+    {
+        // 输入框改成文本框后，管理员键盘手输最常见的就是省零 + 斜杠写法；
+        // 后端解析必须收下（原生日历回填的 yyyy-MM-dd 也依旧有效）。
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var response = await session.GetAsync("/admin/audit-logs?from=2020/1/1&to=2030/12/31");
+        var html = await CookieSession.ReadHtmlAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        html.Should().NotContain("筛选条件有调整", because: "yyyy/M/d 是文本框下最常见的手输写法，不该被当成错误");
+
+        // 反向：真正不合法的输入仍然要给提示，而不是静默忽略
+        var bad = await session.GetAsync("/admin/audit-logs?from=不是日期");
+        var badHtml = await CookieSession.ReadHtmlAsync(bad);
+        badHtml.Should().Contain("筛选条件有调整", because: "非法输入必须有可见提示");
+    }
+
+    [Fact]
     public async Task Scope_page_should_round_trip_a_scope_whose_name_contains_a_colon()
     {
         using var session = NewSession();
