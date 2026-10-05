@@ -38,9 +38,39 @@ public static class AuthorizationPolicyExtensions
             AddPermissionPolicy(options, AuthHubConstants.Policies.RolesManage, AuthHubConstants.Permissions.RolesManage);
             AddPermissionPolicy(options, AuthHubConstants.Policies.TokensRevoke, AuthHubConstants.Permissions.TokensRevoke);
             AddPermissionPolicy(options, AuthHubConstants.Policies.AuditRead, AuthHubConstants.Permissions.AuditRead);
+
+            // ---- 管理后台页面（Razor Pages）：只挂会话 Cookie，见 Ui 策略的说明 ----
+
+            options.AddPolicy(AuthHubConstants.Policies.Ui.Authenticated, policy => policy
+                .AddAuthenticationSchemes(AuthHubSchemes.Cookie)
+                .RequireAuthenticatedUser());
+
+            options.AddPolicy(AuthHubConstants.Policies.Ui.Admin, policy => policy
+                .AddAuthenticationSchemes(AuthHubSchemes.Cookie)
+                .RequireAuthenticatedUser()
+                .RequireClaim(AuthHubConstants.ClaimTypes.Permission, AuthHubConstants.Permissions.All.ToArray()));
+
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.ClientsManage, AuthHubConstants.Permissions.ClientsManage);
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.ScopesManage, AuthHubConstants.Permissions.ScopesManage);
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.UsersManage, AuthHubConstants.Permissions.UsersManage);
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.RolesManage, AuthHubConstants.Permissions.RolesManage);
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.TokensRevoke, AuthHubConstants.Permissions.TokensRevoke);
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.AuditRead, AuthHubConstants.Permissions.AuditRead);
         });
 
         return services;
+    }
+
+    /// <summary>后台页面策略：会话 Cookie + 指定权限声明。</summary>
+    private static void AddUiPermissionPolicy(
+        Microsoft.AspNetCore.Authorization.AuthorizationOptions options,
+        string policyName,
+        string permission)
+    {
+        options.AddPolicy(policyName, policy => policy
+            .AddAuthenticationSchemes(AuthHubSchemes.Cookie)
+            .RequireAuthenticatedUser()
+            .RequireClaim(AuthHubConstants.ClaimTypes.Permission, permission));
     }
 
     private static void AddPermissionPolicy(

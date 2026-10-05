@@ -84,6 +84,33 @@ public static class AuthHubConstants
         public const string RolesManage = "AuthHub.Permission." + Permissions.RolesManage;
         public const string TokensRevoke = "AuthHub.Permission." + Permissions.TokensRevoke;
         public const string AuditRead = "AuthHub.Permission." + Permissions.AuditRead;
+
+        /// <summary>
+        /// 管理后台**页面**（Razor Pages）专用策略名。
+        ///
+        /// 为什么必须与上面的 API 策略分开：Program.cs 的 AddAuthentication 把三个默认方案
+        /// 都改成了 OpenIddict 的「令牌校验」方案（为了让 /api/* 未带令牌时返回 401 而不是
+        /// 302 跳登录页）。浏览器直接访问后台页面时如果走默认方案，未认证同样会得到
+        /// 401 + WWW-Authenticate，用户看到的是一个空白或 JSON 页面。
+        ///
+        /// 因此后台页面的策略显式**只挂 Identity 会话 Cookie 方案**：未登录 → 302 到
+        /// /account/login，无权限 → 302 到 /account/denied，符合浏览器页面的预期。
+        /// </summary>
+        public static class Ui
+        {
+            /// <summary>已登录即可（“我的账户”页）。</summary>
+            public const string Authenticated = "AuthHub.Ui.Authenticated";
+
+            /// <summary>拥有任意一个管理权限（后台首页）。</summary>
+            public const string Admin = "AuthHub.Ui.Admin";
+
+            public const string ClientsManage = "AuthHub.Ui.Permission." + Permissions.ClientsManage;
+            public const string ScopesManage = "AuthHub.Ui.Permission." + Permissions.ScopesManage;
+            public const string UsersManage = "AuthHub.Ui.Permission." + Permissions.UsersManage;
+            public const string RolesManage = "AuthHub.Ui.Permission." + Permissions.RolesManage;
+            public const string TokensRevoke = "AuthHub.Ui.Permission." + Permissions.TokensRevoke;
+            public const string AuditRead = "AuthHub.Ui.Permission." + Permissions.AuditRead;
+        }
     }
 
     /// <summary>开发环境的种子客户端标识。</summary>

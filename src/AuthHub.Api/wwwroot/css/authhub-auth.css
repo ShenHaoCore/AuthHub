@@ -1,0 +1,157 @@
+/* ==========================================================================
+   AuthHub 协议页样式表
+   --------------------------------------------------------------------------
+   服务对象：登录、两阶段验证（2FA）、同意授权、以及各类提示页。
+   这些页面由 Pages/HtmlPages.cs 用纯字符串产出 HTML（不是 Razor），
+   原因见该文件的类注释 —— 它们是 OIDC 流程的一环，需要能被集成测试
+   直接断言，且不该引入视图引擎的间接层。
+
+   调色板来自 authhub-tokens.css，与后台 authhub.css 同源，
+   因此登录页与后台在视觉上是同一套设计语言（ABP 风格的浅色卡片 + 蓝色主色）。
+
+   类名沿用 HtmlPages.cs 里既有的选择器（.card / .brand / .field / .alert …），
+   这样当年把 <style> 抽成外链时，页面标记一字未改，集成测试的断言也无需调整。
+
+   约束：CSP style-src 'self' 'unsafe-inline'。本文件必须在 wwwroot 下，
+   不得引用任何 CDN 字体或图标。
+   ========================================================================== */
+
+@import url("/css/authhub-tokens.css");
+
+/* ============================================================== 页面框架 */
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 0;
+    background: var(--ah-bg);
+    color: var(--ah-text);
+    font-family: var(--ah-font);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+.card {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 24px;
+    padding: 32px;
+    background: var(--ah-surface);
+    border: 1px solid var(--ah-border);
+    border-radius: var(--ah-radius-lg);
+    box-shadow: var(--ah-shadow-xs), 0 8px 24px rgba(31, 35, 40, .06);
+}
+
+/* 同意授权页要列一串 scope，给它更宽的版面 */
+.card.wide { max-width: 480px; }
+
+/* ============================================================== 品牌区 */
+
+.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--ah-radius-sm);
+    background: var(--ah-primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.brand-name { font-weight: 600; font-size: 15px; }
+
+/* ============================================================== 标题与表单 */
+
+h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
+.subtitle { color: var(--ah-muted); margin: 0 0 20px; }
+
+label { display: block; font-weight: 500; margin-bottom: 6px; }
+
+input[type=text],
+input[type=password],
+input[type=email] {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--ah-border);
+    border-radius: var(--ah-radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--ah-surface);
+    color: var(--ah-text);
+}
+
+input:focus {
+    outline: 0;
+    border-color: var(--ah-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+}
+
+.field { margin-bottom: 14px; }
+
+.checkbox { display: flex; align-items: center; gap: 8px; color: var(--ah-muted); margin-bottom: 18px; }
+.checkbox input { margin: 0; }
+.checkbox label { margin: 0; font-weight: 400; }
+
+button {
+    width: 100%;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: var(--ah-radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+}
+button:focus-visible { outline: 2px solid var(--ah-primary); outline-offset: 2px; }
+
+.btn-primary { background: var(--ah-primary); color: #fff; }
+.btn-primary:hover { background: var(--ah-primary-hover); }
+
+.btn-secondary { background: var(--ah-surface); color: var(--ah-text); border: 1px solid var(--ah-border); }
+.btn-secondary:hover { background: #f3f4f6; }
+
+.actions { display: flex; gap: 10px; margin-top: 22px; }
+.actions button { flex: 1; }
+
+/* ============================================================== 提示 */
+
+.alert {
+    padding: 10px 12px;
+    border-radius: var(--ah-radius-sm);
+    margin-bottom: 18px;
+    background: var(--ah-danger-soft);
+    border: 1px solid var(--ah-danger-border);
+    color: var(--ah-danger);
+}
+
+/* ============================================================== 同意授权 */
+
+.scope-list { list-style: none; padding: 0; margin: 0 0 4px; }
+.scope-list li { padding: 12px 0; border-bottom: 1px solid var(--ah-border); }
+.scope-list li:last-child { border-bottom: 0; }
+.scope-name { font-weight: 600; }
+.scope-code { color: var(--ah-muted); font-family: var(--ah-mono); font-size: 12px; }
+.client-name { font-weight: 600; color: var(--ah-primary); }
+
+/* ============================================================== 页脚 */
+
+.hint { color: var(--ah-muted); font-size: 12px; margin-top: 18px; }
+.hint code {
+    font-family: var(--ah-mono);
+    font-size: 11.5px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #f1f3f5;
+    color: var(--ah-text);
+}
+
+.footer { margin-top: 22px; text-align: center; color: var(--ah-muted); font-size: 12px; }
+
+a { color: var(--ah-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }

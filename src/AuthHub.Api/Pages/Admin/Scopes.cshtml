@@ -1,0 +1,346 @@
+@page "/admin/scopes"
+@model AuthHub.Api.Pages.Admin.ScopesModel
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">Scope</h1>
+        <p class="ah-page-sub">
+            Scope 是"这个令牌能做什么"的声明单位：客户端请求它、用户在同意页看到它、
+            资源服务器靠 <code>scp</code> 声明做授权判断，而它关联的资源会成为令牌的 <code>aud</code>。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create">
+            <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Plus" />
+            </svg>
+            新建 Scope
+        </button>
+    </div>
+</div>
+
+<div class="ah-stack">
+    @if (!string.IsNullOrEmpty(Model.FormError))
+    {
+        <div class="ah-alert ah-alert--danger" role="alert">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Alert" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>操作未完成</strong>
+                <span>@Model.FormError</span>
+            </div>
+        </div>
+    }
+
+    <div class="ah-alert ah-alert--info">
+        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="@AdminNav.Icons.Info" />
+        </svg>
+        <div class="ah-alert-body">
+            <strong>标准 Scope 不在这张表里</strong>
+            <span>
+                <code>openid</code> 与 <code>offline_access</code> 由 OpenIddict 内部处理，不落
+                <code>OpenIddictScope</code> 表，因此不会出现在下表中 —— 但它们在客户端的授权范围里确实存在，
+                不需要（也不应该）在这里补建同名的记录。
+            </span>
+        </div>
+    </div>
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <form method="get" action="/admin/scopes" class="ah-toolbar" role="search">
+                <div class="ah-search">
+                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="@AdminNav.Icons.Search" />
+                    </svg>
+                    <input class="ah-input" type="search" name="q" value="@Model.Search"
+                           placeholder="搜索名称 / 显示名 / 说明" aria-label="搜索 Scope" />
+                </div>
+                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
+                @if (Model.HasFilter)
+                {
+                    <a class="ah-btn" href="/admin/scopes">重置</a>
+                }
+            </form>
+        </div>
+
+        @if (Model.Scopes.Count == 0)
+        {
+            <div class="ah-card-body">
+                <div class="ah-empty">
+                    <span class="ah-empty-icon" aria-hidden="true">
+                        <svg class="ah-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="@AdminNav.Icons.Scopes" />
+                        </svg>
+                    </span>
+                    @if (Model.HasFilter)
+                    {
+                        <strong>没有匹配的 Scope</strong>
+                        <span>换一个关键词，或清空筛选条件后重试。</span>
+                    }
+                    else
+                    {
+                        <strong>还没有定义任何 Scope</strong>
+                        <span>用右上角的「新建 Scope」创建第一个。</span>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ah-card-body ah-card-body-flush">
+                <div class="ah-table-wrap">
+                    <table class="ah-table">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>说明</th>
+                                <th>资源（进入 aud）</th>
+                                <th>客户端引用</th>
+                                <th class="ah-col-actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var scope in Model.Scopes)
+                            {
+                                var isBuiltIn = ScopesModel.IsBuiltIn(scope.Name);
+                                var referenced = Model.ReferenceCount(scope.Name);
+                                <tr>
+                                    <td>
+                                        <div class="ah-cell-main ah-cell-mono">@scope.Name</div>
+                                        <div class="ah-cell-sub" style="margin-top:3px">
+                                            @if (isBuiltIn)
+                                            {
+                                                <span class="ah-badge ah-badge--primary">内置</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(scope.DisplayName))
+                                            {
+                                                <span>@scope.DisplayName</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(scope.Description))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@scope.Description</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (scope.Resources.Count == 0)
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="ah-tag-list">
+                                                @foreach (var resource in scope.Resources)
+                                                {
+                                                    <span class="ah-badge">@resource</span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (referenced == 0)
+                                        {
+                                            <span class="ah-cell-sub">未被引用</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge ah-badge--info">@Model.ReferenceText(scope.Name)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="ah-act">
+                                            <button type="button" class="ah-act-btn" data-dialog-open="#dlg-edit-@scope.Name"
+                                                    title="编辑 Scope" aria-label="编辑 Scope @scope.Name">
+                                                <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                     stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="@AdminNav.Icons.Edit" />
+                                                </svg>
+                                            </button>
+
+                                            <form method="post" asp-page-handler="delete"
+                                                  data-confirm="将删除 Scope @scope.Name。@(referenced == 0 ? "当前没有客户端引用它。" : $"它仍被 {Model.ReferenceText(scope.Name)} 引用，删除后这些客户端的授权请求会失败。")此操作不可撤销，继续？">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetName" value="@scope.Name" />
+                                                <button type="submit" class="ah-act-btn ah-act-danger" title="删除 Scope"
+                                                        aria-label="删除 Scope @scope.Name">
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Trash" />
+                                                    </svg>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="ah-card-footer">
+                <span class="ah-pagination-info">
+                    共 <strong>@Model.TotalCount</strong> 个 Scope
+                    @if (Model.ReferenceCountsTruncated)
+                    {
+                        <text> · 客户端超过 200 个，"客户端引用"列只统计前 200 个（下界）</text>
+                    }
+                </span>
+            </div>
+        }
+    </div>
+</div>
+
+@* ------------------------------------------------------------ 新建 Scope *@
+<dialog class="ah-modal" id="dlg-create" aria-labelledby="dlg-create-title"
+        data-dialog-autoopen="@Model.AutoOpenCreate">
+    <form method="post" asp-page-handler="create">
+        <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+
+        <div class="ah-modal-head">
+            <h2 id="dlg-create-title">新建 Scope</h2>
+            <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="ah-modal-body">
+            <div class="ah-field">
+                <label class="ah-label" for="create-name">名称<span class="ah-req">*</span></label>
+                <input class="ah-input" id="create-name" name="NewName" type="text" required
+                       autocomplete="off" value="@Model.NewName" placeholder="例如 reports:read" />
+                <div class="ah-hint">
+                    至少 2 位，只能包含字母、数字以及 <code>: . _ -</code>。名称是主键，创建后不可修改。
+                </div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-display">显示名</label>
+                <input class="ah-input" id="create-display" name="NewDisplayName" type="text"
+                       autocomplete="off" value="@Model.NewDisplayName" placeholder="留空则与名称相同，会展示在用户同意页" />
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-description">说明</label>
+                <textarea class="ah-textarea" id="create-description" name="NewDescription" rows="2"
+                          placeholder="一句话说明这个 Scope 授予什么权限">@Model.NewDescription</textarea>
+                <div class="ah-hint">会同时出现在同意页与发现文档里，请写成人话。</div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-resources">关联资源</label>
+                <textarea class="ah-textarea" id="create-resources" name="NewResources" rows="3"
+                          placeholder="每行一个，例如：&#10;authhub-api">@Model.NewResources</textarea>
+                <div class="ah-hint">
+                    每行一个 API 资源标识。这些值会进入令牌的 <code>aud</code>，资源服务器据此判断"令牌是不是发给我的"。
+                    留空表示该 Scope 不影响 <code>aud</code>。
+                </div>
+            </div>
+        </div>
+
+        <div class="ah-modal-foot">
+            <button type="button" class="ah-btn" data-dialog-close>取消</button>
+            <div class="ah-modal-foot-end">
+                <button type="submit" class="ah-btn ah-btn--primary">创建</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+
+@* ------------------------------------------------------------ 编辑 Scope *@
+@foreach (var scope in Model.Scopes)
+{
+    var resources = string.Join('\n', scope.Resources);
+    <dialog class="ah-modal" id="dlg-edit-@scope.Name" aria-labelledby="dlg-edit-title-@scope.Name"
+            data-dialog-autoopen="@Model.IsEditFailure(scope.Name)">
+        <form method="post" asp-page-handler="save">
+            <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+            <input type="hidden" name="EditName" value="@scope.Name" />
+
+            <div class="ah-modal-head">
+                <h2 id="dlg-edit-title-@scope.Name">编辑 Scope</h2>
+                <button type="button" class="ah-icon-btn ah-modal-close" data-dialog-close aria-label="关闭">
+                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="ah-modal-body">
+                @if (Model.IsEditFailure(scope.Name) && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                        <span>@Model.FormError</span>
+                    </div>
+                }
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-name-@scope.Name">名称</label>
+                    <input class="ah-input ah-input--mono" id="edit-name-@scope.Name" type="text"
+                           value="@scope.Name" readonly />
+                    <div class="ah-hint">名称是主键，不可修改；需要改名请删除后重建。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-display-@scope.Name">显示名</label>
+                    <input class="ah-input" id="edit-display-@scope.Name" name="EditDisplayName" type="text"
+                           autocomplete="off" value="@scope.DisplayName" />
+                    <div class="ah-hint">留空表示不修改（而不是清空）。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-description-@scope.Name">说明</label>
+                    <textarea class="ah-textarea" id="edit-description-@scope.Name" name="EditDescription" rows="2">@scope.Description</textarea>
+                    <div class="ah-hint">留空表示不修改。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-resources-@scope.Name">关联资源</label>
+                    <textarea class="ah-textarea" id="edit-resources-@scope.Name"
+                              name="EditResources" rows="3">@resources</textarea>
+                    <div class="ah-hint">
+                        每行一个。这是**整体覆盖**：清空即解除全部关联。
+                        变更只影响之后签发的令牌，已签发令牌的 <code>aud</code> 不会被改写。
+                    </div>
+                </div>
+
+                <div class="ah-alert ah-alert--warning" style="margin-top:14px">
+                    <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="@AdminNav.Icons.Alert" />
+                    </svg>
+                    <div class="ah-alert-body">
+                        <strong>当前有 @Model.ReferenceText(scope.Name) 引用此 Scope</strong>
+                        <span>修改显示名或说明会立即反映到用户同意页，不需要客户端配合改动。</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ah-modal-foot">
+                <button type="button" class="ah-btn" data-dialog-close>取消</button>
+                <div class="ah-modal-foot-end">
+                    <button type="submit" class="ah-btn ah-btn--primary">保存</button>
+                </div>
+            </div>
+        </form>
+    </dialog>
+}

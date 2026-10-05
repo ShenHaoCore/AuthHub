@@ -1,0 +1,221 @@
+@page "/admin/audit-logs"
+@model AuthHub.Api.Pages.Admin.AuditLogsModel
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">审计日志</h1>
+        <p class="ah-page-sub">
+            登录、令牌签发与撤销、同意授权、后台管理操作的完整留痕。
+            时间统一为 <strong>UTC</strong>，日期筛选<strong>含当天</strong>两端。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        <a class="ah-btn ah-btn--sm" href="@AuditLogsModel.ResetUrl()">清空筛选</a>
+    </div>
+</div>
+
+<div class="ah-stack">
+    @if (!string.IsNullOrEmpty(Model.FilterWarning))
+    {
+        <div class="ah-alert ah-alert--warning" role="status">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Alert" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>筛选条件有调整</strong>
+                <span>@Model.FilterWarning</span>
+            </div>
+        </div>
+    }
+
+    @if (Model.UserNotFound)
+    {
+        <div class="ah-alert ah-alert--info" role="status">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Info" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>没有找到用户「@Model.UserFilter」</strong>
+                <span>用户名解析不到账号，因此本次查询不会有结果。请确认拼写，或改用用户 ID。</span>
+            </div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.ResolvedUserName))
+    {
+        <div class="ah-alert ah-alert--info" role="status">
+            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@AdminNav.Icons.Info" />
+            </svg>
+            <div class="ah-alert-body">
+                <strong>已将「@Model.UserFilter」解析为账号 @Model.ResolvedUserName</strong>
+                <span>审计表按用户 ID 精确匹配，用户名只是查询入口。</span>
+            </div>
+        </div>
+    }
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <form method="get" action="/admin/audit-logs" class="ah-toolbar" role="search">
+                <select class="ah-select" name="action" aria-label="按动作筛选" style="width:auto;min-width:190px">
+                    <option value="">全部动作</option>
+                    @foreach (var group in AuditLogsModel.ActionGroups)
+                    {
+                        <optgroup label="@group.Title">
+                            @foreach (var action in group.Actions)
+                            {
+                                <option value="@action" selected="@(string.Equals(action, Model.ActionFilter, StringComparison.Ordinal))">@AuditDisplay.Label(action)</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+
+                <input class="ah-input" type="text" name="user" value="@Model.UserFilter"
+                       placeholder="用户 ID 或用户名" aria-label="按用户筛选"
+                       style="width:auto;min-width:170px" autocomplete="off" />
+
+                <input class="ah-input ah-input--mono" type="text" name="client" value="@Model.ClientFilter"
+                       placeholder="ClientId" aria-label="按客户端筛选"
+                       style="width:auto;min-width:150px" autocomplete="off" />
+
+                <label class="ah-toolbar-field">
+                    <span class="ah-toolbar-label">起始</span>
+                    <input class="ah-input" type="date" name="from" value="@Model.FromFilter" aria-label="起始日期" />
+                </label>
+
+                <label class="ah-toolbar-field">
+                    <span class="ah-toolbar-label">结束</span>
+                    <input class="ah-input" type="date" name="to" value="@Model.ToFilter" aria-label="结束日期" />
+                </label>
+
+                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
+                <a class="ah-btn" href="@AuditLogsModel.ResetUrl()">重置</a>
+            </form>
+        </div>
+
+        <div class="ah-card-body ah-card-body-tight">
+            <div class="ah-quick-ranges">
+                <span class="ah-quick-ranges-label">快捷范围</span>
+                <a class="ah-chip" href="@Model.RangeUrl(1)">今天</a>
+                <a class="ah-chip" href="@Model.RangeUrl(7)">最近 7 天</a>
+                <a class="ah-chip" href="@Model.RangeUrl(30)">最近 30 天</a>
+                <a class="ah-chip" href="@Model.AllTimeUrl()">全部时间</a>
+                <span class="ah-hint" style="margin:0 0 0 6px">日期按 UTC 计算</span>
+            </div>
+        </div>
+
+        @if (Model.Logs.Items.Count == 0)
+        {
+            <div class="ah-card-body">
+                <div class="ah-empty">
+                    <span class="ah-empty-icon" aria-hidden="true">
+                        <svg class="ah-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="@AdminNav.Icons.Audit" />
+                        </svg>
+                    </span>
+                    @if (Model.HasFilter)
+                    {
+                        <strong>没有匹配的审计记录</strong>
+                        <span>放宽时间范围，或清空筛选条件后重试。</span>
+                    }
+                    else
+                    {
+                        <strong>还没有审计记录</strong>
+                        <span>登录、签发令牌、后台管理等动作都会在这里留痕。</span>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ah-card-body ah-card-body-flush">
+                <div class="ah-table-wrap">
+                    <table class="ah-table">
+                        <thead>
+                            <tr>
+                                <th class="ah-cell-nowrap">时间（UTC）</th>
+                                <th class="ah-cell-nowrap">动作</th>
+                                <th>操作者</th>
+                                <th>来源</th>
+                                <th>详情</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in Model.Logs.Items)
+                            {
+                                <tr>
+                                    <td class="ah-cell-nowrap ah-cell-mono">@AuditDisplay.FormatUtc(log.CreatedAt)</td>
+                                    <td class="ah-cell-nowrap">
+                                        <span class="ah-badge @AuditDisplay.Tone(log.Action, log.Succeeded)">
+                                            @AuditDisplay.Label(log.Action)
+                                        </span>
+                                        @if (!log.Succeeded)
+                                        {
+                                            <div style="margin-top:4px">
+                                                <span class="ah-badge ah-badge--danger">失败</span>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(log.UserName) && string.IsNullOrEmpty(log.UserId))
+                                        {
+                                            <span class="ah-cell-sub">匿名</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="ah-cell-main">@(string.IsNullOrEmpty(log.UserName) ? "（无用户名）" : log.UserName)</div>
+                                            @if (!string.IsNullOrEmpty(log.UserId))
+                                            {
+                                                <div class="ah-cell-sub ah-cell-mono">@AuditDisplay.Shorten(log.UserId, 18)</div>
+                                            }
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(log.ClientId))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="ah-cell-mono">@log.ClientId</div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(log.IpAddress))
+                                        {
+                                            <div class="ah-cell-sub ah-cell-mono">@log.IpAddress</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(log.Details))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div title="@log.Details">@AuditDisplay.Shorten(log.Details, 80)</div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(log.UserAgent))
+                                        {
+                                            <details class="ah-details">
+                                                <summary>User-Agent</summary>
+                                                <div>@log.UserAgent</div>
+                                            </details>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="ah-card-footer">
+                <partial name="_Pagination" model="Model.Pagination" />
+            </div>
+        }
+    </div>
+</div>

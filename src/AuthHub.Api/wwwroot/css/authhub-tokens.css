@@ -1,0 +1,78 @@
+/* ==========================================================================
+   AuthHub 设计令牌（design tokens）—— 调色板与量度的**唯一事实源**
+
+   谁在用：
+     · authhub.css       —— 管理后台（Razor Pages，/admin/*）
+     · authhub-auth.css  —— 协议页（登录 / 两阶段验证 / 同意授权 / 提示）
+   两者都通过 @import 引用本文件的原因就是为了避免"两处改一处忘"：
+   后台与登录页一旦出现色差，用户第一反应是"这是不是钓鱼页"。
+
+   为什么用 @import 而不是让协议页也链 authhub.css：
+   本文件只有令牌（几十行、约 1.5KB），而 authhub.css 带着侧边栏、表格、
+   模态等整套后台壳子（约 29KB）。登录页加载整套后台样式纯属浪费，
+   但又必须拿到同一份调色板 —— 于是把令牌单独拆出来。
+
+   约束：本站 CSP 为 script-src 'self'、style-src 'self' 'unsafe-inline'。
+   所有 CSS 必须落在 wwwroot 下，不允许任何 CDN 引用；同源 @import 是允许的。
+   ========================================================================== */
+
+:root {
+    color-scheme: light;
+
+    /* ---- 基础表面与文字 ---- */
+    --ah-bg: #f5f6f8;
+    --ah-surface: #ffffff;
+    --ah-border: #e3e6ea;
+    --ah-text: #1f2328;
+    --ah-muted: #656d76;
+
+    /* ---- 主色 ---- */
+    --ah-primary: #2563eb;
+    --ah-primary-hover: #1d4ed8;
+    --ah-primary-soft: #eef3ff;
+    --ah-primary-border: #c7d8fb;
+
+    /* ---- 语义色 ---- */
+    --ah-danger: #d1242f;
+    --ah-danger-soft: #fff5f5;
+    --ah-danger-border: #ffd7d7;
+
+    --ah-success: #1a7f37;
+    --ah-success-soft: #eaf6ed;
+    --ah-success-border: #bfe3c9;
+
+    --ah-warning: #9a6700;
+    --ah-warning-soft: #fff8e6;
+    --ah-warning-border: #f0dcb0;
+
+    --ah-info: #0b6bcb;
+    --ah-info-soft: #eaf3fd;
+    --ah-info-border: #bcd8f5;
+
+    /* ---- 侧边栏（深色，ABP 后台的标志性观感；仅后台使用） ---- */
+    --ah-sidebar-bg: #131a2b;
+    --ah-sidebar-bg-soft: #1b2437;
+    --ah-sidebar-text: #a6b0c3;
+    --ah-sidebar-text-strong: #ffffff;
+    --ah-sidebar-divider: rgba(255, 255, 255, .08);
+    --ah-sidebar-hover: rgba(255, 255, 255, .06);
+    --ah-sidebar-width: 258px;
+
+    /* ---- 形状与阴影 ---- */
+    --ah-radius-lg: 12px;
+    --ah-radius: 10px;
+    --ah-radius-sm: 8px;
+
+    --ah-shadow-xs: 0 1px 2px rgba(31, 35, 40, .04);
+    --ah-shadow-sm: 0 1px 2px rgba(31, 35, 40, .05), 0 2px 8px rgba(31, 35, 40, .04);
+    --ah-shadow-md: 0 2px 6px rgba(31, 35, 40, .06), 0 14px 34px rgba(31, 35, 40, .10);
+    --ah-shadow-lg: 0 24px 64px rgba(12, 18, 30, .26);
+
+    /* ---- 量度 ---- */
+    --ah-topbar-height: 60px;
+    --ah-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    --ah-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+/* 两个页面族都依赖 border-box 语义，放这里避免各自再写一遍 */
+* { box-sizing: border-box; }

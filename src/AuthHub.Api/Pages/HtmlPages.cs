@@ -8,10 +8,17 @@ namespace AuthHub.Api.Pages;
 /// <summary>
 /// 服务端渲染的极简 HTML 页面（登录 / 两阶段验证 / 同意授权 / 提示）。
 ///
-/// 为什么不用 Razor：本项目的定位是 OIDC 服务端 + 管理 API，
-/// 浏览器页面只有这几个“协议流程必需”的页面。
-/// 用纯字符串产出 HTML 可以保持 Api 项目零视图依赖、零前端构建步骤，
-/// 同时便于集成测试直接断言页面内容。
+/// **为什么这几页不用 Razor**（重要，改动前请先读完）：
+/// 它们是 OIDC 协议流程的一环 —— 由 <c>AccountController</c> / <c>OpenIddict</c>
+/// 在流程中间直接返回，页面内容（returnUrl、请求参数、scope 列表）全部来自
+/// 当前这次授权请求。用纯字符串产出 HTML 有三个实际收益：
+///   1) 集成测试可以直接断言页面上出现了哪些参数与 scope，不需要解析视图引擎的产物；
+///   2) 协议页的失败模式是"登录不了"，越少的编译期魔法越好定位；
+///   3) 表单字段名与协议参数一一对应，字符串拼装让这层映射一眼可见。
+///
+/// **管理后台（/admin/*）走的是另一条路**：Razor Pages（见 Pages/Admin/），
+/// 因为那边是大量结构相似的列表 / 表单 / 模态，视图引擎的价值远大于成本。
+/// 两条路共用同一套设计令牌（wwwroot/css/authhub-tokens.css），视觉上是一致的。
 ///
 /// 安全上做了三件事：
 ///   1) 所有动态内容一律 HTML 编码，避免反射型 XSS；
@@ -20,75 +27,6 @@ namespace AuthHub.Api.Pages;
 /// </summary>
 public static class HtmlPages
 {
-    private const string Styles = """
-        :root {
-          color-scheme: light;
-          --bg: #f5f6f8;
-          --card: #ffffff;
-          --border: #e3e6ea;
-          --text: #1f2328;
-          --muted: #656d76;
-          --primary: #2563eb;
-          --primary-hover: #1d4ed8;
-          --danger: #d1242f;
-          --danger-bg: #fff5f5;
-          --danger-border: #ffd7d7;
-        }
-        * { box-sizing: border-box; }
-        body {
-          margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-          background: var(--bg); color: var(--text);
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
-          font-size: 14px; line-height: 1.6;
-        }
-        .card {
-          width: 100%; max-width: 420px; margin: 24px; padding: 32px;
-          background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-          box-shadow: 0 1px 2px rgba(31,35,40,.04), 0 8px 24px rgba(31,35,40,.06);
-        }
-        .card.wide { max-width: 480px; }
-        .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
-        .brand-mark {
-          width: 28px; height: 28px; border-radius: 8px; background: var(--primary);
-          color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 14px;
-        }
-        .brand-name { font-weight: 600; font-size: 15px; }
-        h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; }
-        .subtitle { color: var(--muted); margin: 0 0 20px; }
-        label { display: block; font-weight: 500; margin-bottom: 6px; }
-        input[type=text], input[type=password], input[type=email] {
-          width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
-          font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
-        }
-        input:focus { outline: 2px solid rgba(37,99,235,.35); outline-offset: 0; border-color: var(--primary); }
-        .field { margin-bottom: 14px; }
-        .checkbox { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-bottom: 18px; }
-        .checkbox input { margin: 0; }
-        button {
-          width: 100%; padding: 10px 16px; border: 0; border-radius: 8px; cursor: pointer;
-          font-size: 14px; font-weight: 600; font-family: inherit;
-        }
-        .btn-primary { background: var(--primary); color: #fff; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #f3f4f6; }
-        .actions { display: flex; gap: 10px; margin-top: 22px; }
-        .actions button { flex: 1; }
-        .alert {
-          padding: 10px 12px; border-radius: 8px; margin-bottom: 18px;
-          background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger);
-        }
-        .scope-list { list-style: none; padding: 0; margin: 0 0 4px; }
-        .scope-list li { padding: 12px 0; border-bottom: 1px solid var(--border); }
-        .scope-list li:last-child { border-bottom: 0; }
-        .scope-name { font-weight: 600; }
-        .scope-code { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
-        .client-name { font-weight: 600; color: var(--primary); }
-        .hint { color: var(--muted); font-size: 12px; margin-top: 18px; }
-        .footer { margin-top: 22px; text-align: center; color: var(--muted); font-size: 12px; }
-        a { color: var(--primary); }
-        """;
-
     public static string LoginPage(string returnUrl, string requestToken, string? error = null, string? userName = null)
     {
         var body = new StringBuilder();
@@ -114,7 +52,7 @@ public static class HtmlPages
         body.Append("</div>");
         body.Append("<div class=\"checkbox\">");
         body.Append("<input id=\"rememberMe\" name=\"rememberMe\" type=\"checkbox\" value=\"true\" />");
-        body.Append("<label for=\"rememberMe\" style=\"margin:0;font-weight:400\">在此设备上保持登录</label>");
+        body.Append("<label for=\"rememberMe\">在此设备上保持登录</label>");
         body.Append("</div>");
         body.Append("<button class=\"btn-primary\" type=\"submit\">登录</button>");
         body.Append("</form>");
@@ -146,7 +84,7 @@ public static class HtmlPages
         body.Append("</div>");
         body.Append("<div class=\"checkbox\">");
         body.Append("<input id=\"rememberMachine\" name=\"rememberMachine\" type=\"checkbox\" value=\"true\" />");
-        body.Append("<label for=\"rememberMachine\" style=\"margin:0;font-weight:400\">在此设备上不再要求验证码</label>");
+        body.Append("<label for=\"rememberMachine\">在此设备上不再要求验证码</label>");
         body.Append("</div>");
         body.Append("<button class=\"btn-primary\" type=\"submit\">继续</button>");
         body.Append("</form>");
@@ -238,7 +176,8 @@ public static class HtmlPages
              <meta name="viewport" content="width=device-width, initial-scale=1" />
              <meta name="robots" content="noindex, nofollow" />
              <title>{E(title)}</title>
-             <style>{Styles}</style>
+             <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+             <link rel="stylesheet" href="/css/authhub-auth.css" />
            </head>
            <body>
              <main class="card{(wide ? " wide" : string.Empty)}">

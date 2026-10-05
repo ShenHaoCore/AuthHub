@@ -1,0 +1,544 @@
+@page "/admin/profile"
+@model AuthHub.Api.Pages.Admin.ProfileModel
+@using AuthHub.Domain.Constants
+@{
+    var profile = Model.Profile;
+    var permissionGroups = (profile?.Permissions ?? Array.Empty<string>())
+        .GroupBy(AdminNav.PermissionGroupTitle)
+        .OrderBy(group => group.Key, StringComparer.Ordinal)
+        .ToArray();
+}
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">我的账户</h1>
+        <p class="ah-page-sub">
+            维护自己的账号信息与安全设置。这里的操作只影响你自己的账号
+            @if (User.HasClaim(AuthHubConstants.ClaimTypes.Permission, AuthHubConstants.Permissions.UsersManage))
+            {
+                <text>；管理他人账号请到<a href="/admin/users">用户</a>页</text>
+            }
+            。
+        </p>
+    </div>
+</div>
+
+@if (profile is null)
+{
+    <div class="ah-alert ah-alert--danger" role="alert">
+        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="@AdminNav.Icons.Alert" />
+        </svg>
+        <div class="ah-alert-body">
+            <strong>无法读取账号信息</strong>
+            <span>当前会话可能是刚刚失效的（例如管理员重置了你的安全戳），请重新登录后再试。</span>
+        </div>
+    </div>
+}
+else
+{
+    <div data-tab-scope>
+        <div class="ah-tabs" role="tablist" aria-label="账户设置分区">
+            <button type="button" class="ah-tab @(Model.ActiveTab == "profile" ? "is-active" : null)"
+                    data-tab="profile" role="tab" aria-selected="@(Model.ActiveTab == "profile")"
+                    aria-controls="panel-profile" tabindex="@(Model.ActiveTab == "profile" ? "0" : "-1")">
+                档案
+            </button>
+            <button type="button" class="ah-tab @(Model.ActiveTab == "password" ? "is-active" : null)"
+                    data-tab="password" role="tab" aria-selected="@(Model.ActiveTab == "password")"
+                    aria-controls="panel-password" tabindex="@(Model.ActiveTab == "password" ? "0" : "-1")">
+                修改密码
+            </button>
+            <button type="button" class="ah-tab @(Model.ActiveTab == "mfa" ? "is-active" : null)"
+                    data-tab="mfa" role="tab" aria-selected="@(Model.ActiveTab == "mfa")"
+                    aria-controls="panel-mfa" tabindex="@(Model.ActiveTab == "mfa" ? "0" : "-1")">
+                两步验证
+                @if (!profile.TwoFactorEnabled)
+                {
+                    <span class="ah-badge ah-badge--warning" style="margin-left:6px">未开启</span>
+                }
+            </button>
+        </div>
+
+        <div class="ah-tab-body">
+            @* ================================================== 档案 *@
+            <section id="panel-profile" data-tab-panel="profile" role="tabpanel" aria-label="档案"
+                     hidden="@(Model.ActiveTab != "profile")">
+                <div class="ah-stack">
+                    <div class="ah-grid ah-grid-sidebar">
+                        <div class="ah-card">
+                            <div class="ah-card-header">
+                                <div>
+                                    <div class="ah-card-title">账号信息</div>
+                                    <div class="ah-card-sub">显示名与手机号目前只能由管理员在「用户」页修改</div>
+                                </div>
+                            </div>
+                            <div class="ah-card-body">
+                                <dl class="ah-dl">
+                                    <dt>显示名</dt>
+                                    <dd>
+                                        <strong>@profile.DisplayName</strong>
+                                        @if (!profile.IsActive)
+                                        {
+                                            <span class="ah-badge ah-badge--danger" style="margin-left:6px">已停用</span>
+                                        }
+                                    </dd>
+
+                                    <dt>用户名</dt>
+                                    <dd class="ah-cell-mono">@profile.UserName</dd>
+
+                                    <dt>邮箱</dt>
+                                    <dd>
+                                        @if (string.IsNullOrEmpty(profile.Email))
+                                        {
+                                            <span class="ah-cell-sub">未绑定</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-cell-mono">@profile.Email</span>
+                                            @if (profile.EmailConfirmed)
+                                            {
+                                                <span class="ah-badge ah-badge--success" style="margin-left:6px">已验证</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="ah-badge ah-badge--warning" style="margin-left:6px">未验证</span>
+                                            }
+                                        }
+                                    </dd>
+
+                                    <dt>手机号</dt>
+                                    <dd>
+                                        @if (string.IsNullOrEmpty(profile.PhoneNumber))
+                                        {
+                                            <span class="ah-cell-sub">未绑定</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-cell-mono">@profile.PhoneNumber</span>
+                                        }
+                                    </dd>
+
+                                    <dt>两步验证</dt>
+                                    <dd>
+                                        @if (profile.TwoFactorEnabled)
+                                        {
+                                            <span class="ah-badge ah-badge--success">已开启</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge ah-badge--warning">未开启</span>
+                                            <span class="ah-cell-sub" style="margin-left:6px">
+                                                建议立即
+                                                <a href="#mfa" data-tab="mfa">前往开启</a>
+                                            </span>
+                                        }
+                                    </dd>
+
+                                    <dt>注册时间</dt>
+                                    <dd>@AuditDisplay.FormatUtc(profile.CreatedAt) <span class="ah-cell-sub">UTC</span></dd>
+
+                                    <dt>最近登录</dt>
+                                    <dd>
+                                        @if (profile.LastLoginAt is null)
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <text>@AuditDisplay.FormatUtc(profile.LastLoginAt.Value)</text>
+                                            <span class="ah-cell-sub">UTC</span>
+                                        }
+                                    </dd>
+
+                                    <dt>用户 ID</dt>
+                                    <dd class="ah-cell-mono">@profile.Id</dd>
+                                </dl>
+                            </div>
+                        </div>
+
+                        <div class="ah-card">
+                            <div class="ah-card-header">
+                                <div>
+                                    <div class="ah-card-title">会话</div>
+                                    <div class="ah-card-sub">退出后需要重新走一次登录流程</div>
+                                </div>
+                            </div>
+                            <div class="ah-card-body">
+                                <form method="post" action="/account/logout">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="ah-btn ah-btn--block">
+                                        <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                             stroke-linejoin="round" aria-hidden="true">
+                                            <path d="@AdminNav.Icons.Logout" />
+                                        </svg>
+                                        退出登录
+                                    </button>
+                                </form>
+                                <div class="ah-hint">
+                                    只结束<strong>当前浏览器</strong>的会话。若要一次性作废全部设备上的登录，
+                                    请修改密码 —— 它会刷新安全戳。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ah-card">
+                        <div class="ah-card-header">
+                            <div>
+                                <div class="ah-card-title">角色与权限</div>
+                                <div class="ah-card-sub">
+                                    权限由角色推导（<code>RolePermissionMap</code>），不单独授予；
+                                    要调整请联系管理员
+                                </div>
+                            </div>
+                            <div class="ah-card-header-actions">
+                                <span class="ah-badge ah-badge--primary">@profile.Permissions.Count 个权限点</span>
+                            </div>
+                        </div>
+                        <div class="ah-card-body">
+                            <div class="ah-field">
+                                <label class="ah-label">角色</label>
+                                @if (profile.Roles.Count == 0)
+                                {
+                                    <div class="ah-cell-sub">未分配任何角色</div>
+                                }
+                                else
+                                {
+                                    <div class="ah-tag-list">
+                                        @foreach (var role in profile.Roles)
+                                        {
+                                            <span class="ah-badge ah-badge--primary">@role</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            @if (permissionGroups.Length == 0)
+                            {
+                                <div class="ah-empty">
+                                    <strong>没有任何管理权限</strong>
+                                    <span>当前身份只能访问「我的账户」。</span>
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var group in permissionGroups)
+                                {
+                                    <div class="ah-perm-group">
+                                        <div class="ah-perm-group-head">
+                                            @group.Key
+                                            <span class="ah-badge ah-perm-count">@group.Count()</span>
+                                        </div>
+                                        <div class="ah-perm-items">
+                                            @foreach (var permission in group.OrderBy(p => p, StringComparer.Ordinal))
+                                            {
+                                                <div class="ah-perm-item">
+                                                    <code>@permission</code>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            @* ================================================== 修改密码 *@
+            <section id="panel-password" data-tab-panel="password" role="tabpanel" aria-label="修改密码"
+                     hidden="@(Model.ActiveTab != "password")">
+                <div class="ah-grid ah-grid-sidebar">
+                    <div class="ah-card">
+                        <div class="ah-card-header">
+                            <div>
+                                <div class="ah-card-title">修改密码</div>
+                                <div class="ah-card-sub">修改后会刷新安全戳：其它设备下线，当前设备保持登录</div>
+                            </div>
+                        </div>
+
+                        <form method="post" asp-page-handler="changePassword">
+                            <div class="ah-card-body">
+                                @if (!string.IsNullOrEmpty(Model.PasswordError))
+                                {
+                                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                                        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                             stroke-linejoin="round" aria-hidden="true">
+                                            <path d="@AdminNav.Icons.Alert" />
+                                        </svg>
+                                        <div class="ah-alert-body">
+                                            <strong>密码未修改</strong>
+                                            <span>@Model.PasswordError</span>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="ah-field">
+                                    <label class="ah-label" for="current-password">当前密码<span class="ah-req">*</span></label>
+                                    <input class="ah-input" id="current-password" name="CurrentPassword" type="password"
+                                           required autocomplete="current-password" />
+                                </div>
+
+                                <div class="ah-field">
+                                    <label class="ah-label" for="new-password">新密码<span class="ah-req">*</span></label>
+                                    <input class="ah-input" id="new-password" name="NewPassword" type="password"
+                                           required autocomplete="new-password" />
+                                    <div class="ah-hint">
+                                        至少 8 位，且需包含大写字母、小写字母、数字与特殊字符；
+                                        不能与当前密码相同。
+                                    </div>
+                                </div>
+
+                                <div class="ah-field">
+                                    <label class="ah-label" for="confirm-password">确认新密码<span class="ah-req">*</span></label>
+                                    <input class="ah-input" id="confirm-password" name="ConfirmPassword" type="password"
+                                           required autocomplete="new-password" />
+                                    <div class="ah-hint">两次输入需完全一致。</div>
+                                </div>
+                            </div>
+
+                            <div class="ah-card-footer">
+                                <button type="submit" class="ah-btn ah-btn--primary">修改密码</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="ah-card">
+                        <div class="ah-card-header">
+                            <div class="ah-card-title">为什么要刷新安全戳</div>
+                        </div>
+                        <div class="ah-card-body">
+                            <p class="ah-page-sub" style="margin:0">
+                                安全戳（security stamp）是随用户记录一起保存的一串随机值，会写进会话 Cookie。
+                                每次校验时 Identity 都会比对两者是否一致，不一致就直接判定会话失效。
+                                改密会刷新它，因此<strong>其它设备上已经登录的会话会立刻失效</strong>，
+                                而当前设备通过重签 Cookie 保持在线，不需要你重新输一遍密码。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            @* ================================================== 两步验证 *@
+            <section id="panel-mfa" data-tab-panel="mfa" role="tabpanel" aria-label="两步验证"
+                     hidden="@(Model.ActiveTab != "mfa")">
+                <div class="ah-stack">
+                    @if (Model.HasRecoveryCodes)
+                    {
+                        <div class="ah-alert ah-alert--warning" role="alert">
+                            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="@AdminNav.Icons.Key" />
+                            </svg>
+                            <div class="ah-alert-body">
+                                <strong>恢复码 —— 只显示这一次，请立即保存</strong>
+                                <span>
+                                    手机丢失时用它们登录。每个码只能用一次，刷新本页后将无法再次查看。
+                                    建议存进密码管理器（而不是截图放在相册里）。
+                                </span>
+                                <ul class="ah-secret-list" style="margin-top:10px">
+                                    @foreach (var code in Model.RecoveryCodes)
+                                    {
+                                        <li>@code</li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.MfaError))
+                    {
+                        <div class="ah-alert ah-alert--danger" role="alert">
+                            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                 stroke-linejoin="round" aria-hidden="true">
+                                <path d="@AdminNav.Icons.Alert" />
+                            </svg>
+                            <div class="ah-alert-body">
+                                <strong>两步验证未启用</strong>
+                                <span>@Model.MfaError</span>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="ah-card">
+                        <div class="ah-card-header">
+                            <div>
+                                <div class="ah-card-title">Authenticator App</div>
+                                <div class="ah-card-sub">
+                                    基于 TOTP（RFC 6238）的离线验证码，不依赖短信与网络
+                                </div>
+                            </div>
+                            <div class="ah-card-header-actions">
+                                @if (profile.TwoFactorEnabled)
+                                {
+                                    <span class="ah-badge ah-badge--success">已开启</span>
+                                }
+                                else
+                                {
+                                    <span class="ah-badge ah-badge--warning">未开启</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="ah-card-body">
+                            @if (profile.TwoFactorEnabled)
+                            {
+                                <p class="ah-page-sub" style="margin:0 0 4px">
+                                    已启用。关闭后会同时<strong>重置 Authenticator 密钥</strong>，
+                                    下次开启将得到一个全新的密钥，需要重新扫码。
+                                </p>
+                            }
+                            else if (Model.IsSettingUp)
+                            {
+                                <ol class="ah-steps">
+                                    <li>
+                                        在 Authenticator App（Microsoft / Google Authenticator、1Password 等）
+                                        里选择「手动输入密钥」，填入下面这串密钥 —— 账号名随意。
+                                    </li>
+                                    <li>把 App 里生成的 6 位数字填到下面的输入框并提交。</li>
+                                </ol>
+
+                                <div class="ah-field">
+                                    <label class="ah-label">密钥</label>
+                                    <div class="ah-secret">
+                                        <code id="mfa-shared-key">@Model.SetupSharedKey</code>
+                                        <button type="button" class="ah-btn ah-btn--sm" data-copy="#mfa-shared-key">
+                                            复制
+                                        </button>
+                                    </div>
+                                    <div class="ah-hint">
+                                        手动输入时对大小写与空格不敏感；密钥在<strong>启用成功前不会生效</strong>，
+                                        中途放弃不会改变账号状态。
+                                    </div>
+                                </div>
+
+                                <div class="ah-field">
+                                    <label class="ah-label">otpauth URI</label>
+                                    <div class="ah-secret">
+                                        <code id="mfa-uri">@Model.SetupUri</code>
+                                        <button type="button" class="ah-btn ah-btn--sm" data-copy="#mfa-uri">
+                                            复制
+                                        </button>
+                                    </div>
+                                    <div class="ah-hint">
+                                        支持该格式的密码管理器（如 1Password、Bitwarden）可直接导入这一整行。
+                                        本页不生成二维码 —— 生成二维码需要额外的绘图依赖，
+                                        而所有 Authenticator App 都支持手动输入密钥。
+                                    </div>
+                                </div>
+
+                                <form method="post" asp-page-handler="enable">
+                                    <div class="ah-field">
+                                        <label class="ah-label" for="enable-code">App 中的 6 位验证码<span class="ah-req">*</span></label>
+                                        <input class="ah-input ah-input--mono" id="enable-code" name="EnableCode"
+                                               type="text" required inputmode="numeric" autocomplete="one-time-code"
+                                               maxlength="7" placeholder="123456" style="max-width:180px" />
+                                        <div class="ah-hint">验证码每 30 秒变化一次，若提示不正确请等下一组。</div>
+                                    </div>
+
+                                    <div class="ah-btn-row">
+                                        <button type="submit" class="ah-btn ah-btn--primary">确认启用</button>
+                                        <span class="ah-hint" style="margin:0">
+                                            启用后会用一批新的恢复码替换绑定时生成的那批。
+                                        </span>
+                                    </div>
+                                </form>
+                            }
+                            else
+                            {
+                                <p class="ah-page-sub" style="margin:0 0 14px">
+                                    开启后，登录需要「密码 + App 生成的 6 位验证码」两步。即使密码泄露，
+                                    攻击者也无法仅凭密码登录。
+                                </p>
+                                <form method="post" asp-page-handler="beginSetup">
+                                    <button type="submit" class="ah-btn ah-btn--primary">
+                                        <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                             stroke-linejoin="round" aria-hidden="true">
+                                            <path d="@AdminNav.Icons.Key" />
+                                        </svg>
+                                        开始绑定
+                                    </button>
+                                </form>
+                            }
+                        </div>
+
+                        @if (profile.TwoFactorEnabled)
+                        {
+                            <div class="ah-card-footer">
+                                <form method="post" asp-page-handler="disable"
+                                      data-confirm="关闭两步验证会同时重置 Authenticator 密钥，账号安全性将下降。继续？">
+                                    <button type="submit" class="ah-btn ah-btn--danger ah-btn--sm">关闭两步验证</button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="ah-card">
+                        <div class="ah-card-header">
+                            <div>
+                                <div class="ah-card-title">其它验证通道</div>
+                                <div class="ah-card-sub">
+                                    下发一次性验证码到邮箱或手机，用于登录第二因子
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ah-card-body">
+                            @if (Model.TwoFactorProviders.Count == 0)
+                            {
+                                <div class="ah-empty">
+                                    <strong>当前账号没有可用的验证通道</strong>
+                                    <span>需要先绑定并验证邮箱或手机号；绑定的操作需由管理员在「用户」页完成。</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="ah-row">
+                                    @foreach (var provider in Model.TwoFactorProviders)
+                                    {
+                                        <form method="post" asp-page-handler="sendCode">
+                                            <input type="hidden" name="Provider" value="@provider" />
+                                            <button type="submit" class="ah-btn ah-btn--sm">
+                                                @if (string.Equals(provider, "Email", StringComparison.Ordinal))
+                                                {
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Mail" />
+                                                    </svg>
+                                                    <text>发送验证码到邮箱</text>
+                                                }
+                                                else if (string.Equals(provider, "Phone", StringComparison.Ordinal))
+                                                {
+                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                         stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="@AdminNav.Icons.Phone" />
+                                                    </svg>
+                                                    <text>发送验证码到手机</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>使用 @provider 通道</text>
+                                                }
+                                            </button>
+                                        </form>
+                                    }
+                                </div>
+                                <div class="ah-hint">
+                                    这会真的发出一封邮件 / 一条短信，用于确认通道配置是否正确。
+                                    收不到时先检查管理员是否已填写并验证对应的联系方式。
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+}
