@@ -20,7 +20,7 @@
       程序集里、由本地路由提供，不从 CDN 加载 —— 因此在离线/内网环境可用，
       也不会被本站的 CSP（script-src 'self'）拦截。它只消费一个文档 URL，与生成器无关。
     -->
-    <PackageReference Include="Scalar.AspNetCore" Version="2.17.6" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.13" />
 
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.4" />
