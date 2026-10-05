@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AuthHub.Application.Interfaces;
+using AuthHub.Api.Extensions;
 using AuthHub.Api.Pages;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
@@ -503,65 +504,7 @@ public class AuthorizationController : Controller
 
         foreach (var claim in principal.Claims)
         {
-            claim.SetDestinations(GetDestinations(claim, principal));
-        }
-    }
-
-    private static IEnumerable<string> GetDestinations(Claim claim, ClaimsPrincipal principal)
-    {
-        switch (claim.Type)
-        {
-            case Claims.Name:
-            case AuthHubConstants.ClaimTypes.DisplayName:
-                yield return Destinations.AccessToken;
-
-                if (principal.HasScope(AuthHubConstants.Scopes.Profile))
-                {
-                    yield return Destinations.IdentityToken;
-                }
-
-                yield break;
-
-            case Claims.Email:
-                yield return Destinations.AccessToken;
-
-                if (principal.HasScope(AuthHubConstants.Scopes.Email))
-                {
-                    yield return Destinations.IdentityToken;
-                }
-
-                yield break;
-
-            case Claims.Role:
-                yield return Destinations.AccessToken;
-
-                if (principal.HasScope(AuthHubConstants.Scopes.Roles))
-                {
-                    yield return Destinations.IdentityToken;
-                }
-
-                yield break;
-
-            case AuthHubConstants.ClaimTypes.Permission:
-                // 权限只进入 Access Token：ID Token 是给前端看“我是谁”的，不承载授权信息
-                yield return Destinations.AccessToken;
-                yield break;
-
-            // 以下声明由 OpenIddict 自行生成并加入正确位置，显式标注反而会干扰
-            case Claims.Subject:
-            case Claims.JwtId:
-            case Claims.IssuedAt:
-            case Claims.ExpiresAt:
-            case Claims.NotBefore:
-            case Claims.Issuer:
-            case Claims.Audience:
-            case Claims.TokenUsage:
-            case Claims.ClientId:
-                yield break;
-
-            default:
-                yield return Destinations.AccessToken;
-                yield break;
+            claim.SetDestinations(OpenIddictClaimDestinations.Resolve(claim, principal));
         }
     }
 

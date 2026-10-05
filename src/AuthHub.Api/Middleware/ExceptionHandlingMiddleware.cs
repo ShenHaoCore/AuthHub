@@ -1,3 +1,4 @@
+using AuthHub.Api.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AuthHub.Api.Middleware;
@@ -6,6 +7,10 @@ namespace AuthHub.Api.Middleware;
 /// 全局异常兜底。
 /// 关键点：异常详情只写日志、不回传给客户端（生产环境），
 /// 客户端拿到的是统一的 ProblemDetails + traceId，凭 traceId 到日志里定位。
+///
+/// 响应体走 <see cref="ApiProblemWriter"/>，与控制器 / 认证 / 校验失败同一条出口 ——
+/// 这保证了 500 的 Content-Type 也是 <c>application/problem+json</c>，
+/// 而不是默认的 <c>application/json</c>。
 /// </summary>
 public sealed class ExceptionHandlingMiddleware : IMiddleware
 {
@@ -40,28 +45,22 @@ public sealed class ExceptionHandlingMiddleware : IMiddleware
             }
 
             context.Response.Clear();
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            context.Response.ContentType = "application/problem+json; charset=utf-8";
 
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status500InternalServerError,
-                Title = "服务内部错误",
-                Detail = _environment.IsDevelopment()
+            var problem = ApiProblemWriter.Create(
+                context,
+                StatusCodes.Status500InternalServerError,
+                "服务内部错误",
+                _environment.IsDevelopment()
                     ? exception.Message
                     : "服务器处理请求时发生异常，请稍后重试；如持续出现请联系管理员并提供 traceId。",
-                Instance = context.Request.Path
-            };
-
-            problem.Extensions["code"] = "InternalError";
-            problem.Extensions["traceId"] = context.TraceIdentifier;
+                "InternalError");
 
             if (_environment.IsDevelopment())
             {
                 problem.Extensions["exception"] = exception.ToString();
             }
 
-            await context.Response.WriteAsJsonAsync(problem);
+            await ApiProblemWriter.WriteAsync(context, problem);
         }
     }
 }

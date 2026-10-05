@@ -185,31 +185,16 @@ public class AuditLogsModel : PageModel
     public static string ResetUrl() => "/admin/audit-logs";
 
     private string BuildUrl(string? from, string? to)
-    {
-        var parts = new List<string>();
-
-        Append(parts, "action", ActionFilter);
-        Append(parts, "user", UserFilter);
-        Append(parts, "client", ClientFilter);
-        Append(parts, "from", from);
-        Append(parts, "to", to);
-
-        // 刻意不带 page：换时间范围后回到第一页，否则容易停在超出范围的空页上
-        return parts.Count == 0
-            ? "/admin/audit-logs"
-            : string.Concat("/admin/audit-logs?", string.Join('&', parts));
-    }
-
-    private static void Append(List<string> parts, string key, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
+        // 刻意不带 page：换时间范围后回到第一页，否则容易停在超出范围的空页上。
+        // 转义与空值剔除交给 QueryStringBuilder，与翻页链接共用同一套规则。
+        => Pages.Shared.QueryStringBuilder.Append("/admin/audit-logs", new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            parts.Add(string.Concat(
-                Uri.EscapeDataString(key),
-                "=",
-                Uri.EscapeDataString(value)));
-        }
-    }
+            ["action"] = ActionFilter,
+            ["user"] = UserFilter,
+            ["client"] = ClientFilter,
+            ["from"] = from,
+            ["to"] = to
+        });
 
     // ------------------------------------------------------------------ 内部辅助
 

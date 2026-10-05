@@ -1,3 +1,4 @@
+using AuthHub.Api.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -11,6 +12,13 @@ namespace AuthHub.Api.Filters;
 /// 而本项目把规则集中写在 Application 层的 FluentValidation 验证器里（含跨字段规则，
 /// 例如“public 客户端不能带密钥”“非 localhost 必须 https”）。
 /// 该过滤器按参数类型解析 IValidator&lt;T&gt;，命中即校验，失败直接返回 400。
+///
+/// 响应形状**不在这里拼**：错误写进 <c>ModelState</c> 后交给
+/// <see cref="ApiProblemWriter.InvalidModelStateResponse"/>，与 [ApiController] 的
+/// 绑定失败共用同一个出口。曾经这里自己 <c>new ObjectResult { ContentTypes = { "application/problem+json" } }</c>，
+/// 而控制器上的 <c>[Produces("application/json")]</c> 会在结果过滤器阶段把这个 Content-Type 覆盖掉 ——
+/// 于是校验失败实际发出去的是 <c>application/json</c>，违背 README 的「错误响应约定」。
+/// 换成直接写响应流的 <see cref="ProblemDetailsResult"/> 才绕得开内容协商。
 /// </summary>
 public sealed class ValidationFilter : IAsyncActionFilter
 {
@@ -36,33 +44,26 @@ public sealed class ValidationFilter : IAsyncActionFilter
                 continue;
             }
 
-            var validationResult = await validator.ValidateAsync(new ValidationContext<object>(argument), context.HttpContext.RequestAborted);
+            var validationResult = await validator.ValidateAsync(
+                new ValidationContext<object>(argument),
+                context.HttpContext.RequestAborted);
+
             if (validationResult.IsValid)
             {
                 continue;
             }
 
-            var errors = validationResult.Errors
-                .GroupBy(e => string.IsNullOrEmpty(e.PropertyName) ? "request" : e.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
-
-            var problem = new ValidationProblemDetails(errors)
+            foreach (var error in validationResult.Errors)
             {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "请求参数有误",
-                Detail = "请求校验未通过，请检查 errors 中的具体字段。",
-                Instance = context.HttpContext.Request.Path
-            };
+                // 空属性名（RuleFor(x => x) 这种整对象规则）归到 "request" 键，与框架约定一致
+                var key = string.IsNullOrEmpty(error.PropertyName)
+                    ? ApiProblemWriter.RequestErrorKey
+                    : error.PropertyName;
 
-            problem.Extensions["code"] = "ValidationFailed";
-            problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+                context.ModelState.AddModelError(key, error.ErrorMessage);
+            }
 
-            context.Result = new ObjectResult(problem)
-            {
-                StatusCode = StatusCodes.Status400BadRequest,
-                ContentTypes = { "application/problem+json" }
-            };
-
+            context.Result = ApiProblemWriter.InvalidModelStateResponse(context);
             return;
         }
 
