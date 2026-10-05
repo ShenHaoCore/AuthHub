@@ -152,6 +152,12 @@ dotnet run --project src/AuthHub.Api
 | <https://localhost:5001/health> | 健康检查 |
 | <http://localhost:5000> | 同端口组的 HTTP 端点 |
 
+> **调试启动的默认落点是站点根。** `launchSettings.json` 里刻意不设 `launchUrl`，
+> 所以 F5（或 `dotnet run --launch-profile https`）打开的是 `https://localhost:5001/`，
+> 由 `GET /` 302 到 `/admin`，未登录再跳登录页 —— 与"F5 就是打开这个站点"的直觉一致。
+> API 文档不是站点门面，需要时手工打开 `/scalar/v1`；想改回"启动即开文档"，
+> 给两个 profile 各加一行 `"launchUrl": "scalar/v1"` 即可。
+
 `appsettings.Development.json` 默认：`Seeding.Enabled=true`、`MigrateOnStartup=true`、
 `RequireHttps=true`、`EnablePasswordFlow=true`。**生产环境这三项都不要直接沿用**，
 见 [部署](#部署)。
