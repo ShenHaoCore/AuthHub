@@ -233,6 +233,104 @@ public class AdminUiTests
             because: "失败原因要显示在重新打开的弹窗里");
     }
 
+    // ==================================================================== 视图组件契约
+
+    /// <summary>
+    /// 弹窗外壳与标题栏现在由 <c>&lt;ah-dialog&gt;</c>（见 TagHelpers/AdminTagHelpers.cs）统一生成，
+    /// 标题栏的 <c>&lt;h2 id&gt;</c> 与 <c>aria-labelledby</c> 都取自同一个 <c>{id}-title</c> 表达式。
+    ///
+    /// 这条用例盯住三件"生成器一改就静默坏掉"的事：
+    ///
+    /// 1. **无障碍名称不能丢**。两者一旦脱钩，弹窗就没有无障碍名称，读屏只会念"对话框"。
+    ///    历史上这里差点出问题：某个弹窗的 id 是 <c>dlg-perm-{roleName}</c>，
+    ///    而手写的标题 id 是老格式 <c>dlg-perm-title-{roleName}</c>，与统一的 <c>{id}-title</c> 规则对不上。
+    /// 2. **关闭按钮必须是 <c>type="button"</c>**。底部的"取消"按钮位于 <c>&lt;form&gt;</c> 内部，
+    ///    默认类型是 <c>submit</c> —— 少了这个属性，点"取消"会提交表单（并触发校验失败）。
+    /// 3. 每个弹窗都要有标题栏，且外面套着 <c>ah-modal</c>（否则 authhub.css 的模态框样式不生效）。
+    /// </summary>
+    [Theory]
+    [InlineData("/admin/users")]
+    [InlineData("/admin/roles")]
+    [InlineData("/admin/clients")]
+    [InlineData("/admin/scopes")]
+    public async Task Every_dialog_should_be_labelled_by_its_own_heading(string path)
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync(path));
+        var dialogs = Regex.Matches(html, @"<dialog\b[^>]*>.*?</dialog>", RegexOptions.Singleline);
+
+        dialogs.Should().NotBeEmpty(because: $"{path} 上应当有弹窗，否则这条断言是空跑");
+
+        foreach (Match dialog in dialogs)
+        {
+            var openTag = dialog.Value[..(dialog.Value.IndexOf('>') + 1)];
+
+            openTag.Should().Contain("class=\"ah-modal",
+                because: "少了 ah-modal 类，authhub.css 的模态框样式不会生效");
+
+            var label = Regex.Match(openTag, "aria-labelledby=\"([^\"]+)\"");
+            label.Success.Should().BeTrue(because: $"{openTag} 缺少 aria-labelledby，弹窗会没有无障碍名称");
+
+            var labelled = label.Groups[1].Value;
+            Regex.Matches(dialog.Value, $"<h2 id=\"{Regex.Escape(labelled)}\"")
+                .Should().HaveCount(1,
+                    because: $"aria-labelledby=\"{labelled}\" 必须正好命中一个标题元素，"
+                             + "标题 id 与 aria-labelledby 由同一个 {id}-title 表达式生成，脱钩就是无障碍回归");
+
+            dialog.Value.Should().Contain("<div class=\"ah-modal-head\">",
+                because: "标题栏由 ah-dialog 产出，缺了就没有标题与关闭按钮");
+
+            // 所有带 data-dialog-close 的按钮都必须是 type="button"（含表单内的"取消"）
+            var dismissers = Regex.Matches(dialog.Value, @"<button[^>]*data-dialog-close[^>]*>");
+            dismissers.Should().NotBeEmpty(because: "每个弹窗都要有关闭入口");
+            foreach (Match button in dismissers)
+            {
+                button.Value.Should().Contain("type=\"button\"",
+                    because: $"「取消」默认是 submit，少了 type=\"button\" 会提交表单：{button.Value}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 全站 68 处图标现在统一由 <c>&lt;ah-icon&gt;</c> 生成，画法只此一份。
+    ///
+    /// 断言的是"每一个 svg 都长得一样"：装饰性图标必须 <c>aria-hidden</c>，
+    /// 描边参数必须齐全（缺 <c>stroke</c> 图标会变成黑色实心块，缺 <c>viewBox</c> 会被裁掉）。
+    /// 这条用例等于把"别在视图里手写 &lt;svg&gt;"的约定钉死 —— 手写的那份必然少一两项。
+    /// </summary>
+    [Theory]
+    [InlineData("/admin")]
+    [InlineData("/admin/users")]
+    [InlineData("/admin/roles")]
+    [InlineData("/admin/clients")]
+    [InlineData("/admin/scopes")]
+    [InlineData("/admin/audit-logs")]
+    [InlineData("/admin/profile")]
+    public async Task Every_icon_should_follow_the_same_svg_contract(string path)
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync(path));
+        var icons = Regex.Matches(html, @"<svg\b[^>]*>");
+
+        icons.Should().NotBeEmpty(because: $"{path} 应当有图标，否则这条断言是空跑");
+
+        foreach (Match icon in icons)
+        {
+            icon.Value.Should().Contain("class=\"ah-icon\"");
+            icon.Value.Should().Contain("aria-hidden=\"true\"",
+                because: "图标是纯装饰，含义由按钮的 aria-label 或可见文字承担");
+            icon.Value.Should().Contain("stroke=\"currentColor\"",
+                because: "不跟随文字颜色的图标在深色/悬停态下会突然变黑");
+            icon.Value.Should().Contain("stroke-width=\"2\"");
+            icon.Value.Should().Contain("viewBox=\"0 0 24 24\"");
+            icon.Value.Should().Contain("fill=\"none\"");
+        }
+    }
+
     // ==================================================================== 静态资源
 
     [Theory]

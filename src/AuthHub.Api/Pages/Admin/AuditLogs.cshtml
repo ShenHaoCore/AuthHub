@@ -18,10 +18,7 @@
     @if (!string.IsNullOrEmpty(Model.FilterWarning))
     {
         <div class="ah-alert ah-alert--warning" role="status">
-            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Alert" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Alert" size="16" />
             <div class="ah-alert-body">
                 <strong>筛选条件有调整</strong>
                 <span>@Model.FilterWarning</span>
@@ -32,10 +29,7 @@
     @if (Model.UserNotFound)
     {
         <div class="ah-alert ah-alert--info" role="status">
-            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Info" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Info" size="16" />
             <div class="ah-alert-body">
                 <strong>没有找到用户「@Model.UserFilter」</strong>
                 <span>用户名解析不到账号，因此本次查询不会有结果。请确认拼写，或改用用户 ID。</span>
@@ -45,10 +39,7 @@
     else if (!string.IsNullOrEmpty(Model.ResolvedUserName))
     {
         <div class="ah-alert ah-alert--info" role="status">
-            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@AdminNav.Icons.Info" />
-            </svg>
+            <ah-icon path="@AdminNav.Icons.Info" size="16" />
             <div class="ah-alert-body">
                 <strong>已将「@Model.UserFilter」解析为账号 @Model.ResolvedUserName</strong>
                 <span>审计表按用户 ID 精确匹配，用户名只是查询入口。</span>
@@ -117,10 +108,7 @@
             <div class="ah-card-body">
                 <div class="ah-empty">
                     <span class="ah-empty-icon" aria-hidden="true">
-                        <svg class="ah-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="@AdminNav.Icons.Audit" />
-                        </svg>
+                        <ah-icon path="@AdminNav.Icons.Audit" size="22" />
                     </span>
                     @if (Model.HasFilter)
                     {

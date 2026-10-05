@@ -26,10 +26,7 @@
 @if (profile is null)
 {
     <div class="ah-alert ah-alert--danger" role="alert">
-        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="@AdminNav.Icons.Alert" />
-        </svg>
+        <ah-icon path="@AdminNav.Icons.Alert" size="16" />
         <div class="ah-alert-body">
             <strong>无法读取账号信息</strong>
             <span>当前会话可能是刚刚失效的（例如管理员重置了你的安全戳），请重新登录后再试。</span>
@@ -173,11 +170,7 @@ else
                                 <form method="post" action="/account/logout">
                                     @Html.AntiForgeryToken()
                                     <button type="submit" class="ah-btn ah-btn--block">
-                                        <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                             stroke-linejoin="round" aria-hidden="true">
-                                            <path d="@AdminNav.Icons.Logout" />
-                                        </svg>
+                                        <ah-icon path="@AdminNav.Icons.Logout" size="15" />
                                         退出登录
                                     </button>
                                 </form>
@@ -269,11 +262,7 @@ else
                                 @if (!string.IsNullOrEmpty(Model.PasswordError))
                                 {
                                     <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
-                                        <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                             stroke-linejoin="round" aria-hidden="true">
-                                            <path d="@AdminNav.Icons.Alert" />
-                                        </svg>
+                                        <ah-icon path="@AdminNav.Icons.Alert" size="16" />
                                         <div class="ah-alert-body">
                                             <strong>密码未修改</strong>
                                             <span>@Model.PasswordError</span>
@@ -334,10 +323,7 @@ else
                     @if (Model.HasRecoveryCodes)
                     {
                         <div class="ah-alert ah-alert--warning" role="alert">
-                            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="@AdminNav.Icons.Key" />
-                            </svg>
+                            <ah-icon path="@AdminNav.Icons.Key" size="16" />
                             <div class="ah-alert-body">
                                 <strong>恢复码 —— 只显示这一次，请立即保存</strong>
                                 <span>
@@ -357,11 +343,7 @@ else
                     @if (!string.IsNullOrEmpty(Model.MfaError))
                     {
                         <div class="ah-alert ah-alert--danger" role="alert">
-                            <svg class="ah-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                 stroke-linejoin="round" aria-hidden="true">
-                                <path d="@AdminNav.Icons.Alert" />
-                            </svg>
+                            <ah-icon path="@AdminNav.Icons.Alert" size="16" />
                             <div class="ah-alert-body">
                                 <strong>两步验证未启用</strong>
                                 <span>@Model.MfaError</span>
@@ -461,11 +443,7 @@ else
                                 </p>
                                 <form method="post" asp-page-handler="beginSetup">
                                     <button type="submit" class="ah-btn ah-btn--primary">
-                                        <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                             stroke-linejoin="round" aria-hidden="true">
-                                            <path d="@AdminNav.Icons.Key" />
-                                        </svg>
+                                        <ah-icon path="@AdminNav.Icons.Key" size="15" />
                                         开始绑定
                                     </button>
                                 </form>
@@ -510,20 +488,12 @@ else
                                             <button type="submit" class="ah-btn ah-btn--sm">
                                                 @if (string.Equals(provider, "Email", StringComparison.Ordinal))
                                                 {
-                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                         stroke-linejoin="round" aria-hidden="true">
-                                                        <path d="@AdminNav.Icons.Mail" />
-                                                    </svg>
+                                                    <ah-icon path="@AdminNav.Icons.Mail" size="15" />
                                                     <text>发送验证码到邮箱</text>
                                                 }
                                                 else if (string.Equals(provider, "Phone", StringComparison.Ordinal))
                                                 {
-                                                    <svg class="ah-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                         stroke-linejoin="round" aria-hidden="true">
-                                                        <path d="@AdminNav.Icons.Phone" />
-                                                    </svg>
+                                                    <ah-icon path="@AdminNav.Icons.Phone" size="15" />
                                                     <text>发送验证码到手机</text>
                                                 }
                                                 else
