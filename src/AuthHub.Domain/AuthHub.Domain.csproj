@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AuthHub.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Domain 层引入 Identity 实体基类（IdentityUser<TKey> / IdentityRole<TKey>）。
+      这是本项目对“Domain 零外部依赖”原则的唯一让步：
+      ApplicationUser / ApplicationRole 必须继承 Identity 基类才能被
+      IdentityDbContext + UserManager 直接消费，否则要在 Infrastructure 里做一层
+      双向映射（收益低、复杂度高）。这里只引 Identity.Stores —— 纯 POCO / 仓储抽象，
+      不含 ASP.NET Core Web 依赖。
+    -->
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="8.0.31" />
+  </ItemGroup>
+
+</Project>

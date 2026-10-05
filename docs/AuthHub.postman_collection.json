@@ -1,0 +1,801 @@
+{
+  "info": {
+    "name": "AuthHub — OIDC / OAuth 2.0",
+    "_postman_id": "a7c1f0d2-5b64-4e2a-9c31-0d5f8e6b1a94",
+    "description": "# AuthHub 接口集合\n\n覆盖四类典型调用：**客户端凭证（M2M）**、**用户会话（Cookie）**、**授权码 + PKCE**、**刷新令牌与撤销**。\n\n## 使用前提\n\n1. 本机已启动服务：`dotnet run --project src/AuthHub.Api`（默认 https://localhost:5001）。\n2. 服务以 **Development** 启动，且 `AuthHub:Seeding:Enabled=true`，这样才有下面的种子客户端与账号。\n3. **关闭 SSL 证书校验**：Postman → Settings → General → 关闭 *SSL certificate verification*。\n   本机用的是自签名开发证书，不关会直接连不上。\n\n## 种子数据（仅开发环境）\n\n| 客户端 | 类型 | 密钥 |\n|---|---|---|\n| `spa-client` | public（仅 PKCE） | — |\n| `web-client` | confidential | `web-secret` |\n| `m2m-service` | confidential | `m2m-secret` |\n\n| 账号 | 密码 | 角色 |\n|---|---|---|\n| `admin` | `Admin@12345` | Administrator（全部管理权限） |\n| `alice` | `Alice@12345` | User（无管理权限） |\n\n## 建议的跑法\n\n按文件夹顺序执行，前一步会把令牌写进**集合变量**供后一步使用：\n\n1. **环境与发现** → 确认服务活着、发现文档正常\n2. **机器对机器** → 拿到 `accessToken`，验证受保护资源与 scope 门禁\n3. **用户会话** → 用 Cookie 走一遍登录 / 查自己 / 登出\n4. **授权码 + PKCE** → 拿一个管理员令牌（需要先放行 Postman 的回调地址）\n5. **刷新令牌与撤销** → 验证旋转，以及\"撤销后未过期令牌立即失效\"\n\n> 集合变量中的 `accessToken` / `refreshToken` 标记为 secret，不会随导出泄漏。"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 集合级前置脚本：这里不做鉴权，各请求自带所需凭证。",
+          "// 令牌端点与业务接口的鉴权方式不同（表单 / Bearer / Cookie），",
+          "// 放在请求上比放在集合上更不容易出错。"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "https://localhost:5001", "type": "string" },
+    { "key": "m2mClientId", "value": "m2m-service", "type": "string" },
+    { "key": "m2mClientSecret", "value": "m2m-secret", "type": "secret" },
+    { "key": "spaClientId", "value": "spa-client", "type": "string" },
+    { "key": "redirectUri", "value": "https://localhost:3000/callback", "type": "string" },
+    { "key": "postmanCallback", "value": "https://oauth.pstmn.io/v1/callback", "type": "string" },
+    { "key": "demoUsername", "value": "alice", "type": "string" },
+    { "key": "demoPassword", "value": "Alice@12345", "type": "secret" },
+    { "key": "adminUsername", "value": "admin", "type": "string" },
+    { "key": "adminPassword", "value": "Admin@12345", "type": "secret" },
+    { "key": "accessToken", "value": "", "type": "secret" },
+    { "key": "refreshToken", "value": "", "type": "secret" },
+    { "key": "adminToken", "value": "", "type": "secret" },
+    { "key": "subject", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0. 环境与发现",
+      "item": [
+        {
+          "name": "健康检查",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('服务存活（200）', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "最轻量的存活探测。返回 Healthy 表示进程已就绪。"
+          },
+          "response": []
+        },
+        {
+          "name": "OIDC 发现文档",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('声明了标准端点', () => {",
+                  "    pm.expect(body.authorization_endpoint).to.be.a('string');",
+                  "    pm.expect(body.token_endpoint).to.be.a('string');",
+                  "    pm.expect(body.userinfo_endpoint).to.be.a('string');",
+                  "    pm.expect(body.end_session_endpoint).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('支持授权码 + 刷新令牌 + 客户端凭证', () => {",
+                  "    pm.expect(body.grant_types_supported).to.include('authorization_code');",
+                  "    pm.expect(body.grant_types_supported).to.include('refresh_token');",
+                  "    pm.expect(body.grant_types_supported).to.include('client_credentials');",
+                  "});",
+                  "",
+                  "pm.test('强制 PKCE（客户端必须用 S256）', () => {",
+                  "    pm.expect(body.code_challenge_methods_supported).to.include('S256');",
+                  "});",
+                  "",
+                  "// 注意：OpenIddict 5.x 无法限制 code_challenge_method，",
+                  "// 因此这里还会列出已被 OAuth 2.1 弃用的 plain。客户端必须选 S256。",
+                  "pm.test('plain 虽被列出，但客户端不应使用', () => {",
+                  "    if (body.code_challenge_methods_supported.includes('plain')) {",
+                  "        console.log('提醒：发现文档声明了 plain，OAuth 2.1 已弃用它，请固定使用 S256。');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test('公钥集地址可用（下游据此离线验签）', () => {",
+                  "    pm.expect(body.jwks_uri).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('jwksUri', body.jwks_uri);",
+                  "pm.collectionVariables.set('issuer', body.issuer);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/openid-configuration",
+              "host": ["{{baseUrl}}"],
+              "path": [".well-known", "openid-configuration"]
+            },
+            "description": "下游应用接入的第一步。注意 `issuer` 必须与令牌里的 `iss` 完全一致，做反向代理时要显式配置 `AuthHub:Issuer`。"
+          },
+          "response": []
+        },
+        {
+          "name": "JWKS 公钥集",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('返回至少一个签名公钥', () => {",
+                  "    pm.expect(body.keys).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "pm.test('公钥包含 RS256 所需的字段', () => {",
+                  "    const key = body.keys[0];",
+                  "    pm.expect(key.kty).to.eql('RSA');",
+                  "    pm.expect(key).to.have.property('n');",
+                  "    pm.expect(key).to.have.property('e');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/jwks",
+              "host": ["{{baseUrl}}"],
+              "path": [".well-known", "jwks"]
+            },
+            "description": "**分布式令牌验证的关键**。下游服务缓存这套公钥即可在本地校验 Access Token 的签名，无需每个请求都回源 introspect。\n\n服务端为此关闭了令牌加密（`DisableAccessTokenEncryption`），产出的是 JWS 而非 JWE —— 加密的令牌第三方读不了。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. 机器对机器（客户端凭证）",
+      "item": [
+        {
+          "name": "① 客户端凭证换取令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('返回 access_token 与有效期', () => {",
+                  "    pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(body.token_type).to.eql('Bearer');",
+                  "    pm.expect(body.expires_in).to.be.a('number').above(0);",
+                  "});",
+                  "",
+                  "pm.test('按请求的 scope 签发', () => {",
+                  "    pm.expect(body.scope).to.include('api:read');",
+                  "});",
+                  "",
+                  "pm.test('令牌是 JWS（三段式），可被第三方离线校验', () => {",
+                  "    pm.expect(body.access_token.split('.')).to.have.lengthOf(3);",
+                  "});",
+                  "",
+                  "pm.test('M2M 流程不签发 refresh_token', () => {",
+                  "    pm.expect(body).to.not.have.property('refresh_token');",
+                  "});",
+                  "",
+                  "// 关键：把令牌写进集合变量，后续请求直接复用",
+                  "pm.collectionVariables.set('accessToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "client_credentials", "type": "text" },
+                { "key": "client_id", "value": "{{m2mClientId}}", "type": "text" },
+                { "key": "client_secret", "value": "{{m2mClientSecret}}", "type": "text" },
+                { "key": "scope", "value": "api:read api:write", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/connect/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["connect", "token"]
+            },
+            "description": "后端服务之间的调用凭证。**注意请求体是 `application/x-www-form-urlencoded`，不是 JSON** —— OAuth 令牌端点只认表单编码。\n\n密钥以 HTTP Basic 或表单字段提交均可，这里用表单字段，观察起来更直观。"
+          },
+          "response": []
+        },
+        {
+          "name": "② 用令牌访问受保护资源",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('身份来自令牌，而不是客户端会话', () => {",
+                  "    pm.expect(body.clientId).to.eql(pm.collectionVariables.get('m2mClientId'));",
+                  "});",
+                  "",
+                  "pm.test('scope 被正确带入', () => {",
+                  "    pm.expect(body.scopes).to.include('api:read');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile"]
+            },
+            "description": "策略 `AuthHub.ApiAccess` 要求 `api:read` 或 `api:write`。\n\n**不带令牌时返回 401 + `application/problem+json`**（而不是 302 跳登录页）—— 对脚本和网关来说，重定向到 HTML 登录页是最难排查的失败模式。"
+          },
+          "response": []
+        },
+        {
+          "name": "③ 写接口需要 api:write",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 本请求的令牌同时含 api:read 与 api:write，因此预期 200。",
+                  "// 想验证 403：把 ① 里的 scope 改成只剩 api:read 再重跑。",
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('原样回显请求内容', () => {",
+                  "    pm.expect(body.echoed).to.eql('hello from postman');",
+                  "});",
+                  "",
+                  "// 顺带验证错误响应的 Content-Type 约定：",
+                  "// 令牌不足时应当返回 403 + application/problem+json（而不是 application/json）。",
+                  "pm.test('若被拒，错误体必须是 RFC 7807', () => {",
+                  "    if (pm.response.code === 403) {",
+                  "        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"hello from postman\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/echo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "echo"]
+            },
+            "description": "演示**基于 scope 的细粒度门禁**：同一个接口，只读令牌被拒、读写令牌放行。"
+          },
+          "response": []
+        },
+        {
+          "name": "④ 未带令牌访问受保护接口（预期 401）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 401（不是 302）', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Content-Type 是 application/problem+json', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "});",
+                  "",
+                  "const problem = pm.response.json();",
+                  "",
+                  "pm.test('符合 RFC 7807 且带 code / traceId', () => {",
+                  "    pm.expect(problem.status).to.eql(401);",
+                  "    pm.expect(problem.code).to.eql('Unauthorized');",
+                  "    pm.expect(problem.traceId).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users"]
+            },
+            "description": "这是**多认证方案**的回归用例。管理类策略同时挂了会话 Cookie 与 Bearer 两个方案，ASP.NET Core 会依次对每个方案执行 Challenge —— 如果某个方案在 Challenge 里写出响应体，排在后面的方案再设状态码就会抛 `The status code cannot be set, the response has already started`。\n\n正确的做法是各方案只补响应头、由统一出口写 ProblemDetails，因此这里无论方案顺序如何都应当稳定返回 401。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. 用户会话（Cookie）",
+      "item": [
+        {
+          "name": "⑤ 用户登录（建立会话）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('登录成功', () => {",
+                  "    pm.expect(body.succeeded).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('未触发两步验证', () => {",
+                  "    pm.expect(body.requiresTwoFactor).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('返回了身份信息', () => {",
+                  "    pm.expect(body.userName).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "// 记下 subject，第 ⑫ 步按它批量撤销令牌",
+                  "pm.collectionVariables.set('subject', body.userId);",
+                  "",
+                  "// 会话 Cookie 是 HttpOnly 的，JS 读不到；但 Postman 的 cookie jar 会自动带上，",
+                  "// 后续请求无需手动处理。",
+                  "pm.test('已写入会话 Cookie', () => {",
+                  "    const cookie = pm.cookies.get('authhub.session');",
+                  "    pm.expect(cookie, '缺少 authhub.session').to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userNameOrEmail\": \"{{demoUsername}}\",\n  \"password\": \"{{demoPassword}}\",\n  \"rememberMe\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/account/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "account", "login"]
+            },
+            "description": "面向 SPA 的 JSON 登录接口，**用会话 Cookie 而不是 Bearer 令牌** —— 因为要在浏览器里保持登录态。\n\n浏览器页面的表单登录走的是 `POST /account/login`（带防伪令牌 + 302 跳转），两者是两个不同的端点。\n\n注意：这个端点和 HTML 登录页一样挂了**登录限流**（默认 10 次 / 5 分钟），连点会拿到 429。"
+          },
+          "response": []
+        },
+        {
+          "name": "⑥ 查询当前登录用户",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200（Cookie 认证生效）', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('返回角色与展开后的权限', () => {",
+                  "    pm.expect(body.roles).to.be.an('array');",
+                  "    pm.expect(body.permissions).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('演示账号 alice 是普通用户，不应有管理权限', () => {",
+                  "    pm.expect(body.roles).to.include('User');",
+                  "    pm.expect(body.permissions).to.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/account/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "account", "me"]
+            },
+            "description": "`/api/account` 整组都要求会话 Cookie（`[Authorize(AuthenticationSchemes = Cookie)]`）。\n\n未登录时会返回 **401 + problem+json**，而不是 302 —— 这是刻意按路径分流的结果。"
+          },
+          "response": []
+        },
+        {
+          "name": "⑦ 登出（结束会话）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 204（无内容）', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/account/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "account", "logout"]
+            },
+            "description": "只结束本机会话（清 Cookie）。\n\n要让**已经签发出去的令牌**立即失效，走「4. 刷新令牌与撤销」里的 `POST /api/tokens/revoke` —— 两者是不同的语义，一个是会话层、一个是令牌层。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. 授权码 + PKCE",
+      "item": [
+        {
+          "name": "⑧ 为 spa-client 放行 Postman 回调地址",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('重定向白名单已同时包含本地 SPA 与 Postman 回调', () => {",
+                  "    pm.expect(body.redirectUris).to.include(pm.collectionVariables.get('redirectUri'));",
+                  "    pm.expect(body.redirectUris).to.include(pm.collectionVariables.get('postmanCallback'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"redirectUris\": [\n    \"{{redirectUri}}\",\n    \"{{postmanCallback}}\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{spaClientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{spaClientId}}"]
+            },
+            "description": "**先跑这一步，下面的 OAuth2 助手才能用。**\n\n`spa-client` 的重定向白名单原本只有 `https://localhost:3000/callback`，而 Postman 的 OAuth2 助手回调是 `https://oauth.pstmn.io/v1/callback`。授权码只能回跳到已登记的白名单地址（这是防授权码被劫持的核心机制），所以必须先在客户端上登记。\n\n本请求需要 `clients.manage` 权限，因此要用 `adminToken`。第一次跑时 `adminToken` 还是空的 —— 请先手动用 `admin` 账号登录浏览器、或者按下面「⑨」的说明先用别的方式拿一个管理员令牌；也可以直接把 Bearer 令牌换成手动粘贴的管理员 Access Token。\n\n> 这正好演示了一个安全特性：重定向白名单是**精确匹配**的，想加就得到管理接口上显式登记，客户端自己改不了。"
+          },
+          "response": []
+        },
+        {
+          "name": "⑨ 授权码 + PKCE 获取用户令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('同时拿到 access_token 与 id_token', () => {",
+                  "    pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(body.id_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('拿到 refresh_token（请求了 offline_access）', () => {",
+                  "    pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "// 顺带把 ID Token 的 payload 解出来看看",
+                  "const parts = body.id_token.split('.');",
+                  "const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "",
+                  "pm.test('ID Token 的 aud 是自身 client_id', () => {",
+                  "    pm.expect(payload.aud).to.eql(pm.collectionVariables.get('spaClientId'));",
+                  "});",
+                  "",
+                  "pm.test('ID Token 的 iss 与发现文档一致', () => {",
+                  "    pm.expect(payload.iss).to.eql(pm.collectionVariables.get('issuer'));",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('adminToken', body.access_token);",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "oauth2",
+              "oauth2": [
+                { "key": "grant_type", "value": "authorization_code", "type": "string" },
+                { "key": "authUrl", "value": "{{baseUrl}}/connect/authorize", "type": "string" },
+                { "key": "accessTokenUrl", "value": "{{baseUrl}}/connect/token", "type": "string" },
+                { "key": "clientId", "value": "{{spaClientId}}", "type": "string" },
+                { "key": "scope", "value": "openid profile email roles api:read offline_access", "type": "string" },
+                { "key": "redirect_uri", "value": "{{postmanCallback}}", "type": "string" },
+                { "key": "usePkce", "value": true, "type": "boolean" },
+                { "key": "tokenName", "value": "AuthHub 用户令牌", "type": "string" },
+                { "key": "client_authentication", "value": "body", "type": "string" },
+                { "key": "addTokenTo", "value": "header", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/account/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "account", "me"]
+            },
+            "description": "**这是浏览器侧的标准流程**，Postman 会代你完成：跳转到授权端点 → 用 `admin` / `Admin@12345` 登录 → 确认同意 → 拿着回调里的授权码回来换令牌。\n\n操作：Authorization 标签页 → Type 选 *OAuth 2.0* → 点 **Get New Access Token** → 在弹出的浏览器窗口里登录并同意 → Use Token。\n\n要点：\n- 已勾选 **PKCE**（`code_challenge_method=S256`）。服务端对本流程强制 PKCE，客户端如果不带就会被拒 —— 这是防授权码被拦截后直接兑换的关键。\n- `spa-client` 是 **public 客户端**（没有密钥），安全边界完全由 PKCE 承担，所以这里不填 Client Secret。\n- 已在上面第 ⑧ 步登记了 Postman 的回调地址，否则这里会报 `invalid_redirect_uri`。\n- 登录 `admin` 拿到的令牌里会带全部 6 项 `authhub:permission`，下面两步正好验证。\n\n换到令牌后会写进 `adminToken`，供第 ⑧ 步和后面的管理接口复用。"
+          },
+          "response": []
+        },
+        {
+          "name": "⑩ 管理员令牌可访问管理接口",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('返回分页结构', () => {",
+                  "    pm.expect(body).to.have.property('items');",
+                  "    pm.expect(body).to.have.property('totalCount');",
+                  "});",
+                  "",
+                  "// 这条最值得看：Access Token 里真的带了权限声明，",
+                  "// 下游资源服务器不解令牌也能靠它做粗粒度判断。",
+                  "const token = pm.collectionVariables.get('adminToken');",
+                  "if (token) {",
+                  "    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    pm.test('令牌内含 authhub:permission 声明（RBAC）', () => {",
+                  "        pm.expect(payload['authhub:permission']).to.be.an('array');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "10" }
+              ]
+            },
+            "description": "策略 `AuthHub.Permission.users.manage` 要求令牌里有 `authhub:permission=users.manage`。\n\n这个声明是**服务端在签发时按角色展开**写进令牌的，不是信任客户端传来的角色 —— 否则客户端只要自称 Administrator 就能提权。角色/权限变更会在下一次签发令牌时生效；会话侧还有 5 分钟的安全戳校验兜底。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. 刷新令牌与撤销",
+      "item": [
+        {
+          "name": "⑪ 刷新令牌（含旋转）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('换到新的 access_token', () => {",
+                  "    pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "// 旋转：每次刷新都返回**新的** refresh_token，旧的立即作废。",
+                  "// 这样即使 refresh_token 泄露，被用过一次之后就废了；",
+                  "// 而且复用旧令牌会触发重放检测，撤销该授权下的全部令牌。",
+                  "pm.test('refresh_token 被旋转（返回了新的）', () => {",
+                  "    pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(body.refresh_token).to.not.eql(pm.collectionVariables.get('refreshToken'));",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);",
+                  "pm.collectionVariables.set('adminToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "refresh_token", "type": "text" },
+                { "key": "refresh_token", "value": "{{refreshToken}}", "type": "text" },
+                { "key": "client_id", "value": "{{spaClientId}}", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/connect/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["connect", "token"]
+            },
+            "description": "依赖第 ⑨ 步拿到的 `refreshToken`（scope 里有 `offline_access` 才会签发刷新令牌）。\n\n**想验证重放防护**：连点两次这个请求。第二次会失败，因为第一次返回时旧的 `refresh_token` 已经作废；而且服务端会把该授权下的**所有**令牌一并撤销，所以你手上那个还没过期的 access_token 也会立刻失效 —— 这正是主动应对令牌泄露的设计。"
+          },
+          "response": []
+        },
+        {
+          "name": "⑫ 撤销某用户的全部令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('返回被撤销的令牌与授权数量', () => {",
+                  "    pm.expect(body.revokedTokenCount).to.be.a('number');",
+                  "    pm.expect(body.revokedAuthorizationCount).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"{{subject}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tokens/revoke",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tokens", "revoke"]
+            },
+            "description": "「把某个用户强制下线」的运维入口，需要 `tokens.revoke` 权限。\n\n`subject` 来自第 ⑤ 步登录时记下的 `userId`。\n\n> 这条路走完，第 ③ 步那个还没过期的 access_token 会立刻失效 —— 继续看下一条。"
+          },
+          "response": []
+        },
+        {
+          "name": "⑬ 撤销后：未过期令牌立即失效（预期 401）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 关键点：令牌本身还没到 exp，签名也依然有效，",
+                  "// 但因为服务端每次校验都查令牌状态，所以已经被撤销的令牌立刻失效。",
+                  "pm.test('状态码 401（令牌被列入黑名单）', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('错误体仍是 RFC 7807', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "    pm.expect(pm.response.json().code).to.eql('Unauthorized');",
+                  "});",
+                  "",
+                  "// 说明：如果你在「3. 授权码 + PKCE」之后没跑过 ⑫，这里会是 200，属于正常。",
+                  "if (pm.response.code === 200) {",
+                  "    console.log('提示：先执行 ⑫ 撤销令牌，再跑本请求，才能看到 401。');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile"]
+            },
+            "description": "验证**令牌黑名单**：JWT 是无状态的，默认情况下签发出去就管不了了（只能等它过期）。\n\n服务端开启了 `EnableTokenEntryValidation()`，每次校验都回查令牌表状态。代价是每次校验多一次查询 —— 高并发下应当把令牌状态缓存到 Redis，并把撤销事件广播给各实例（见 README 的扩展方向）。"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

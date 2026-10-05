@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AuthHub.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Application 需要 ASP.NET Core 共享框架，唯一原因是 SignInManager<TUser>：
+      它位于 Microsoft.AspNetCore.Identity 程序集（随共享框架分发，不在
+      Microsoft.Extensions.Identity.Core 包里），而登录会话的建立/刷新/登出本质上是
+      它的一部分。取舍：与其为 SignInManager 再造一层 6~8 个方法的接口壳
+      （会把 SignInResult 等类型也一起镜像出来），不如接受这一处框架依赖，
+      让账号业务逻辑完整地留在一个服务内。Application 层依然不接触
+      Controller / HttpContext / EF Core。
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="8.0.31" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+    <PackageReference Include="AutoMapper" Version="13.0.1" />
+    <PackageReference Include="FluentValidation" Version="11.12.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AuthHub.Domain\AuthHub.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
