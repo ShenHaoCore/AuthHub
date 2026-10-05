@@ -1,0 +1,53 @@
+name: CodeQL
+
+# GitHub 官方静态分析：扫描 C# 代码里的注入、反序列化、路径穿越等已知漏洞模式，
+# 结果（告警与修复建议）出现在仓库的 Security → Code scanning 标签页。
+#
+# 为什么不用"默认设置"（CodeQL default setup）：工作流文件虽然多几行，
+# 但版本锁在 actions 里、能随仓库一起 review，也方便日后加自定义查询包。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # 每周一早上跑一次全量扫描，即使整周没有提交也能跟进新的查询规则
+  schedule:
+    - cron: "30 22 * * 0"
+
+# 只给必要的权限：写入 security-events 是为了上报扫描结果，其余一概最小化
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: 静态分析（csharp）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      # 分析器会自动识别仓库里的语言；这里显式声明，防止未来仓库里
+      # 出现其他语言时扫描范围悄悄变化
+      - name: 初始化 CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          # build-mode: none 尚未覆盖全部 C# 场景，保持默认的 autobuild 路线
+
+      # C# 需要真实编译才能完成数据流分析，交给 CodeQL 自己做
+      - name: 构建
+        uses: github/codeql-action/autobuild@v3
+
+      - name: 执行分析
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"

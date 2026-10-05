@@ -13,6 +13,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限：整个工作流只需要读代码（上传 artifact 不需要额外权限）。
+permissions:
+  contents: read
+
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -22,6 +26,8 @@ jobs:
   build-and-test:
     name: 编译与测试
     runs-on: ubuntu-latest
+    # 不设的话失败的任务会挂满默认 6 小时；本仓库全量构建 + 测试实测约 4 分钟
+    timeout-minutes: 15
 
     steps:
       - name: 拉取代码
@@ -47,11 +53,11 @@ jobs:
       - name: 还原依赖
         run: dotnet restore AuthHub.slnx
 
-      # 当前编译结果是 0 警告 0 错误。若想在 CI 上强制守住这一点，
-      # 给下面这条命令加上 -warnaserror 即可；这里默认不加，
-      # 是为了避免 SDK 补丁版本引入新分析器规则时把流水线误伤成红色。
-      - name: 编译（Release）
-        run: dotnet build AuthHub.slnx -c Release --no-restore
+      # 本仓库的门槛是"编译 0 警告 0 错误"，本地一直按这个标准跑。
+      # CI 上加 -warnaserror 把它变成硬门禁：任何新警告（包括 SDK 升级引入的
+      # 新分析器规则）都会让流水线变红，而不是被刷进日志里没人看见。
+      - name: 编译（Release，警告即失败）
+        run: dotnet build AuthHub.slnx -c Release --no-restore -warnaserror
 
       - name: 单元测试
         run: >
@@ -80,6 +86,7 @@ jobs:
   dependency-audit:
     name: 依赖漏洞检查
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: 拉取代码
@@ -112,3 +119,29 @@ jobs:
         run: |
           echo "如需失败即阻断，请接入 OWASP Dependency Check："
           echo "https://github.com/dependency-check/DependencyCheck"
+
+  docker-image:
+    name: 镜像构建校验
+    runs-on: ubuntu-latest
+    # Dockerfile 是部署路径的一部分，但它不在常规"编译 + 测试"的覆盖范围内：
+    # 改了代码却忘了同步 Dockerfile（依赖、入口、端口）时，只有发布那天才会炸。
+    # 这里只构建、不推送，把"镜像还能不能构建出来"变成每次提交都验证的事。
+    timeout-minutes: 20
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 只构建不推送。层缓存走 GHA 缓存：工程文件没变时 restore 会直接命中，
+      # 构建时间从几分钟降到几十秒。
+      - name: 构建镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: authhub:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
