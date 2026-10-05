@@ -154,7 +154,19 @@
         });
 
         // 服务端校验失败时重新打开对应的模态（表单值已原样回填）
+        //
+        // 契约：该属性的值只会是字符串 "true" 或 "false"（各页 *.cshtml 用显式三元写出下写字面量）。
+        // 这里必须按**值**判断，不能按"属性是否存在"判断 —— 属性在每个弹窗上都存在。
+        //
+        // 曾经的故障：服务端那边写成 data-dialog-autoopen="@Model.AutoOpenCreate"，
+        // Razor 把 bool 插值渲染成 "True"/"False" 字面量，于是这里按存在性判断时
+        // 页面上**每一个**弹窗都被 showModal()，表现是"点菜单进入任一页面，全部弹窗一起弹出来"。
+        // 现在两层都有防线：服务端写出小写字面量，这里也只认 "true"。
         all('dialog[data-dialog-autoopen]').forEach(function (dialog) {
+            if (String(dialog.getAttribute('data-dialog-autoopen')).toLowerCase() !== 'true') {
+                return;
+            }
+
             if (typeof dialog.showModal === 'function') {
                 dialog.showModal();
             }

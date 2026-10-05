@@ -249,8 +249,12 @@
 </div>
 
 @* ------------------------------------------------------------ 新建用户 *@
+@* 自动打开标记必须写成显式的小写字面量 "true" / "false"。
+   不要写成 data-dialog-autoopen="@Model.AutoOpenCreate" —— Razor 会把 bool 插值渲染成
+   "True"/"False"，属性照样存在，前端按值判断随即失效（曾出现的故障：点菜单进入任一页面，
+   所有弹窗一起弹出来）。前端契约见 wwwroot/js/authhub.js 的 initDialogs。 *@
 <dialog class="ah-modal" id="dlg-create" aria-labelledby="dlg-create-title"
-        data-dialog-autoopen="@Model.AutoOpenCreate">
+        data-dialog-autoopen="@(Model.AutoOpenCreate ? "true" : "false")">
     <form method="post" asp-page-handler="create">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
@@ -343,7 +347,7 @@
 
     <dialog class="ah-modal ah-modal-lg" id="dlg-edit-@user.Id"
             aria-labelledby="dlg-edit-title-@user.Id"
-            data-dialog-autoopen="@failed">
+            data-dialog-autoopen="@(failed ? "true" : "false")">
         <form method="post" asp-page-handler="save">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditId" value="@user.Id" />
