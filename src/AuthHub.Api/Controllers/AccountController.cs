@@ -18,8 +18,21 @@ namespace AuthHub.Api.Controllers;
 ///
 /// 该控制器不加 [ApiController]：需要返回 HTML 页面与 302 跳转。
 /// </summary>
+/// <remarks>
+/// <b>本控制器不进 API 文档</b>（<c>[ApiExplorerSettings(IgnoreApi = true)]</c>）。
+/// 它产出的是浏览器页面，调用方在文档里看到 /account/login、/account/2fa 这类端点
+/// 只会困惑 —— 它们既不能从 Scalar 直接发起（要会话 + 防伪令牌），
+/// 也不是给程序化调用方用的。需要程序化调用请走 <c>/api/account/*</c>（AccountApiController）。
+///
+/// 为什么不在 <c>OpenApiExtensions</c> 里改那个可见性约定来实现「只收录 API」：
+/// 那个约定是专门给 <c>/connect/*</c> 用的（那两个控制器同样没有 [ApiController]，
+/// 但必须出现在文档里）。框架的 <c>ApiVisibilityConvention</c> 只在控制器与动作的
+/// <c>IsVisible</c> **都为 null** 时才点亮，所以这里的显式 false 不会被它覆盖 ——
+/// 两件事互不干扰，各自留在自己该在的地方。
+/// </remarks>
 [Tags("登录与提示页")]
 [Route("account")]
+[ApiExplorerSettings(IgnoreApi = true)]
 public class AccountController : Controller
 {
     /// <summary>保存“已通过密码校验、等待第二因子”的临时票据。</summary>
