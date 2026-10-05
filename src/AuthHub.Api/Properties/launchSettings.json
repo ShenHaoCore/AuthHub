@@ -1,11 +1,12 @@
 ﻿{
   "$schema": "http://json.schemastore.org/launchsettings.json",
+  // 刻意不设 launchUrl：调试启动后浏览器落在站点根（GET / → 302 /admin，未登录再跳登录页），
+  // 与「F5 就是打开这个站点」的直觉一致。API 文档不是站点门面，在 /scalar/v1，需要时手工打开。
   "profiles": {
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "launchUrl": "scalar/v1",
       "applicationUrl": "https://localhost:5001;http://localhost:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
@@ -15,7 +16,6 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "launchUrl": "scalar/v1",
       "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
