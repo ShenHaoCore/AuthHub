@@ -3,12 +3,18 @@ using AuthHub.Api.Middleware;
 using AuthHub.Application;
 using AuthHub.Domain.Constants;
 using AuthHub.Infrastructure;
+using AuthHub.Infrastructure.Configuration;
 using AuthHub.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 本机私有覆盖（不入库）。必须紧挨着 CreateBuilder —— 下面第 2 节就会开始读配置，
+// 晚了的话那些"早期读取"的项（数据库提供程序、是否强制 HTTPS）就拿不到本机覆盖值。
+// 它插在配置链的哪一位由 LocalSettingsConfiguration 决定，那里解释了为什么是那一位。
+builder.Configuration.AddAuthHubLocalSettings(builder.Environment.ContentRootFileProvider);
 
 // ---------------------------------------------------------------------------
 // 1. 结构化日志（Serilog：Console + File，生产可追加 Seq / ELK Sink）
@@ -78,6 +84,11 @@ var app = builder.Build();
 // 挂在它上面的配置校验要等第一个用户登录才跑，配置错误就落不到启动日志里了。
 // 这里刻意安排在数据库初始化之前：配置错误应该比数据库问题更早、更清楚地报出来。
 app.ValidateAuthHubStartupConfiguration();
+
+// 环境一致性护栏：确认这份配置与它所在的环境自洽（开发配置被带到服务器上、
+// 生产没改占位符、受保护环境却打开了接口文档……这类问题都是静默的）。
+// 刻意排在数据库初始化之前 —— "连上了不该连的库"必须在建立连接之前就拦下来。
+app.ValidateAuthHubEnvironment();
 
 // ---------------------------------------------------------------------------
 // 4. 数据库初始化（建库 / 迁移 + 种子数据，由配置开关控制）

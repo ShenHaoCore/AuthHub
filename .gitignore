@@ -69,6 +69,10 @@ secrets.json
 .env
 .env.*
 !.env.example
+# 本机私有配置覆盖：个人机器的连接串 / 证书路径等。
+# 入库的 appsettings.{环境}.json 是**团队共识**，谁的机器不一样就写到这里，别去改那份。
+# 模板 appsettings.Local.json.example 要入库 —— 它是"这里能放什么"的自解释文档。
+appsettings.Local.json
 
 # ---------------------------------------------------------------- 本地临时文件
 oidapi*.txt
