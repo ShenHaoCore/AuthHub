@@ -67,7 +67,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 146 项、集成测试 109 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 146 项、集成测试 117 项 |
 
 ---
 
@@ -243,6 +243,39 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 其余关），所以它的默认值留在代码里（`Program.cs` 的 `GetValue` 第二个参数），**不**在
 `appsettings.json` 里写 `false`。配置里的键一旦存在，代码里的默认值就永远不会生效 ——
 那样就变成了「两份文件必须同时改才不会出错」，而这正是最容易被改崩的一种结构。
+
+### 配置里的说明文字用 `//` 注释，不用 `_comment_*` 伪键
+
+四个 `appsettings*.json` 里都带大段中文说明（每个开关「为什么是这个值、什么场景下才改」）。
+它们是**真注释**（JSONC 风格），不是配置项：
+
+```jsonc
+{
+  // 部署在反向代理 / 网关之后时置 true。否则 RemoteIpAddress 会是网关地址（审计日志失真）……
+  "TrustForwardedHeaders": false
+}
+```
+
+.NET 的 JSON 配置提供程序（`JsonConfigurationProvider`）原生支持 `//` 与 `/* */` 注释，
+读取时直接跳过。**不要改回 `"_comment_xxx": "说明"` 那种伪键** —— 伪键看着像注释，实际是
+真实配置项，代价有三层：
+
+1. 会进配置树（`AuthHub:Security:_comment_TrustForwardedHeaders` 是能读出来的键）；
+2. 能被环境变量覆盖（`AuthHub__Security___comment_TrustForwardedHeaders`）；
+3. 将来一旦对某一节改用强类型绑定并开 `ErrorOnUnknownConfiguration`，
+   进程会**直接起不来**。
+
+代价换来的唯一好处是「严格 JSON 工具也不会坏」，而这份仓库里并没有这类消费者：
+CI 不解析配置、`docker build` 只是复制文件、`dotnet ef` 走的是同一个配置提供程序。
+
+`launchSettings.json` 早就用着 `//` 注释（`dotnet run` 按 `JsonCommentHandling.Skip` 解析），
+所以这不是引入新约定。守门用例见 `ShippedConfigurationFilesTests`：一个用例用**运行时同一个**
+配置提供程序把四个文件各读一遍（注释写坏、漏逗号都会当场失败），另一个禁止 `_comment*` 键出现在
+配置树里。
+
+> 编辑器若给注释画波浪线（VS Code 默认会），把 `appsettings*.json` 关联到 `jsonc` 即可：
+> `"files.associations": { "appsettings*.json": "jsonc" }`。纯显示问题，不影响构建与运行。
+> 仓库根目录的 `.vscode/` 在 `.gitignore` 里，因此这条关联只能各自在本机设置。
 
 ### 本机私有覆盖
 
@@ -602,14 +635,14 @@ dotnet build AuthHub.slnx
 # 单元测试：146 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：109 项
+# 集成测试：117 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
 | `AuthHub.UnitTests` | 146 | 角色-权限映射**三级叠加语义**（出厂默认 / 配置基线 / 数据库覆盖各自生效、**覆盖行内空数组必须收回全部而不是回落配置**、`IsCustomized` 判定、`Invalidate()` 后确实重读、快照确实被缓存）、**反代信任范围解析**（IPv4/IPv6 CIDR、裸 IP 与前缀超界被拒且消息带原值、空白项跳过、`Describe` 必须渲染成 CIDR 而不是类型名）、**种子护栏**（四种组合，含"生产 + 缺二次确认必须拒绝"）、**环境护栏**（受保护环境的判定表含自定义环境名、`(local)`/`(localdb)`/`.` 判 Fail 而 `localhost`/`::1`/`tcp:localhost,1433` 只判 Warn、占位符哨兵、受保护环境用 SQLite、`GuardMode` 降级与**非法值必须回退到 Strict**）、**本机覆盖文件的插入位置**（"晚于 `{环境}.json`"与"早于环境变量"两个方向各有用例，另有一条直接断言配置源顺序 —— 只看最终取值可能是巧合）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
-| `AuthHub.IntegrationTests` | 109 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**部署安全**（密钥环真的落到配置目录、**两个实例共享目录能互相解密**、非法网段让进程起不来且消息带原值、TrustAnyProxy 不影响正常服务）、**环境护栏**（受保护环境里连接串指向本机专用地址时阻止启动、消息带出配置项路径与豁免开关；`GuardMode=Warn` 降级后服务照常提供；**`Testing` 环境必须豁免同一套规则** —— 否则整套集成测试会在加上护栏的当天集体变红）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
+| `AuthHub.IntegrationTests` | 117 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**部署安全**（密钥环真的落到配置目录、**两个实例共享目录能互相解密**、非法网段让进程起不来且消息带原值、TrustAnyProxy 不影响正常服务）、**环境护栏**（受保护环境里连接串指向本机专用地址时阻止启动、消息带出配置项路径与豁免开关；`GuardMode=Warn` 降级后服务照常提供；**`Testing` 环境必须豁免同一套规则** —— 否则整套集成测试会在加上护栏的当天集体变红）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**）、**随包配置文件**（四个 `appsettings*.json` 都能被运行时同一个配置提供程序读出来 —— 注释写坏、漏逗号这类只在起进程时才暴露的错误因此进不了主干；且说明文字不得写成 `_comment_*` 伪键） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。

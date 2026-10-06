@@ -1,21 +1,29 @@
 {
-  "_comment": "把本文件复制成 appsettings.Local.json 再按需修改。那个文件名在 .gitignore 里，不会被提交；本文件（.example）会入库，所以它只放示例、不放任何真实凭据。",
+  // 把本文件复制成 appsettings.Local.json 再按需修改。那个文件名在 .gitignore 里，不会被提交；
+  // 本文件（.example）会入库，所以它只放示例、不放任何真实凭据。
 
-  "_comment_优先级": "appsettings.json < appsettings.{环境}.json < appsettings.Local.json < 环境变量 < 命令行参数。本机文件刻意排在环境变量之前 —— 部署平台注入的配置是运行时的最终裁决者，本地文件不该有本事把它压掉（那会让「明明设了环境变量却不生效」变成最难排查的一类问题）。",
+  // 优先级：appsettings.json < appsettings.{环境}.json < appsettings.Local.json < 环境变量 < 命令行参数。
+  // 本机文件刻意排在环境变量之前 —— 部署平台注入的配置是运行时的最终裁决者，本地文件不该有本事把它
+  // 压掉（那会让「明明设了环境变量却不生效」变成最难排查的一类问题）。
 
-  "_comment_怎么用": "只保留你要覆盖的项，其余整段删掉。没写的项继续保持上层取值，所以这个文件通常只有几行。",
+  // 怎么用：只保留你要覆盖的项，其余整段删掉。没写的项继续保持上层取值，所以这个文件通常只有几行。
 
   "ConnectionStrings": {
-    "_comment_DefaultConnection": "本机另装了一个实例、或想换个库名时用。Development 已经指向本机默认实例，多数情况不需要动它。注意 Server 要写 (local) 走共享内存：本机实例的 TCP/IP 协议默认是关闭的，写 localhost,1433 只会得到连接超时。",
+    // 本机另装了一个实例、或想换个库名时用。Development 已经指向本机默认实例，多数情况不需要动它。
+    // 注意 Server 要写 (local) 走共享内存：本机实例的 TCP/IP 协议默认是关闭的，写 localhost,1433
+    // 只会得到连接超时。
     "DefaultConnection": "Server=(local);Database=AuthHub.Dev;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=True;TrustServerCertificate=True"
   },
 
   "AuthHub": {
     "Security": {
-      "_comment_DataProtectionKeysPath": "想让本机调试的登录态在重启后依然有效（不必反复登录）时，指向一个固定目录。留空则每次重启换一套密钥环 —— 开发环境无所谓，只是会被登出。",
+      // 想让本机调试的登录态在重启后依然有效（不必反复登录）时，指向一个固定目录。留空则每次重启
+      // 换一套密钥环 —— 开发环境无所谓，只是会被登出。
       "DataProtectionKeysPath": ""
-    },
+    }
 
-    "_comment_其他可覆盖项": "AuthHub:Seed:AdminPassword / DemoPassword 可换本机演示账号的口令；AuthHub:Features:EnableApiDocs 可开关接口文档。写的时候注意别给空字符串 —— 配置里键存在即生效，空值会把口令真的置空。"
+    // 其他可覆盖项：AuthHub:Seed:AdminPassword / DemoPassword 可换本机演示账号的口令；
+    // AuthHub:Features:EnableApiDocs 可开关接口文档。写的时候注意别给空字符串 —— 配置里键存在即生效，
+    // 空值会把口令真的置空。
   }
 }
