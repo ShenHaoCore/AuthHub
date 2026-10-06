@@ -422,7 +422,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | `<ah-icon path size />` | `<svg class="ah-icon" …>` | `path` 取 `AdminNav.Icons.*`；`size` 默认 16 |
 | `<ah-dialog id title auto-open size>` | `<dialog class="ah-modal">` + 标题栏 | `auto-open` **按字符串原样透传**；`size="lg"` → `ah-modal-lg` |
 | `<ah-dialog-body>` | `<div class="ah-modal-body">` | 无 |
-| `<ah-dialog-foot dismiss submit />` | `.ah-modal-foot` + 取消/提交按钮 | `dismiss` 默认「取消」；不传 `submit` 则只读 |
+| `<ah-dialog-foot dismiss submit secondary secondary-handler />` | `.ah-modal-foot` + 取消 / 次级 / 提交按钮 | `dismiss` 默认「取消」；不传 `submit` 则只读；`secondary` 渲染成排在主按钮左侧的次级提交按钮，`secondary-handler` 给它 `formaction="?handler=…"`（相对当前文档解析 ⇒ 仍在本页且沿用同一表单，**防伪令牌不会丢**） |
 
 **为什么用 TagHelper 而不是 partial 视图**：弹窗的 head / body / foot 之间夹着任意表单内容，
 partial 承载不了子内容；而 TagHelper 能在**编译期**校验属性名——写错属性名直接编译失败，
