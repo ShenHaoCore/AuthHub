@@ -79,10 +79,11 @@ AuthHub.slnx
 │   ├── AuthHub.Application/     34 个文件   用例编排、接口、DTO、校验器、Result 体系、
 │   │                                        MFA 下发通道（ITwoFactorChannel + 两个实现）
 │   ├── AuthHub.Infrastructure/  23 个文件   EF Core、迁移、OpenIddict 适配、各类实现
-│   └── AuthHub.Api/             39 个 .cs + 11 个 .cshtml + 5 个静态资源
+│   └── AuthHub.Api/             46 个 .cs + 11 个 .cshtml + 5 个静态资源
 │                                            控制器、协议页、管理后台（Razor Pages）、
 │                                            视图 TagHelper 组件（TagHelpers/）、
-│                                            中间件、DI 组装、Program.cs、wwwroot
+│                                            中间件、服务注册与管道（Extensions/）、
+│                                            Program.cs（只保留装配清单）、wwwroot
 ├── tests/
 │   ├── AuthHub.UnitTests/        4 个文件   领域规则、Result、校验器、AccountService（Moq）
 │   └── AuthHub.IntegrationTests/ 11 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 管理后台
@@ -298,7 +299,8 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | `Ui.Admin` | 仪表盘：持有 6 个管理权限中的任意一个 |
 | `Ui.UsersManage` / `RolesManage` / `ClientsManage` / `ScopesManage` / `TokensRevoke` / `AuditRead` | 对应的 `authhub:permission` 声明（由 `RolePermissionMap` 从角色推导） |
 
-> **一个容易踩的坑**：`Program.cs` 把 `DefaultChallengeScheme` 指向了 OpenIddict Validation
+> **一个容易踩的坑**：`Extensions/AuthenticationExtensions.cs` 把 `DefaultChallengeScheme`
+> 指向了 OpenIddict Validation
 > （为的是 `/api/*` 未带令牌时返回 401 而不是 302）。所以后台的 UI 策略**必须显式只挂会话 Cookie 方案**，
 > 否则浏览器访问 `/admin` 会拿到 `401 + WWW-Authenticate`，用户看到一片空白而不是登录页。
 > 集成测试里有一条用例专门钉住这个行为。
@@ -517,7 +519,7 @@ Content-Type 恒定是 `application/problem+json`。
 | 刷新令牌 | 每次刷新旋转，宽限期 0；**复用已旋转的旧令牌会撤销该授权下全部令牌**（重放防护） |
 | 令牌撤销 | `EnableTokenEntryValidation()` 让每次校验都查令牌状态，未过期的 JWT 也能立即失效 |
 | 令牌形态 | `DisableAccessTokenEncryption()` 产出 JWS 而非 JWE，下游可凭 `/.well-known/jwks` 离线校验 |
-| 令牌有效期 | Access 1h、ID 30min、授权码 5min、刷新 30d（可按需在 `Program.cs` 调整） |
+| 令牌有效期 | Access 1h、ID 30min、授权码 5min、刷新 30d（可按需在 `Extensions/OpenIddictServerExtensions.cs` 调整） |
 | 登录防爆破 | 限流 `LoginRequestsPerMinute`（默认 10 次 / 5 分钟），同时作用于 HTML 登录表单与 `/api/account/*`；再叠加 Identity 锁定（5 次失败锁 15 分钟） |
 | 令牌端点限流 | `/connect/*` 前缀单独限流，**默认额度更严**（60/min）；其余接口放宽 10 倍 |
 | 会话 Cookie | `HttpOnly` + `SameSite=Lax` + 按需 `Secure`；密码/角色变更经安全戳 5 分钟内失效 |
@@ -699,7 +701,7 @@ Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PK
 | 排除的内容 | 位置 | 做法 |
 |---|---|---|
 | `/account/login`、`/account/2fa`、`/account/logout`、`/account/denied`、`/account/loggedout` | `AccountController` | `[ApiExplorerSettings(IgnoreApi = true)]` |
-| `GET /`（302 跳到 `/admin`） | `Program.cs` | `ExcludeFromDescription()` |
+| `GET /`（302 跳到 `/admin`） | `Extensions/WebApplicationExtensions.cs` | `ExcludeFromDescription()` |
 
 两点容易走错：
 
@@ -766,8 +768,9 @@ Scalar 在 OAuth2 上的预设：授权码流程预填 `spa-client` 并强制 PK
 | 集成测试断言 | 直接对 HTML 字符串断言参数与 scope，很直接 | 断言关键内容即可，不需要逐字段验证视觉 |
 | 防伪令牌 | 手工 `IssueAntiforgeryToken()` | Razor Pages 的 POST 处理器**默认自动校验**，不需要逐个挂 `[ValidateAntiForgeryToken]` |
 
-因此：**后台改用 Razor Pages，协议页保持纯字符串**。这也是 `Program.cs` 里
-`AddRazorPages()` / `MapRazorPages()` 的来由。顺带一提，当初选 `AddControllersWithViews()`
+因此：**后台改用 Razor Pages，协议页保持纯字符串**。这也是
+`Extensions/WebApiExtensions.cs` 里 `AddRazorPages()`、`Extensions/WebApplicationExtensions.cs`
+里 `MapRazorPages()` 的来由。顺带一提，当初选 `AddControllersWithViews()`
 而非 `AddControllers()` 就是为了让 `[ValidateAntiForgeryToken]` 能正常工作（见第 6 条），
 现在两条路都受益。
 
@@ -824,7 +827,7 @@ AuthHub__Keys__SigningCertificatePassword="..."
 AuthHub__Cors__AllowedOrigins__0="https://app.example.com"
 ```
 
-**签名密钥必须持久化**：`Program.cs` 会按 配置证书 → 开发证书 → 临时密钥 依次降级。
+**签名密钥必须持久化**：`Extensions/OpenIddictKeySetup.cs` 会按 配置证书 → 开发证书 → 临时密钥 依次降级。
 临时密钥每次重启都变，会让所有已签发令牌失效、下游缓存全废 —— 生产必须走持久化证书
 （或挂载 Data Protection 密钥环）。
 
