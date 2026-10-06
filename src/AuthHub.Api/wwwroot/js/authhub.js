@@ -259,41 +259,63 @@
     /* --------------------------------------------------------- 7. 页内标签 */
 
     function initTabs() {
+        /** 把某个标签设为激活：同步兄弟标签的 class / aria，并只显示它对应的面板。 */
+        function activate(tab, scope) {
+            var target = tab.getAttribute('data-tab');
+
+            all('[data-tab]', scope).forEach(function (other) {
+                var active = other === tab;
+                other.classList.toggle('is-active', active);
+
+                // 只同步声明了 role="tab" 的元素：没有该 role 时写 aria-selected 是无意义的
+                if (other.getAttribute('role') === 'tab') {
+                    other.setAttribute('aria-selected', active ? 'true' : 'false');
+                    other.setAttribute('tabindex', active ? '0' : '-1');
+                }
+            });
+            all('[data-tab-panel]', scope).forEach(function (panel) {
+                panel.hidden = panel.getAttribute('data-tab-panel') !== target;
+            });
+        }
+
+        /** 激活 hash 指向的标签。hash 为空、指向不存在的标签、或不是合法选择器时，什么都不做。 */
+        function activateFromHash() {
+            var hash = window.location.hash;
+            if (hash.length < 2) {
+                return;
+            }
+
+            var byHash;
+            try {
+                byHash = document.querySelector('[data-tab="' + hash.slice(1) + '"]');
+            } catch (error) {
+                return;
+            }
+
+            if (byHash) {
+                activate(byHash, byHash.closest('[data-tab-scope]') || document);
+            }
+        }
+
         all('[data-tab]').forEach(function (tab) {
             on(tab, 'click', function (event) {
                 event.preventDefault();
-
-                var target = tab.getAttribute('data-tab');
-                var scope = tab.closest('[data-tab-scope]') || document;
-
-                all('[data-tab]', scope).forEach(function (other) {
-                    var active = other === tab;
-                    other.classList.toggle('is-active', active);
-
-                    // 只同步声明了 role="tab" 的元素：没有该 role 时写 aria-selected 是无意义的
-                    if (other.getAttribute('role') === 'tab') {
-                        other.setAttribute('aria-selected', active ? 'true' : 'false');
-                        other.setAttribute('tabindex', active ? '0' : '-1');
-                    }
-                });
-                all('[data-tab-panel]', scope).forEach(function (panel) {
-                    panel.hidden = panel.getAttribute('data-tab-panel') !== target;
-                });
+                activate(tab, tab.closest('[data-tab-scope]') || document);
 
                 // 让刷新后仍停留在同一标签
                 if (window.history && window.history.replaceState) {
-                    window.history.replaceState(null, '', '#' + target);
+                    window.history.replaceState(null, '', '#' + tab.getAttribute('data-tab'));
                 }
             });
         });
 
-        // 支持从锚点直接进入某个标签（例如 /admin/profile#mfa）
-        if (window.location.hash) {
-            var initial = document.querySelector('[data-tab="' + window.location.hash.slice(1) + '"]');
-            if (initial) {
-                initial.click();
-            }
-        }
+        // 支持从锚点直接进入某个标签（例如从别的页点「修改密码」跳到 /admin/profile#password）
+        activateFromHash();
+
+        // 但已经停在本页时点同一个链接，属于"同文档锚点导航"：浏览器只改 hash、
+        // 不会重新加载页面，上面的初始化也就不会重跑 —— 少了这个监听，
+        // 用户看到的就是「点了没反应」。
+        on(window, 'hashchange', activateFromHash);
     }
 
     /* ------------------------------------------------- 8. 文本框日期筛选 */
