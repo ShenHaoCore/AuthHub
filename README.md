@@ -138,10 +138,13 @@ Api ──▶ Application ──▶ Domain
   解决方案文件用的是 `.slnx` 格式，同样需要 9.0.200+ 的 SDK / IDE。
   不想升级 SDK 的话，也可以按项目路径操作：`dotnet build src/AuthHub.Api/AuthHub.Api.csproj`
   （CI 与 Dockerfile 就是这么做的，因此它们对 SDK 版本不敏感）。
-- 任选其一：SQL Server LocalDB（默认）/ SQL Server / SQLite
+- 数据库，任选其一：
+  - **本机 SQL Server 默认实例** —— `appsettings.Development.json` 的默认值，连接串是 `Server=(local)`；
+  - SQL Server LocalDB —— 把连接串换成 `Server=(localdb)\MSSQLLocalDB` 即可，其余不变；
+  - SQLite —— 零依赖，见 [切到 SQLite](#切到-sqlite零依赖跑起来)。
 - 开发用 HTTPS 证书（`dotnet dev-certs https --trust`）
 
-### 本机运行（SQL Server LocalDB）
+### 本机运行（本机 SQL Server 默认实例）
 
 ```bash
 git clone https://github.com/ShenHaoCore/AuthHub.git
@@ -156,6 +159,21 @@ dotnet ef database update -p src/AuthHub.Infrastructure -s src/AuthHub.Api
 # 启动
 dotnet run --project src/AuthHub.Api
 ```
+
+> **为什么写 `Server=(local)` 而不是 `localhost,1433`。**
+> 本机 SQL Server 实例的 **TCP/IP 协议默认是关闭的**（`SQL Server 配置管理器 → SQL Server
+> 网络配置 → 协议`），1433 根本没有在监听 —— 这是安装时的默认状态，不是故障。
+> SqlClient 对 `(local)` / `.` 走**共享内存**，对 `localhost` 走 **TCP**，所以前者能连上、
+> 后者会得到"连接超时"。
+>
+> 共享内存只对本机进程可用，开发完全够用。真需要标准端口（外部工具、容器连接）时，
+> 去配置管理器里把 TCP/IP 置为启用（IPAll 的 TCP 端口填 1433）并**重启 SQL Server 服务** ——
+> 注意重启会掐断这台机器上其他库的连接。
+>
+> 认证用 Windows 认证（`Trusted_Connection=True`）而不是 `sa`：开发机当前账号通常已经是
+> `sysadmin`（用 `SELECT IS_SRVROLEMEMBER('sysadmin')` 确认），省掉一处明文口令。
+> 库名 `AuthHub.Dev` 会在首次运行时自动创建，日志里能看到
+> `数据库结构已就绪（SqlServer）。`
 
 启动后：
 
@@ -918,6 +936,35 @@ System.InvalidOperationException: The LINQ expression 'DbSet<AuditLog>()
 
 > 教训：认证方案改了 `UserNameClaimType` 之后，**所有查声明的地方都要跟着核对**，
 > 编译器不会提醒。
+
+### 15. 本机 SQL Server 的 TCP/IP 协议默认是关闭的
+
+把连接串写成 `Server=localhost,1433` 连本机实例，会得到**连接超时**（而不是"找不到实例"
+这种有指向性的报错），容易误判成实例没启动。实测本机安装的 SQL Server 2022 默认实例：
+`sqlservr.exe` 在跑、服务是 Running，但 `netstat` 里 **1433 没有任何监听** ——
+因为 TCP/IP 协议是安装后的默认关闭状态（注册表
+`MSSQL16.MSSQLSERVER\MSSQLServer\SuperSocketNetLib\Tcp` 的 `Enabled=0`）。
+
+> 容易看错的中间现象：`1434` 端口确实有监听，但那是 **DAC（专用管理员连接）/ Browser**
+> 的端口，不是实例的查询端口。看到 1434 有反应就以为"实例正常、端口通了"是错的。
+
+SqlClient 的连接协议是按服务名解析的，同样写"本机"结果不同：
+
+| 连接串里的 Server | 走的协议 | 本机 TCP 关闭时 |
+|---|---|---|
+| `(local)` 或 `.` | 共享内存 | **可以连** |
+| `localhost` / `127.0.0.1` / `机器名` | TCP | 连接超时 |
+
+所以开发配置用 `Server=(local)`。共享内存只对本机进程可用 —— 开发够用，但**不要**把它
+当成部署方案（容器跨主机必须走 TCP）。确实需要标准端口时，用 SQL Server 配置管理器
+启用 TCP/IP（`IPAll` 的 TCP 端口填 1433）并重启服务；重启会掐断该实例上所有其他库的连接，
+多项目共用一台实例时要先确认。
+
+> 判断实例是否可连，别只看进程在不在。可靠的做法是直接用 `sqlcmd` 连一次：
+> ```
+> sqlcmd -S "(local)" -E -C -Q "SELECT @@VERSION; SELECT IS_SRVROLEMEMBER('sysadmin');"
+> ```
+> 第二条顺便告诉你当前 Windows 账号是不是 `sysadmin` —— 不是的话建库会失败。
 
 ---
 
