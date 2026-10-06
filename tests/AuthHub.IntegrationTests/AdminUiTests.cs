@@ -366,6 +366,34 @@ public class AdminUiTests
         css.Should().Contain("var(--ah-primary)");
     }
 
+    // ==================================================================== 页内锚点
+
+    /// <summary>
+    /// 右上角「修改密码」是指向 <c>/admin/profile#password</c> 的**同文档锚点**。
+    /// 用户已经停在「我的账户」页时点它，浏览器只改 hash、不会重新加载页面，
+    /// authhub.js 的初始化也就不会重跑 —— 少了 hashchange 监听，表现就是「点了没反应」。
+    ///
+    /// 这条断言检查三样必须同时成立的东西：链接指向一个真实存在的标签，且脚本会响应 hash 变化。
+    /// 切换效果本身在真实渲染的页面上用 jsdom 验证过（前端刻意零 npm、零构建，
+    /// 仓库里没有 JS 测试运行器，因此这里只能做静态检查）。
+    /// </summary>
+    [Fact]
+    public async Task In_page_anchor_should_switch_tabs_through_a_hashchange_listener()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/profile"));
+        var script = await CookieSession.ReadHtmlAsync(await session.GetAsync("/js/authhub.js"));
+
+        html.Should().Contain("href=\"/admin/profile#password\"",
+            because: "右上角菜单里的「修改密码」跳的是本页的密码标签");
+        html.Should().Contain("data-tab=\"password\"",
+            because: "上面那个 hash 必须对应页面上真实存在的标签，否则锚点无处可去");
+        script.Should().Contain("hashchange",
+            because: "已经在本页时点该链接不会重新加载页面，只能靠 hashchange 监听接管");
+    }
+
     // ==================================================================== 表单往返
 
     [Fact]
