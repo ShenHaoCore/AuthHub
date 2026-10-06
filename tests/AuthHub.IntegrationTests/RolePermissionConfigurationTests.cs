@@ -23,7 +23,11 @@ public class RolePermissionConfigurationTests
     [Fact]
     public void Shipped_appsettings_should_match_the_code_defaults()
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(FindRepositoryFile(AppSettingsRelativePath)));
+        // 随包的 appsettings 用 // 注释承载说明（JSONC 风格，配置系统原生支持），
+        // 而 JsonDocument 的默认解析是严格 JSON —— 必须显式允许注释，否则这里会误报成"配置坏了"。
+        using var document = JsonDocument.Parse(
+            File.ReadAllText(FindRepositoryFile(AppSettingsRelativePath)),
+            new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
 
         var fromFile = document.RootElement
             .GetProperty("AuthHub")
