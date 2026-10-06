@@ -65,8 +65,17 @@ public abstract class AdminPageModel : PageModel
     protected abstract Task LoadDataAsync(CancellationToken cancellationToken);
 
     /// <summary>该行的编辑弹窗是否需要自动打开。</summary>
-    public bool IsEditFailure(string id)
-        => string.Equals(OpenDialog, EditDialog, StringComparison.Ordinal)
+    public bool IsEditFailure(string id) => IsDialogFailure(EditDialog, id);
+
+    /// <summary>
+    /// 指定弹窗是否因上一次提交失败而需要自动打开。
+    ///
+    /// 给"同一行上有多个表单弹窗"的页面用（如角色页除了编辑说明，还有一个权限归属弹窗），
+    /// 它们共用 <see cref="EditingId"/> 定位到同一行，靠 <paramref name="dialog"/> 区分是哪一个。
+    /// </summary>
+    public bool IsDialogFailure(string dialog, string? id)
+        => string.Equals(OpenDialog, dialog, StringComparison.Ordinal)
+           && !string.IsNullOrEmpty(id)
            && string.Equals(EditingId, id, EditingIdComparison);
 
     /// <summary>载入数据后原地返回本页，并重新打开出错的弹窗。</summary>

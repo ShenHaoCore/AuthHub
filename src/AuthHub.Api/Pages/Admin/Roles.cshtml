@@ -6,8 +6,8 @@
     <div>
         <h1 class="ah-page-title">角色与权限</h1>
         <p class="ah-page-sub">
-            角色的权限归属来自配置 <code>AuthHub:RolePermissions</code>：调整归属改配置后重启即可，不必重新部署；
-            新增权限点则要改代码并重新发版。此处只做可视化 —— 允许在界面上随手改写归属会带来提权风险。
+            勾选即改权限归属，立即生效 —— 不必重启，也不必发版。可变的只有「已存在的权限发给谁」：
+            权限点与授权策略都编译在服务端，端点上那道 <code>[Authorize]</code> 是程序集的一部分。
         </p>
     </div>
     <div class="ah-page-header-actions">
@@ -33,13 +33,16 @@
     <div class="ah-alert ah-alert--info">
         <ah-icon path="@AdminNav.Icons.Info" size="16" />
         <div class="ah-alert-body">
-            <strong>为什么权限不能在这里勾选</strong>
+            <strong>这里能改什么、不能改什么</strong>
             <span>
-                权限点与授权策略都编译在服务端，端点上那道 <code>[Authorize]</code> 是程序集的一部分，
-                能改变的只有「已存在的权限发给谁」。允许运行时改写归属，等于谁能进后台谁就能把任意已有能力发给自己。
+                <strong>能改</strong>：某个已存在的权限点发给哪个角色。改动立刻写库，<strong>不必重启、不必发版</strong>；
+                想回到配置 / 出厂默认，在弹窗里点「恢复默认」。
                 <br />
-                调整归属：改配置 <code>AuthHub:RolePermissions</code> 后重启，不必发版。
-                新增权限点：在 <code>AuthHubConstants.Permissions</code> 加常量 → 建同名策略（<code>AuthHubConstants.Policies</code>）→ 在控制器 / 页面上引用，需要发版。
+                <strong>改不了</strong>：权限点本身与授权策略都编译在服务端，端点上那道 <code>[Authorize]</code> 是程序集的一部分。
+                新增权限点要走代码：在 <code>AuthHubConstants.Permissions</code> 加常量 → 建同名策略（<code>AuthHubConstants.Policies</code>）→ 在控制器 / 页面上引用。
+                <br />
+                <strong>两点须知</strong>：① 能进本页就能改归属，所以每次变更都会写一条审计（动作 <code>admin.role.permissions.updated</code>）；
+                ② 权限声明是登录那一刻写进会话 Cookie 的，已在线的用户最迟 5 分钟刷新，重新登录则立即生效。
             </span>
         </div>
     </div>
@@ -86,7 +89,7 @@
                                 <td>
                                     @if (role.Permissions.Count == 0)
                                     {
-                                        <span class="ah-cell-sub">无权限映射</span>
+                                        <span class="ah-cell-sub">无权限</span>
                                     }
                                     else
                                     {
@@ -97,12 +100,22 @@
                                             }
                                         </div>
                                     }
+                                    <div class="ah-cell-sub" style="margin-top:4px">
+                                        @if (role.PermissionsCustomized)
+                                        {
+                                            <span>已自定义（存在界面上的改动）</span>
+                                        }
+                                        else
+                                        {
+                                            <span>沿用配置 / 出厂默认</span>
+                                        }
+                                    </div>
                                 </td>
                                 <td class="ah-col-num">@role.UserCount</td>
                                 <td class="ah-col-actions">
                                     <div class="ah-act">
-                                        <button type="button" class="ah-act-btn" title="查看权限"
-                                                aria-label="查看 @name 的权限"
+                                        <button type="button" class="ah-act-btn" title="编辑权限"
+                                                aria-label="编辑 @name 的权限"
                                                 data-dialog-open="#dlg-perm-@name">
                                             <ah-icon path="@AdminNav.Icons.Roles" size="15" />
                                         </button>
@@ -146,7 +159,7 @@
         <div class="ah-card-header">
             <div>
                 <h2 class="ah-card-title">权限矩阵</h2>
-                <p class="ah-card-sub">行 = 权限点，列 = 内置角色；✓ 表示该角色拥有此权限</p>
+                <p class="ah-card-sub">行 = 权限点，列 = 内置角色；✓ 表示当前生效。改归属请用上方表格每行的「权限」按钮</p>
             </div>
         </div>
         <div class="ah-card-body ah-card-body-flush">
@@ -215,7 +228,7 @@
                        autocomplete="off" value="@Model.NewRoleName" />
                 <div class="ah-hint">
                     建议使用英文名（会作为令牌里的 <code>role</code> 声明）。
-                    自定义角色默认不绑定任何权限，需要在配置 <code>AuthHub:RolePermissions</code> 里补一条映射并重启。
+                    自定义角色创建后不绑定任何权限，用列表里的「权限」按钮勾选即可生效。
                 </div>
             </div>
 
@@ -229,63 +242,90 @@
     </form>
 </ah-dialog>
 
-@* ----------------------------------- 每行：权限树（只读）+ 编辑说明 *@
+@* ----------------------------------- 每行：权限归属（可勾选）+ 编辑说明 *@
 @foreach (var role in Model.Roles)
 {
     var roleName = role.Name ?? string.Empty;
     var editFailed = Model.IsEditFailure(roleName);
+    var permFailed = Model.AutoOpenPermissions(roleName);
 
-    <ah-dialog id="dlg-perm-@roleName" title="@roleName 的权限" size="lg">
-        <ah-dialog-body>
-            @if (role.Permissions.Count == 0)
-            {
-                <div class="ah-alert ah-alert--warning">
-                    <ah-icon path="@AdminNav.Icons.Alert" size="16" />
-                    <div class="ah-alert-body">
-                        <strong>该角色没有任何权限映射</strong>
-                        <span>
-                            @if (Model.IsBuiltInRole(roleName))
+    <ah-dialog id="dlg-perm-@roleName" title="@roleName 的权限"
+               auto-open="@(permFailed ? "true" : "false")" size="lg">
+        <form method="post" asp-page-handler="permissions">
+            <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+            <input type="hidden" name="PermissionRoleName" value="@roleName" />
+
+            <ah-dialog-body>
+                @if (permFailed && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                        <span>@Model.FormError</span>
+                    </div>
+                }
+
+                @if (role.Permissions.Count == 0)
+                {
+                    <div class="ah-alert ah-alert--warning">
+                        <ah-icon path="@AdminNav.Icons.Alert" size="16" />
+                        <div class="ah-alert-body">
+                            <strong>该角色当前没有任何权限</strong>
+                            <span>
+                                @if (role.PermissionsCustomized)
+                                {
+                                    <text>
+                                        它在界面上被改成过空集合 —— 这与「没改过」是两件事，不会回落到默认值。
+                                        点「恢复默认」可改回配置 / 出厂默认。
+                                    </text>
+                                }
+                                else
+                                {
+                                    <text>配置与出厂默认里它就没有权限。勾选下面的项目即可授予。</text>
+                                }
+                            </span>
+                        </div>
+                    </div>
+                }
+
+                @foreach (var group in Model.PermissionGroups)
+                {
+                    <div class="ah-perm-group">
+                        <div class="ah-perm-group-head">
+                            <span>@group.Title</span>
+                            <span class="ah-perm-count ah-badge">@group.Permissions.Count 项</span>
+                        </div>
+                        <div class="ah-perm-items">
+                            @foreach (var permission in group.Permissions)
                             {
-                                <text>这是内置角色，但配置 AuthHub:RolePermissions 中没有给它挂任何权限。</text>
+                                var granted = Model.HasPermission(roleName, permission.Name);
+                                <label class="ah-perm-item">
+                                    <input type="checkbox" name="SelectedPermissions" value="@permission.Name" checked="@granted" />
+                                    <span>
+                                        @(string.IsNullOrWhiteSpace(permission.Description) ? permission.Name : permission.Description)
+                                        <code>@permission.Name</code>
+                                    </span>
+                                </label>
                             }
-                            else
-                            {
-                                <text>这是自定义角色。请在配置 AuthHub:RolePermissions 中补上映射并重启，之后才会获得权限。</text>
-                            }
-                        </span>
+                        </div>
                     </div>
-                </div>
-            }
+                }
 
-            @foreach (var group in Model.PermissionGroups)
+                <div class="ah-hint" style="margin-top:12px">
+                    勾选结果写进数据库，优先级高于配置 <code>AuthHub:RolePermissions</code>，保存后立即生效。
+                    <strong>全部取消勾选</strong>表示"这个角色没有任何权限"，与点「恢复默认」（回落配置 / 出厂默认）是两件不同的事。
+                    权限点会被展开成 <code>authhub:permission</code> 声明写入会话与令牌；
+                    已在线的用户最迟 5 分钟刷新，重新登录则立即生效。
+                </div>
+            </ah-dialog-body>
+
+            @if (role.PermissionsCustomized)
             {
-                <div class="ah-perm-group">
-                    <div class="ah-perm-group-head">
-                        <span>@group.Title</span>
-                        <span class="ah-perm-count ah-badge">@group.Permissions.Count 项</span>
-                    </div>
-                    <div class="ah-perm-items">
-                        @foreach (var permission in group.Permissions)
-                        {
-                            var granted = Model.HasPermission(roleName, permission.Name);
-                            <label class="ah-perm-item">
-                                <input type="checkbox" disabled checked="@granted" />
-                                <span>
-                                    @(string.IsNullOrWhiteSpace(permission.Description) ? permission.Name : permission.Description)
-                                    <code>@permission.Name</code>
-                                </span>
-                            </label>
-                        }
-                    </div>
-                </div>
+                <ah-dialog-foot dismiss="取消" submit="保存" secondary="恢复默认" secondary-handler="resetPermissions" />
             }
-
-            <div class="ah-hint" style="margin-top:12px">
-                勾选框为只读展示。权限归属由配置 <code>AuthHub:RolePermissions</code> 决定，改后重启生效；
-                权限点会被展开成 <code>authhub:permission</code> 声明写入会话与令牌。
-            </div>
-        </ah-dialog-body>
-        <ah-dialog-foot dismiss="关闭" />
+            else
+            {
+                <ah-dialog-foot dismiss="取消" submit="保存" />
+            }
+        </form>
     </ah-dialog>
 
     <ah-dialog id="dlg-edit-role-@roleName" title="编辑角色 · @roleName" auto-open="@(editFailed ? "true" : "false")">

@@ -29,6 +29,9 @@ public class AuthHubDbContext : IdentityDbContext<ApplicationUser, ApplicationRo
     /// <summary>审计日志。</summary>
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    /// <summary>「角色 → 权限」归属的运行时覆盖（后台界面写入）。见 <see cref="RolePermissionOverride"/>。</summary>
+    public DbSet<RolePermissionOverride> RolePermissionOverrides => Set<RolePermissionOverride>();
+
     // OpenIddict 的实体（Application / Authorization / Scope / Token / Device）
     // 无需手动声明 DbSet：ModelBuilder.UseOpenIddict() 会把它们加入模型。
 
@@ -63,8 +66,13 @@ public class AuthHubDbContext : IdentityDbContext<ApplicationUser, ApplicationRo
     ///   · **只对 SQLite 生效**，SQL Server 仍用原生 datetimeoffset 列类型，
     ///     生产库结构与既有迁移完全不受影响。
     ///
-    /// 只处理我们自己的三张实体表（不碰 OpenIddict 的实体）：
+    /// 只处理我们自己的四张实体表（不碰 OpenIddict 的实体）：
     /// OpenIddict 对 SQLite 有自己的时间存储策略，不该被这里覆盖。
+    ///
+    /// **新增带 DateTimeOffset 的实体时别忘了加进下面那个数组** ——
+    /// 漏了的话，在 SQLite 上对该字段做比较 / 排序会抛
+    /// "The LINQ expression ... could not be translated"，而 SQL Server 上却一切正常，
+    /// 于是故障只在开发机与集成测试里复现。
     ///
     /// 副作用：切换后 SQLite 上的**既有数据**读不出来（原本是 TEXT、现在是 INTEGER）。
     /// 开发/测试库删掉重建即可 —— 这也正是把 SQLite 定位为"本地开发与测试"的原因。
@@ -78,7 +86,10 @@ public class AuthHubDbContext : IdentityDbContext<ApplicationUser, ApplicationRo
             return;
         }
 
-        foreach (var clrType in new[] { typeof(ApplicationUser), typeof(ApplicationRole), typeof(AuditLog) })
+        foreach (var clrType in new[]
+                 {
+                     typeof(ApplicationUser), typeof(ApplicationRole), typeof(AuditLog), typeof(RolePermissionOverride)
+                 })
         {
             foreach (var property in builder.Entity(clrType).Metadata.GetProperties())
             {

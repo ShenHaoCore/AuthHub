@@ -41,7 +41,12 @@ internal sealed class CookieSession : IDisposable
     public Task<HttpResponseMessage> GetAsync(string path)
         => _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
 
-    public Task<HttpResponseMessage> PostFormAsync(string path, IReadOnlyDictionary<string, string> fields)
+    /// <summary>
+    /// 提交表单。参数类型是 <see cref="IEnumerable{T}"/> 而不是字典 —— 复选框组
+    /// （如角色权限弹窗里的 <c>SelectedPermissions</c>）需要**重复的字段名**，
+    /// 字典表达不了，而 <see cref="FormUrlEncodedContent"/> 本来就是按序列编码的。
+    /// </summary>
+    public Task<HttpResponseMessage> PostFormAsync(string path, IEnumerable<KeyValuePair<string, string>> fields)
         => _client.SendAsync(new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = new FormUrlEncodedContent(fields)

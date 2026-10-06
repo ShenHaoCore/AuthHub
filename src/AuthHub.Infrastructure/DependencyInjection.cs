@@ -37,6 +37,7 @@ public static class DependencyInjection
         // 管理服务实现（OpenIddict 驱动的部分）
         services.AddScoped<IUserAdminService, UserAdminService>();
         services.AddScoped<IRoleAdminService, RoleAdminService>();
+        services.AddScoped<IRolePermissionAdminService, RolePermissionAdminService>();
         services.AddScoped<IClientAdminService, OpenIddictClientAdminService>();
         services.AddScoped<IScopeAdminService, OpenIddictScopeAdminService>();
         services.AddScoped<ITokenAdminService, OpenIddictTokenAdminService>();

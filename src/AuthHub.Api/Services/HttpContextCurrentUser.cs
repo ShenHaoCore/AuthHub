@@ -31,8 +31,18 @@ public sealed class HttpContextCurrentUser : ICurrentUser
         => Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
            ?? Principal?.FindFirst(OpenIddictConstants.Claims.Subject)?.Value;
 
+    /// <summary>
+    /// 用户名。三个候选类型缺一不可：
+    ///   · <see cref="ClaimTypes.Name"/> —— 默认的 Identity 声明类型；
+    ///   · <c>OpenIddictConstants.Claims.Name</c>（<c>"name"</c>）—— **本项目实际用的就是这个**：
+    ///     IdentityExtensions 把 <c>ClaimsIdentity.UserNameClaimType</c> 对齐到了 OpenIddict 的
+    ///     <c>"name"</c>。少了这一条，会话 Cookie 的 <c>UserName</c> 会恒为 null，
+    ///     表现是审计日志里"谁干的"一栏全空（UserId 还在，所以不容易被注意到）。
+    ///   · <c>preferred_username</c> —— Bearer 令牌侧的等价声明。
+    /// </summary>
     public string? UserName
         => Principal?.FindFirst(ClaimTypes.Name)?.Value
+           ?? Principal?.FindFirst(OpenIddictConstants.Claims.Name)?.Value
            ?? Principal?.FindFirst(OpenIddictConstants.Claims.PreferredUsername)?.Value;
 
     public string? ClientId

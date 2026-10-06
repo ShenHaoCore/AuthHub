@@ -51,7 +51,9 @@ public static class AuditDisplay
         [AuditActionType.RoleRevoked] = "移除角色",
         [AuditActionType.RoleCreated] = "创建角色",
         [AuditActionType.RoleUpdated] = "修改角色",
-        [AuditActionType.RoleDeleted] = "删除角色"
+        [AuditActionType.RoleDeleted] = "删除角色",
+        [AuditActionType.RolePermissionsUpdated] = "修改角色权限",
+        [AuditActionType.RolePermissionsReset] = "恢复角色默认权限"
     };
 
     /// <summary>审计动作的中文标签（未知动作原样返回，便于后续扩展时仍可读）。</summary>
@@ -107,7 +109,10 @@ public static class AuditDisplay
             AuditActionType.RoleRevoked,
             AuditActionType.RoleCreated,
             AuditActionType.RoleUpdated,
-            AuditActionType.RoleDeleted
+            AuditActionType.RoleDeleted,
+            // 单独列出来：权限归属的变更比其他角色操作更需要被翻出来看
+            AuditActionType.RolePermissionsUpdated,
+            AuditActionType.RolePermissionsReset
         })
     };
 
@@ -130,6 +135,9 @@ public static class AuditDisplay
             AuditActionType.TokenRevoked => "ah-badge--warning",
             AuditActionType.TwoFactorRecoveryCodeUsed => "ah-badge--warning",
             AuditActionType.ConsentDenied => "ah-badge--warning",
+            // 权限归属的变更属于"可以立刻把人变成管理员"的动作，值得在列表里显眼
+            AuditActionType.RolePermissionsUpdated => "ah-badge--warning",
+            AuditActionType.RolePermissionsReset => "ah-badge--warning",
             _ => string.Empty
         };
     }

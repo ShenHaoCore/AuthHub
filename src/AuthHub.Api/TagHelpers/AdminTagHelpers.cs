@@ -54,6 +54,9 @@ public sealed class DialogBodyTagHelper : AuthHubTagHelperBase
 /// 两种形态：
 ///   - 只给 <c>dismiss</c>（如只读弹窗）：按钮靠右，文案就是 dismiss；
 ///   - 同时给 <c>submit</c>：dismiss 在左、主按钮在右（<c>ah-modal-foot-end</c> 里）。
+///
+/// 可选的 <c>secondary</c> + <c>secondary-handler</c> 再加一个**次级提交按钮**，
+/// 它提交到同一个表单的另一个 handler（典型用法：「保存」旁边的「恢复默认」）。
 /// </summary>
 [HtmlTargetElement("ah-dialog-foot", TagStructure = TagStructure.WithoutEndTag)]
 public sealed class DialogFootTagHelper : AuthHubTagHelperBase
@@ -65,6 +68,20 @@ public sealed class DialogFootTagHelper : AuthHubTagHelperBase
     /// <summary>主按钮（<c>type="submit"</c>）的文案。留空表示这个弹窗没有提交动作。</summary>
     [HtmlAttributeName("submit")]
     public string? Submit { get; set; }
+
+    /// <summary>
+    /// 可选的次级提交按钮文案。必须与 <see cref="SecondaryHandler"/> 同时给，否则不渲染。
+    /// </summary>
+    [HtmlAttributeName("secondary")]
+    public string? Secondary { get; set; }
+
+    /// <summary>
+    /// 次级提交按钮对应的 Razor Pages 处理器名（如 <c>resetPermissions</c>，对应
+    /// <c>OnPostResetPermissionsAsync</c>）。渲染成 <c>formaction="?handler=…"</c>：
+    /// 相对当前文档地址解析，因此仍落在本页，且**沿用同一个表单** —— 防伪令牌不会丢。
+    /// </summary>
+    [HtmlAttributeName("secondary-handler")]
+    public string? SecondaryHandler { get; set; }
 
     public override void Process(TagHelperContext context, TagHelperOutput output)
     {
@@ -82,6 +99,17 @@ public sealed class DialogFootTagHelper : AuthHubTagHelperBase
 
             var end = new TagBuilder("div");
             end.AddCssClass("ah-modal-foot-end");
+
+            // 次级提交排在主按钮左边：破坏性/回退性的动作不该长在"确认"的右侧
+            if (!string.IsNullOrWhiteSpace(Secondary) && !string.IsNullOrWhiteSpace(SecondaryHandler))
+            {
+                end.InnerHtml.AppendHtml(Button(
+                    "submit",
+                    "ah-btn",
+                    Secondary!,
+                    ("formaction", $"?handler={SecondaryHandler}")));
+            }
+
             end.InnerHtml.AppendHtml(Button(
                 "submit",
                 "ah-btn ah-btn--primary",
