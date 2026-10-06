@@ -1,6 +1,7 @@
 using AuthHub.Api.Middleware;
 using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
+using AuthHub.Infrastructure.Configuration;
 using AuthHub.Infrastructure.Data;
 using AuthHub.Infrastructure.Data.Seed;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,57 @@ internal static class WebApplicationExtensions
     {
         _ = app.Services.GetRequiredService<IOptions<RolePermissionOptions>>().Value;
         return app;
+    }
+
+    /// <summary>
+    /// 环境一致性护栏：确认这份配置与它所在的环境自洽（判定规则见
+    /// <see cref="EnvironmentGuard"/>）。
+    ///
+    /// 安排在这里的两个理由：
+    /// <list type="number">
+    /// <item>在数据库初始化**之前** —— 环境串用最典型的表现就是"连上了不该连的库"，
+    /// 必须在任何连接动作发生前拦下来；</item>
+    /// <item>在配置自检**之后** —— 权限配置写错属于"同一个环境的配置本身有问题"，
+    /// 与环境无关，先报它更接近问题的边界。</item>
+    /// </list>
+    ///
+    /// Fail 项直接抛异常让进程起不来：这些取值在部署环境里没有"凑合能跑"的可能，
+    /// 放它起来只会换来一个更难定位的故障。Warn 项写日志 —— 它们可能是正当的部署形态
+    /// （TLS 在网关卸载、数据库就在本机），所以只要求"被看见"。
+    /// </summary>
+    public static WebApplication ValidateAuthHubEnvironment(this WebApplication app)
+    {
+        var findings = EnvironmentGuard.Evaluate(app.Configuration, app.Environment.EnvironmentName);
+        if (findings.Count == 0)
+        {
+            return app;
+        }
+
+        foreach (var warning in findings.Where(finding => finding.Severity == GuardSeverity.Warning))
+        {
+            app.Logger.LogWarning(
+                "环境一致性警告 | {ConfigKey} | {Message}",
+                warning.Key,
+                warning.Message);
+        }
+
+        var failures = findings
+            .Where(finding => finding.Severity == GuardSeverity.Failure)
+            .ToList();
+
+        if (failures.Count == 0)
+        {
+            return app;
+        }
+
+        var detail = string.Join(
+            System.Environment.NewLine,
+            failures.Select(finding => $"  · {finding.Key}{System.Environment.NewLine}    {finding.Message}"));
+
+        throw new InvalidOperationException(
+            $"环境={app.Environment.EnvironmentName} 的配置自检未通过，已阻止启动：" +
+            $"{System.Environment.NewLine}{detail}{System.Environment.NewLine}" +
+            "若这些取值确实是有意为之，把 AuthHub:Security:GuardMode 设为 Warn（降级为日志）或 Off（跳过检查）。");
     }
 
     /// <summary>

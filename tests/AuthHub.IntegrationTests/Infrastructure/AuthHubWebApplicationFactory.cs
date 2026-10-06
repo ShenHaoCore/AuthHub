@@ -17,9 +17,18 @@ namespace AuthHub.IntegrationTests.Infrastructure;
 public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _databasePath;
+    private readonly string _environment;
 
-    public AuthHubWebApplicationFactory(IReadOnlyDictionary<string, string>? overrides = null)
+    /// <param name="overrides">在基线之上覆盖的环境变量。</param>
+    /// <param name="environment">
+    /// 宿主环境名。默认 <c>Testing</c> —— 启动期的环境护栏刻意豁免它（夹具的配置本来就是
+    /// "不该拿去部署"的样子）。需要验证护栏本身时才传 <c>Production</c> 之类的值。
+    /// </param>
+    public AuthHubWebApplicationFactory(
+        IReadOnlyDictionary<string, string>? overrides = null,
+        string environment = "Testing")
     {
+        _environment = environment;
         _databasePath = Path.Combine(Path.GetTempPath(), $"authhub-it-{Guid.NewGuid():N}.db");
 
         var settings = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -66,7 +75,7 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(_environment);
     }
 
     protected override void Dispose(bool disposing)

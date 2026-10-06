@@ -20,8 +20,19 @@ internal static class PersistenceExtensions
         IConfiguration configuration)
     {
         var provider = configuration["Database:Provider"] ?? DatabaseProviders.SqlServer;
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("缺少连接字符串 ConnectionStrings:DefaultConnection。");
+
+        // 用 IsNullOrWhiteSpace 而不是 `?? throw`：配置项存在但为空串时 GetConnectionString
+        // 返回的是 ""，`??` 放它过去，于是 UseSqlServer("") 要等到第一次真正连接才炸 ——
+        // 那时错误信息与"少配了连接串"已经看不出关系了。
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "缺少数据库连接串。三种提供方式任选一种：" +
+                "环境变量 ConnectionStrings__DefaultConnection、" +
+                "appsettings.{环境}.json 里的 ConnectionStrings:DefaultConnection、" +
+                "或本机私有的 appsettings.Local.json（模板见 appsettings.Local.json.example）。");
+        }
 
         services.AddDbContext<AuthHubDbContext>(options =>
         {

@@ -17,6 +17,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 - [技术栈](#技术栈)
 - [架构](#架构)
 - [快速开始](#快速开始)
+- [环境配置](#环境配置)
 - [种子数据](#种子数据)
 - [端点清单](#端点清单)
 - [管理后台（UI）](#管理后台ui)
@@ -66,7 +67,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 106 项、集成测试 105 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 146 项、集成测试 109 项 |
 
 ---
 
@@ -81,19 +82,21 @@ AuthHub.slnx
 │   │                                        角色权限覆盖的读写端口（IRolePermissionOverrideStore /
 │   │                                        IRolePermissionAdminService）、
 │   │                                        MFA 下发通道（ITwoFactorChannel + 两个实现）
-│   ├── AuthHub.Infrastructure/  30 个文件   EF Core、迁移、OpenIddict 适配、各类实现
-│   │                                        （含三层叠加的 LayeredRolePermissionMap、
-│   │                                        反代信任范围解析 ProxyTrustParser）
-│   └── AuthHub.Api/             49 个 .cs + 11 个 .cshtml + 5 个静态资源
+│   ├── AuthHub.Infrastructure/  32 个文件   EF Core、迁移、OpenIddict 适配、各类实现
+│   │                                        （三层叠加的 LayeredRolePermissionMap、
+│   │                                        反代信任范围解析 ProxyTrustParser、
+│   │                                        环境护栏与配置装配 EnvironmentGuard /
+│   │                                        LocalSettingsConfiguration）
+│   └── AuthHub.Api/             49 个 .cs + 11 个 .cshtml + 4 个 appsettings + 5 个静态资源
 │                                            控制器、协议页、管理后台（Razor Pages）、
 │                                            视图 TagHelper 组件（TagHelpers/）、
 │                                            中间件、服务注册与管道（Extensions/）、
 │                                            Program.cs（只保留装配清单）、wwwroot
 ├── tests/
-│   ├── AuthHub.UnitTests/        8 个文件   领域规则、Result、校验器、Option 校验器、AccountService（Moq）、
+│   ├── AuthHub.UnitTests/        10 个文件  领域规则、Result、校验器、Option 校验器、AccountService（Moq）、
 │   │                                        权限映射三层的叠加语义（用 Fake 覆盖存储，不碰数据库）、
-│   │                                        反代信任范围解析与种子护栏（纯函数，可直接单测）
-│   └── AuthHub.IntegrationTests/ 14 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 部署安全（密钥环与反代）/ 管理后台
+│   │                                        反代信任范围解析 / 种子护栏 / 环境护栏 / 本机覆盖文件的位置约束
+│   └── AuthHub.IntegrationTests/ 15 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 部署安全（密钥环与反代）/ 环境护栏 / 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
@@ -206,6 +209,105 @@ dotnet run --project src/AuthHub.Api
 
 SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 SQL Server 迁移），
 因此不需要为 SQLite 另维护一套迁移文件。**SQLite 仅用于开发与集成测试，不要上生产。**
+
+---
+
+## 环境配置
+
+### 四个来源，优先级由低到高
+
+| # | 来源 | 放什么 | 入库 |
+|---|------|--------|------|
+| 1 | `appsettings.json` | **所有环境共用**的默认值 | ✅ |
+| 2 | `appsettings.{环境}.json` | 该环境特有的取值 | Development / Production 都入库 |
+| 3 | `appsettings.Local.json` | **本机私有**覆盖（另一台数据库、另一个证书路径） | ❌ 只有 `.example` 模板入库 |
+| 4 | 环境变量 / 命令行参数 | 部署平台注入的连接串、口令、证书 | — |
+
+本机文件刻意排在**第 3 位**：晚于入库的配置文件（否则本机覆盖没有意义），早于环境变量
+（部署平台注入的配置必须是最终裁决者）。反过来的话，「容器里明明设了环境变量却不生效」
+会变成最难排查的一类问题 —— 线索藏在一个可能被遗忘的本地文件里。
+
+**为什么生产配置也入库**：它让「生产该长什么样」有唯一可 review、可被 CI 校验的依据，
+不必去翻部署文档或凭记忆。代价是**绝不能往里写任何口令** —— 写进去即使后来删掉，
+它也还在 git 历史里，这类事故没法回滚。
+
+### 三份文件的分工
+
+| 文件 | 定位 | 大致内容 |
+|------|------|---------|
+| `appsettings.json` | 所有环境的公共默认 | 安全默认（`RequireHttps=true`）、日志模板与降噪、限流基线、角色权限出厂基线。**不表达任何单个环境的意图**。它的连接串是一个**刻意留的假地址**（解析不了的主机名 + `CHANGE_ME` 占位符）：真值必须由部署平台注入，留一个看起来能用的默认值反而危险。 |
+| `appsettings.Development.json` | 本机开发 | 本机数据库、`localhost` 的 Issuer、开着文档与密码流程、跑种子与启动迁移。 |
+| `appsettings.Production.json` | 生产 | 关文档、关密码流程、关种子与自动迁移、CORS 骨架、日志级别。**不含任何凭据**。 |
+
+一个反例值得记住：`AuthHub:Features:EnableApiDocs` 的默认值**需要随环境变**（开发开、
+其余关），所以它的默认值留在代码里（`Program.cs` 的 `GetValue` 第二个参数），**不**在
+`appsettings.json` 里写 `false`。配置里的键一旦存在，代码里的默认值就永远不会生效 ——
+那样就变成了「两份文件必须同时改才不会出错」，而这正是最容易被改崩的一种结构。
+
+### 本机私有覆盖
+
+```bash
+cp src/AuthHub.Api/appsettings.Local.json.example src/AuthHub.Api/appsettings.Local.json
+# 再改你要覆盖的那几项，其余整段删掉 —— 它按路径覆盖，没写的项继续沿用上层取值
+```
+
+模板本身是自解释文档（每个键都写了什么场景下才需要它）。文件同时列进了 `.gitignore`
+与 `.dockerignore`；后者尤其不能漏 —— 构建机上那份 `Local.json` 会被 `COPY` 进镜像，
+进而盖掉容器里由环境变量注入的生产配置。
+
+### 启动期环境护栏
+
+环境串用（开发配置被带进生产、生产没改占位符、受保护环境却开着接口文档）的后果几乎都是
+**静默**的：连接串指向本机实例时表现为「启动很慢然后超时」，看不出是连错了地方。而这些都是
+「看一眼配置就能确认」的事，所以放到启动期一次性问清楚。
+
+| 检查 | 判据 | 严重度 |
+|------|------|--------|
+| 连接串是本机专用写法 | Server 是 `(local)` / `(localdb)` / `.` | **Fail** |
+| 连接串还是占位符 | 含 `CHANGE_ME` | **Fail** |
+| Issuer 为空或仍是模板 | 空字符串、或含 `example.com` | **Fail** |
+| 接口文档被打开 | `Features:EnableApiDocs=true` | **Fail** |
+| 连接串指向 loopback | `localhost` / `127.0.0.1` / `::1` | Warn |
+| 传输层放宽 | `Security:RequireHttps=false` | Warn |
+| 密码流程被打开 | `Features:EnablePasswordFlow=true` | Warn |
+| 用 SQLite | `Database:Provider=Sqlite` | Warn |
+
+Fail 与 Warn 的分界是**「在部署环境里是否必然不成立」**：`(local)` 走共享内存、`(localdb)`
+是 LocalDB 实例，离开本机进程就不可达，没有任何凑合能跑的可能；而 `localhost` 在单机部署、
+`RequireHttps=false` 在网关卸载 TLS 时都是**正当形态** —— 把它们判成 Fail 只会把正常部署
+挡在门外，然后护栏被人直接关掉。
+
+**只检查受保护环境**，判据是「不是 Development、也不是 Testing」而不是「是 Production」：
+自定义的环境名（Staging、PreProd）因此天然也被保护。漏保护的代价是某个环境悄悄跑着开发
+配置，多保护的代价只是多一次启动失败 —— 两者不对称，所以往严的一边倒。`Testing` 必须豁免：
+集成测试夹具的配置（SQLite 临时库、明文演示口令、`RequireHttps=false`）就是「不该拿去部署」
+的样子，检查它会全线误伤。
+
+豁免开关 `AuthHub:Security:GuardMode` = `Strict`（默认）/ `Warn`（全部降级成日志）/ `Off`。
+缺失或写错都按 `Strict` —— 出错方向必须是查得更严，否则一个拼写错误就成了安静的绕过开关，
+而「写错了」恰恰是最常见的状态。
+
+判定逻辑是纯函数（`Infrastructure/Configuration/EnvironmentGuard.cs`），
+规则表由单元测试逐条钉住；「它确实被接进了启动序列」由集成测试钉住 ——
+一个写了检查却没人调用的护栏，与完全没有护栏在行为上是无法区分的。
+
+### EF 设计时工具的环境
+
+`dotnet ef` 的连接串来源与运行时同构：`AUTHHUB_CONNECTION` 环境变量 →
+`appsettings.{ASPNETCORE_ENVIRONMENT}.json` → `appsettings.json`，
+读的是**启动项目**（`src/AuthHub.Api`）的那份文件。
+
+它**刻意不提供任何本机默认值**。以前这里硬编码了一个本机连接串，后果是那个值会跟着代码走到
+任何机器上：在 CI 或生产机器上执行 `dotnet ef` 时，命令会安静地连**本机**实例 —— 要么失败得
+莫名其妙，要么更糟：那台机器上恰好有个同名库，于是结构被改在了一个完全无关的数据库上。
+
+```bash
+# 用 Development 的配置（默认）
+dotnet ef migrations add Xxx --project src/AuthHub.Infrastructure --startup-project src/AuthHub.Api
+
+# 临时指向别处
+AUTHHUB_CONNECTION="Server=...;Database=...;" dotnet ef database update --project src/AuthHub.Infrastructure
+```
 
 ---
 
@@ -497,17 +599,17 @@ partial 写错模型属性要等运行期才炸。
 # 全解决方案（编译须 0 警告 0 错误）
 dotnet build AuthHub.slnx
 
-# 单元测试：106 项
+# 单元测试：146 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：105 项
+# 集成测试：109 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
-| `AuthHub.UnitTests` | 106 | 角色-权限映射**三级叠加语义**（出厂默认 / 配置基线 / 数据库覆盖各自生效、**覆盖行内空数组必须收回全部而不是回落配置**、`IsCustomized` 判定、`Invalidate()` 后确实重读、快照确实被缓存）、**反代信任范围解析**（IPv4/IPv6 CIDR、裸 IP 与前缀超界被拒且消息带原值、空白项跳过、`Describe` 必须渲染成 CIDR 而不是类型名）、**种子护栏**（四种组合，含"生产 + 缺二次确认必须拒绝"）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
-| `AuthHub.IntegrationTests` | 105 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**部署安全**（密钥环真的落到配置目录、**两个实例共享目录能互相解密**、非法网段让进程起不来且消息带原值、TrustAnyProxy 不影响正常服务）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
+| `AuthHub.UnitTests` | 146 | 角色-权限映射**三级叠加语义**（出厂默认 / 配置基线 / 数据库覆盖各自生效、**覆盖行内空数组必须收回全部而不是回落配置**、`IsCustomized` 判定、`Invalidate()` 后确实重读、快照确实被缓存）、**反代信任范围解析**（IPv4/IPv6 CIDR、裸 IP 与前缀超界被拒且消息带原值、空白项跳过、`Describe` 必须渲染成 CIDR 而不是类型名）、**种子护栏**（四种组合，含"生产 + 缺二次确认必须拒绝"）、**环境护栏**（受保护环境的判定表含自定义环境名、`(local)`/`(localdb)`/`.` 判 Fail 而 `localhost`/`::1`/`tcp:localhost,1433` 只判 Warn、占位符哨兵、受保护环境用 SQLite、`GuardMode` 降级与**非法值必须回退到 Strict**）、**本机覆盖文件的插入位置**（"晚于 `{环境}.json`"与"早于环境变量"两个方向各有用例，另有一条直接断言配置源顺序 —— 只看最终取值可能是巧合）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
+| `AuthHub.IntegrationTests` | 109 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**部署安全**（密钥环真的落到配置目录、**两个实例共享目录能互相解密**、非法网段让进程起不来且消息带原值、TrustAnyProxy 不影响正常服务）、**环境护栏**（受保护环境里连接串指向本机专用地址时阻止启动、消息带出配置项路径与豁免开关；`GuardMode=Warn` 降级后服务照常提供；**`Testing` 环境必须豁免同一套规则** —— 否则整套集成测试会在加上护栏的当天集体变红）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
@@ -972,19 +1074,25 @@ SqlClient 的连接协议是按服务名解析的，同样写"本机"结果不�
 
 ### 配置（生产）
 
-生产用**环境变量**覆盖，不要把口令写进 `appsettings.json`：
+**非敏感项已经在入库的 `appsettings.Production.json` 里**（`RequireHttps`、文档开关、
+密码流程、种子与自动迁移开关、日志级别），不必在这里重复 —— 重复一次就多一处要同步的地方。
+所以下面这份清单只列**必须由部署平台注入**的东西：
 
 ```bash
 ASPNETCORE_ENVIRONMENT=Production
+
+# 必配：连接串。护栏会拒绝 (local) / (localdb) 这类本机专用写法，
+# 也会拒绝还带着 CHANGE_ME 占位符的值。
 ConnectionStrings__DefaultConnection="Server=...;Database=AuthHub;User Id=...;Password=...;Encrypt=True;"
-AuthHub__Issuer="https://authhub.example.com/"
-AuthHub__Security__RequireHttps=true
-AuthHub__Features__EnablePasswordFlow=false
-AuthHub__Features__EnableApiDocs=false
-AuthHub__Seeding__Enabled=false        # 生产不要跑种子数据
-AuthHub__Seeding__MigrateOnStartup=false # 迁移建议在发布流程里显式执行
+
+# 必配：必须是这个部署实际对外可达的地址，且结尾带 /。
+# 模板里的 authhub.example.com 是占位符 —— 留着它进程会直接起不来（护栏的 Fail 项）。
+AuthHub__Issuer="https://auth.example.com/"
+
 AuthHub__Keys__SigningCertificatePath="/run/secrets/authhub-signing.pfx"
 AuthHub__Keys__SigningCertificatePassword="..."
+
+# 仅前后端分离时需要；不配置时会收紧成 https://localhost（而不是放开）
 AuthHub__Cors__AllowedOrigins__0="https://app.example.com"
 
 # 必配（容器部署）：Data Protection 密钥环要落到挂载的卷上。
@@ -1011,6 +1119,21 @@ AuthHub__RolePermissions__UserManager__2="audit.read"   # 例：把审计只读�
 
 **签名密钥必须持久化**：`Extensions/OpenIddictKeySetup.cs` 会按 配置证书 → 开发证书 → 临时密钥 依次降级。
 临时密钥每次重启都变，会让所有已签发令牌失效、下游缓存全废 —— 生产必须走持久化证书。
+
+**这份配置在启动期会被自动检查一遍。** 受保护环境（不是 Development、也不是 Testing，
+因此 Staging / PreProd 同样算）下，以下情况**直接拒绝启动**：连接串是本机专用写法
+（`(local)` / `(localdb)` / `.`）、连接串还带 `CHANGE_ME` 占位符、`Issuer` 为空或仍是
+`example.com`、接口文档被打开。另有几项只写警告：连接串指向 loopback、`RequireHttps=false`、
+密码流程打开、用 SQLite。
+
+如果某个警告项的取值确实是有意为之（典型两种：TLS 在网关卸载所以 `RequireHttps=false`、
+数据库就在同一台机器上所以用 `localhost`），**不必关掉整个护栏**，降一级即可：
+
+```bash
+AuthHub__Security__GuardMode=Warn   # 全部降级成启动日志；Off 则完全跳过
+```
+
+完整的规则表、以及「为什么这几条判 Fail 而那几条只判 Warn」，见 [环境配置](#环境配置)。
 
 ### 容器 / 反代部署的两个隐性依赖
 
