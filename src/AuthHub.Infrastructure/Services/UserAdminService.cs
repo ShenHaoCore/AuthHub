@@ -1,11 +1,11 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Users;
 using AuthHub.Application.Interfaces;
+using AuthHub.Application.Mappings;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
 using AuthHub.Infrastructure.Data;
-using AutoMapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,20 +23,17 @@ public sealed class UserAdminService : IUserAdminService
     private readonly AuthHubDbContext _dbContext;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
-    private readonly IMapper _mapper;
     private readonly IAuditLogService _audit;
 
     public UserAdminService(
         AuthHubDbContext dbContext,
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
-        IMapper mapper,
         IAuditLogService audit)
     {
         _dbContext = dbContext;
         _userManager = userManager;
         _roleManager = roleManager;
-        _mapper = mapper;
         _audit = audit;
     }
 
@@ -84,7 +81,7 @@ public sealed class UserAdminService : IUserAdminService
         var roleLookup = await LoadRoleLookupAsync(page.Select(u => u.Id).ToArray(), cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
-        var items = page.Select(user => _mapper.Map<UserDto>(user) with
+        var items = page.Select(user => user.ToDto() with
         {
             Roles = roleLookup.TryGetValue(user.Id, out var roles) ? roles : Array.Empty<string>(),
             LockedOut = user.LockoutEnd is not null && user.LockoutEnd > now
@@ -335,7 +332,7 @@ public sealed class UserAdminService : IUserAdminService
     {
         var roles = await _userManager.GetRolesAsync(user);
 
-        return _mapper.Map<UserDto>(user) with
+        return user.ToDto() with
         {
             Roles = roles.ToArray(),
             LockedOut = await _userManager.IsLockedOutAsync(user)

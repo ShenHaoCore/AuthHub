@@ -13,9 +13,6 @@ public static class DependencyInjection
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        // DTO / Entity 映射
-        services.AddAutoMapper(assembly);
-
         // 注册程序集内全部 FluentValidation 验证器
         services.AddValidatorsFromAssembly(assembly);
 
