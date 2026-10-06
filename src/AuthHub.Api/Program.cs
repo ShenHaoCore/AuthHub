@@ -54,6 +54,10 @@ builder.Services.Replace(ServiceDescriptor.Singleton<
     IAuthorizationMiddlewareResultHandler,
     AuthHubAuthorizationResultHandler>());
 
+// 角色 → 权限归属（授权三层里的「授权策略」层）。可被配置 AuthHub:RolePermissions 覆盖，
+// 未配置的角色沿用 Domain 里的出厂默认；权限名写错在启动期就失败（见 RolePermissionOptionsValidator）。
+builder.Services.AddAuthHubRolePermissions(builder.Configuration);
+
 builder.Services.AddAuthHubRateLimiting(builder.Configuration);
 builder.Services.AddAuthHubCors(builder.Configuration);
 builder.Services.AddAuthHubWebApi(enableApiDocs);
@@ -63,6 +67,10 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
 
 var app = builder.Build();
+
+// 强制求值一次角色 → 权限映射：IOptions 是懒加载的，不主动取一次的话，
+// 挂在它上面的配置校验要等第一个用户登录才跑，配置错误就落不到启动日志里了。
+app.ValidateAuthHubStartupConfiguration();
 
 // ---------------------------------------------------------------------------
 // 4. 数据库初始化（建库 / 迁移 + 种子数据，由配置开关控制）

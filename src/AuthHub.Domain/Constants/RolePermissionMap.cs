@@ -1,49 +1,49 @@
 namespace AuthHub.Domain.Constants;
 
 /// <summary>
-/// 角色 → 权限的映射表（RBAC 的“角色权限”部分）。
-/// 纯领域逻辑，不依赖任何基础设施，便于单元测试。
+/// 内置角色的**出厂默认**「角色 → 权限」映射。
+///
+/// 它不再是运行时的唯一事实源：部署时可用配置 <c>AuthHub:RolePermissions</c> 覆盖
+/// （见 Application 层的 RolePermissionOptions 与 IRolePermissionMap 契约）。
+/// 之所以仍然保留这份默认值，有两个理由：
+///   1) 老部署的 appsettings 里没有这一段，出厂默认能让升级前后的行为逐字一致；
+///   2) 默认值用 <see cref="AuthHubConstants.Permissions"/> 常量而不是字符串字面量拼出来，
+///      将来重命名某个权限时编译器会替我们报错。
+///
+/// 另一个方向的取舍：**不**采用"配置缺失就启动失败"的做法。
+/// 那份映射一旦为空，现象是管理员自己也进不去后台 —— 一个很难第一时间联想到配置的故障。
+/// 让默认值兜底、配置只做覆盖，风险面更小；配置写错了则由启动期校验器拦住（非法权限名直接启动失败）。
 /// </summary>
 public static class RolePermissionMap
 {
-    private static readonly Dictionary<string, string[]> Map = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// 出厂默认的角色 → 权限映射。每次调用返回一份新的字典，调用方可自由改写。
+    /// 角色名比较不区分大小写（与 Identity 的角色名查找保持一致）。
+    /// </summary>
+    public static Dictionary<string, string[]> CreateDefaultRoles() => new(StringComparer.OrdinalIgnoreCase)
     {
-        [AuthHubConstants.Roles.Administrator] = new[]
-        {
+        [AuthHubConstants.Roles.Administrator] =
+        [
             AuthHubConstants.Permissions.ClientsManage,
             AuthHubConstants.Permissions.ScopesManage,
             AuthHubConstants.Permissions.UsersManage,
             AuthHubConstants.Permissions.RolesManage,
             AuthHubConstants.Permissions.TokensRevoke,
             AuthHubConstants.Permissions.AuditRead
-        },
-        [AuthHubConstants.Roles.UserManager] = new[]
-        {
+        ],
+
+        [AuthHubConstants.Roles.UserManager] =
+        [
             AuthHubConstants.Permissions.UsersManage,
             AuthHubConstants.Permissions.TokensRevoke
-        },
-        [AuthHubConstants.Roles.Auditor] = new[]
-        {
+        ],
+
+        [AuthHubConstants.Roles.Auditor] =
+        [
             AuthHubConstants.Permissions.AuditRead
-        },
-        [AuthHubConstants.Roles.User] = Array.Empty<string>()
+        ],
+
+        // 显式列出：普通用户不拥有任何管理权限
+        [AuthHubConstants.Roles.User] = []
     };
-
-    /// <summary>取得指定角色拥有的权限集合。</summary>
-    public static IEnumerable<string> GetPermissions(string roleName)
-        => Map.TryGetValue(roleName, out var permissions) ? permissions : Array.Empty<string>();
-
-    /// <summary>把一组角色展开为去重后的权限集合。</summary>
-    public static IReadOnlyCollection<string> ResolvePermissions(IEnumerable<string> roleNames)
-        => roleNames.SelectMany(GetPermissions)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-
-    /// <summary>角色是否拥有指定权限。</summary>
-    public static bool RoleHasPermission(string roleName, string permission)
-        => GetPermissions(roleName).Contains(permission, StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>该角色是否为内置角色。</summary>
-    public static bool IsBuiltInRole(string roleName)
-        => Map.ContainsKey(roleName);
 }

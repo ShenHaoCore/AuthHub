@@ -1,9 +1,11 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Account;
 using AuthHub.Application.Interfaces;
+using AuthHub.Application.Options;
 using AuthHub.Application.Services;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
+using AuthHub.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -89,6 +91,9 @@ public class AccountServiceTests
                 new PhoneTwoFactorChannel(_sms.Object)
             },
             _currentUser.Object,
+            // 角色 → 权限用**真实实现** + 出厂默认配置：规则本身由 RolePermissionMapTests 覆盖，
+            // 这里只需要一个能正常展开的角色映射，不需要把它的行为再 mock 一遍。
+            new ConfiguredRolePermissionMap(Options.Create(new RolePermissionOptions())),
             NullLogger<AccountService>.Instance);
     }
 

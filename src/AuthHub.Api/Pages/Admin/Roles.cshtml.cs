@@ -14,22 +14,29 @@ public sealed record PermissionGroup(string Title, IReadOnlyList<PermissionDescr
 /// <summary>
 /// 角色与权限。
 ///
-/// 重要前提：本项目的「角色 → 权限」是**代码内固定映射**（<c>RolePermissionMap</c>），
-/// 不是数据库配置 —— 内置角色对应的就是服务端的授权策略，运行时随意改写会带来提权风险
-/// （详见 Infrastructure/Services/RoleAdminService.cs 的类注释）。
+/// 理解本页的前提是分清授权三层，它们的可变性完全不同：
+///   1) **能力目录**（<see cref="AuthHubConstants.Permissions"/>）—— 编译期常量。
+///      新增权限点必须改代码并重新部署，因为它对应的是程序集里那道 [Authorize]。
+///   2) **策略**（<see cref="AuthHubConstants.Policies"/>）—— 同样是编译期常量，
+///      由权限点常量拼接而成，控制器 / 页面按策略名引用。
+///   3) **角色归属**（配置 AuthHub:RolePermissions）—— 本页展示的"谁拥有什么"就是它。
+///      调整归属改配置、重启即可，无需重新部署。
 ///
-/// 因此这里的权限树是**只读的可视化**：勾选框刻意 disabled，只用来回答
-/// “这个角色到底能做什么”。要调整权限，改代码里的 RolePermissionMap 即可；
-/// 页面上也把这条路径写清楚了，避免运维以为界面漏了保存按钮。
+/// 因此权限树仍是**只读可视化**：勾选框 disabled，只回答"这个角色能做什么"。
+/// 不做成可勾选，是因为一旦允许在运行时改写归属，谁能进后台谁就能把任意已有能力
+/// 发给自己 —— 配置化的意义是"改归属不用发版"，不是"绕过评审随手改"。
+/// 页面上把这两条路径都写清楚了，避免运维以为界面漏了保存按钮。
 /// </summary>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.RolesManage)]
 public class RolesModel : AdminPageModel
 {
     private readonly IRoleAdminService _roles;
+    private readonly IRolePermissionMap _rolePermissions;
 
-    public RolesModel(IRoleAdminService roles)
+    public RolesModel(IRoleAdminService roles, IRolePermissionMap rolePermissions)
     {
         _roles = roles;
+        _rolePermissions = rolePermissions;
     }
 
     [BindProperty] public string? NewRoleName { get; set; }
@@ -64,9 +71,12 @@ public class RolesModel : AdminPageModel
         return role is not null && role.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>指定角色是否内置（视图用；判据是编译期的角色常量，见 <see cref="IRolePermissionMap.IsBuiltInRole"/>）。</summary>
+    public bool IsBuiltInRole(string roleName) => _rolePermissions.IsBuiltInRole(roleName);
+
     /// <summary>权限矩阵的列（内置角色，按固定顺序）。</summary>
     public IReadOnlyList<RoleDto> BuiltInRoles => Roles
-        .Where(role => RolePermissionMap.IsBuiltInRole(role.Name))
+        .Where(role => _rolePermissions.IsBuiltInRole(role.Name))
         .OrderBy(role => RoleOrder(role.Name))
         .ToArray();
 
@@ -112,8 +122,8 @@ public class RolesModel : AdminPageModel
         }
 
         return RedirectBackWithSuccess(result.Value.IsSystemRole
-            ? $"已创建角色 {result.Value.Name}；它与内置角色同名，会自动继承 RolePermissionMap 里的权限映射。"
-            : $"已创建角色 {result.Value.Name}。自定义角色目前不绑定任何内置权限，需要在 RolePermissionMap 中补充映射后才会获得权限。");
+            ? $"已创建角色 {result.Value.Name}；它与内置角色同名，会沿用配置里的权限归属。"
+            : $"已创建角色 {result.Value.Name}。自定义角色默认不绑定任何权限，需要在配置 AuthHub:RolePermissions 里补一条映射并重启后才会获得权限。");
     }
 
     // ------------------------------------------------------------------ POST：修改说明

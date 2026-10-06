@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using AuthHub.Application.Interfaces;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -10,7 +11,8 @@ namespace AuthHub.Infrastructure.Identity;
 /// 自定义 ClaimsPrincipal 工厂：在 Identity 默认声明（nameidentifier / name / email / role）
 /// 之外，追加两类声明，让会话 Cookie 与令牌使用同一套身份：
 ///   1) <c>authhub:display_name</c> —— 用户显示名；
-///   2) <c>authhub:permission</c> —— 由角色展开出的细粒度权限（见 RolePermissionMap）。
+///   2) <c>authhub:permission</c> —— 由角色展开出的细粒度权限
+///      （见 <see cref="IRolePermissionMap"/>，数据来自配置 AuthHub:RolePermissions）。
 ///
 /// 这样 RBAC 策略既可以在 IdP 内部用 Cookie 会话判断，
 /// 也可以在下游资源服务器上仅凭令牌内的 permission 声明判断。
@@ -20,15 +22,18 @@ public sealed class ApplicationUserClaimsPrincipalFactory
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
+    private readonly IRolePermissionMap _rolePermissions;
 
     public ApplicationUserClaimsPrincipalFactory(
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
-        IOptions<IdentityOptions> optionsAccessor)
+        IOptions<IdentityOptions> optionsAccessor,
+        IRolePermissionMap rolePermissions)
         : base(userManager, roleManager, optionsAccessor)
     {
         _userManager = userManager;
         _roleManager = roleManager;
+        _rolePermissions = rolePermissions;
     }
 
     protected override async Task<ClaimsIdentity> GenerateClaimsAsync(ApplicationUser user)
@@ -41,7 +46,7 @@ public sealed class ApplicationUserClaimsPrincipalFactory
         }
 
         var roles = await _userManager.GetRolesAsync(user);
-        foreach (var permission in RolePermissionMap.ResolvePermissions(roles))
+        foreach (var permission in _rolePermissions.ResolvePermissions(roles))
         {
             identity.AddClaim(new Claim(AuthHubConstants.ClaimTypes.Permission, permission));
         }
