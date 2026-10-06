@@ -66,7 +66,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 89 项、集成测试 100 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 106 项、集成测试 105 项 |
 
 ---
 
@@ -81,17 +81,19 @@ AuthHub.slnx
 │   │                                        角色权限覆盖的读写端口（IRolePermissionOverrideStore /
 │   │                                        IRolePermissionAdminService）、
 │   │                                        MFA 下发通道（ITwoFactorChannel + 两个实现）
-│   ├── AuthHub.Infrastructure/  29 个文件   EF Core、迁移、OpenIddict 适配、各类实现
-│   │                                        （含三层叠加的 LayeredRolePermissionMap）
-│   └── AuthHub.Api/             47 个 .cs + 11 个 .cshtml + 5 个静态资源
+│   ├── AuthHub.Infrastructure/  30 个文件   EF Core、迁移、OpenIddict 适配、各类实现
+│   │                                        （含三层叠加的 LayeredRolePermissionMap、
+│   │                                        反代信任范围解析 ProxyTrustParser）
+│   └── AuthHub.Api/             49 个 .cs + 11 个 .cshtml + 5 个静态资源
 │                                            控制器、协议页、管理后台（Razor Pages）、
 │                                            视图 TagHelper 组件（TagHelpers/）、
 │                                            中间件、服务注册与管道（Extensions/）、
 │                                            Program.cs（只保留装配清单）、wwwroot
 ├── tests/
-│   ├── AuthHub.UnitTests/        6 个文件   领域规则、Result、校验器、Option 校验器、AccountService（Moq）、
-│   │                                        权限映射三层的叠加语义（用 Fake 覆盖存储，不碰数据库）
-│   └── AuthHub.IntegrationTests/ 13 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 管理后台
+│   ├── AuthHub.UnitTests/        8 个文件   领域规则、Result、校验器、Option 校验器、AccountService（Moq）、
+│   │                                        权限映射三层的叠加语义（用 Fake 覆盖存储，不碰数据库）、
+│   │                                        反代信任范围解析与种子护栏（纯函数，可直接单测）
+│   └── AuthHub.IntegrationTests/ 14 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 部署安全（密钥环与反代）/ 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
@@ -477,17 +479,17 @@ partial 写错模型属性要等运行期才炸。
 # 全解决方案（编译须 0 警告 0 错误）
 dotnet build AuthHub.slnx
 
-# 单元测试：89 项
+# 单元测试：106 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：100 项
+# 集成测试：105 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
-| `AuthHub.UnitTests` | 89 | 角色-权限映射**三级叠加语义**（出厂默认 / 配置基线 / 数据库覆盖各自生效、**覆盖行内空数组必须收回全部而不是回落配置**、`IsCustomized` 判定、`Invalidate()` 后确实重读、快照确实被缓存）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
-| `AuthHub.IntegrationTests` | 100 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
+| `AuthHub.UnitTests` | 106 | 角色-权限映射**三级叠加语义**（出厂默认 / 配置基线 / 数据库覆盖各自生效、**覆盖行内空数组必须收回全部而不是回落配置**、`IsCustomized` 判定、`Invalidate()` 后确实重读、快照确实被缓存）、**反代信任范围解析**（IPv4/IPv6 CIDR、裸 IP 与前缀超界被拒且消息带原值、空白项跳过、`Describe` 必须渲染成 CIDR 而不是类型名）、**种子护栏**（四种组合，含"生产 + 缺二次确认必须拒绝"）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
+| `AuthHub.IntegrationTests` | 105 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**部署安全**（密钥环真的落到配置目录、**两个实例共享目录能互相解密**、非法网段让进程起不来且消息带原值、TrustAnyProxy 不影响正常服务）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
@@ -938,6 +940,18 @@ AuthHub__Keys__SigningCertificatePath="/run/secrets/authhub-signing.pfx"
 AuthHub__Keys__SigningCertificatePassword="..."
 AuthHub__Cors__AllowedOrigins__0="https://app.example.com"
 
+# 必配（容器部署）：Data Protection 密钥环要落到挂载的卷上。
+# 不配的话密钥环在镜像层里，容器一重建就换一套：所有人被登出、
+# 后台表单提交 400、MFA 流程中断，而日志里只有一行"默认位置"。
+AuthHub__Security__DataProtectionKeysPath="/var/authhub/keys"
+
+# 反代部署必配：告诉它信任谁。.NET 默认**只信任 loopback**，
+# 反代在另一个容器 / 另一台机器时，X-Forwarded-* 会被静默丢弃。
+AuthHub__Security__TrustForwardedHeaders=true
+AuthHub__Security__KnownNetworks__0="172.16.0.0/12"   # CIDR，必须写前缀长度
+AuthHub__Security__KnownProxies__0="10.0.0.5"         # 或直接列网关地址（可同时用）
+# AuthHub__Security__TrustAnyProxy=true               # 上游地址不固定时的出口，见下
+
 # 可选：部署期基线，覆盖角色→权限映射（不写则用代码出厂默认，见「权限模型」）。
 # 只列要改的角色即可；权限名写错会让进程起不来（启动期校验）。
 # 注意：这只是**基线**，后台在 /admin/roles 上的勾选（落 RolePermissionOverrides 表）
@@ -949,8 +963,41 @@ AuthHub__RolePermissions__UserManager__2="audit.read"   # 例：把审计只读�
 ```
 
 **签名密钥必须持久化**：`Extensions/OpenIddictKeySetup.cs` 会按 配置证书 → 开发证书 → 临时密钥 依次降级。
-临时密钥每次重启都变，会让所有已签发令牌失效、下游缓存全废 —— 生产必须走持久化证书
-（或挂载 Data Protection 密钥环）。
+临时密钥每次重启都变，会让所有已签发令牌失效、下游缓存全废 —— 生产必须走持久化证书。
+
+### 容器 / 反代部署的两个隐性依赖
+
+这两样东西**配错了不会让进程起不来**，只会在运行期以别的面目出现，因此都在启动日志里显式打出来。
+
+**① Data Protection 密钥环**（`AuthHub:Security:DataProtectionKeysPath`）
+
+它保护的不是"记住我"那类小玩意，而是三样东西：**会话 Cookie 的加密票、防伪令牌、MFA 票据**。
+默认位置是 `$HOME/.aspnet/DataProtection-Keys`，而容器里这个位置通常不在卷上 ——
+容器一重建密钥环就换一套，表现为「所有在线用户被登出 + 后台表单提交 400 + MFA 流程中断」。
+
+- **必须挂卷**，并且**多实例 / 滚动更新必须共享同一个目录**，否则 A 实例发的 Cookie 到 B 实例解不开。
+- 目录不可写（只读卷、错误的挂载）会**在启动期直接抛**，不会拖到第一次签发 Cookie。
+- 密钥环的应用名被固定成常量 `AuthHub`（`DataProtectionExtensions.ApplicationName`）：
+  默认隔离键由**内容根路径**派生，两个实例从不同路径启动就认不到同一个环，共享目录也救不回来。
+  **这个名字不该再改** —— 改了等于把所有已发 Cookie 作废一次。
+
+**② 反向代理信任范围**（`AuthHub:Security:TrustForwardedHeaders` + `KnownProxies` / `KnownNetworks`）
+
+`ForwardedHeadersOptions` 的信任范围**默认只含 loopback**（`127.0.0.1/8` 与 `::1`）。
+把 Nginx 放在另一个容器或另一台机器上时，它发来的 `X-Forwarded-For` / `X-Forwarded-Proto`
+会被 ASP.NET Core **静默丢弃** —— 不报错、不打日志。症状是审计日志里的来源 IP 全部记成网关地址，
+以及 `RequireHttps` 下 `Request.IsHttps` 恒为 false 带来的重定向异常。
+
+| 配置形态 | 效果 |
+|----------|------|
+| `KnownNetworks` / `KnownProxies` | 显式列出网段 / 网关地址（推荐）。**配了任意一项就整体替换默认值**，而不是叠加 —— 追加语义会让"我明明只信任 172.16/12"与"其实还信任着 loopback"并存，读配置时看不出全貌 |
+| `TrustAnyProxy=true` | 上游地址不固定时（容器编排常见）的显式出口，等同信任任何直连来源。会打一条警告：安全性此时完全由网络层保证 |
+| 都不配 | 沿用 loopback 默认值，并**打一条警告**说明这意味着什么 |
+
+- 网段必须写成 CIDR 且**写出前缀长度**，裸 IP 会被拒绝并让进程起不来 ——
+  替用户把 `10.0.0.5` 猜成 `/32` 看着贴心，但同一个人手滑写成 `10.0.0.0` 时该猜 `/32` 还是 `/8` 就没有依据了，
+  而两者授权范围相差 1600 万个地址。
+- 解析失败**不降级**成"空信任范围继续跑"：那会退化成"转发头全被忽略"这个最难排查的症状。
 
 ### 迁移
 
@@ -971,11 +1018,18 @@ dotnet ef database update -p src/AuthHub.Infrastructure -s src/AuthHub.Api
 ```bash
 docker build -t authhub:local .
 docker run --rm -p 8080:8080 \
+  -v authhub-keys:/var/authhub/keys \
   -e ConnectionStrings__DefaultConnection="..." \
   -e AuthHub__Issuer="http://localhost:8080/" \
   -e AuthHub__Security__RequireHttps=false \
+  -e AuthHub__Security__DataProtectionKeysPath="/var/authhub/keys" \
   authhub:local
 ```
+
+> **`-v authhub-keys:...` 不是可选项**：容器内以非 root 的 `app` 用户运行，Data Protection
+> 密钥环默认落在镜像层里。不挂卷的话，`docker run` 换一次容器就等于换了一套密钥 ——
+> 所有会话 Cookie、防伪令牌与 MFA 票据一起失效。多副本部署时把同一个卷（或等价的共享存储）
+> 挂给所有副本，见上文「容器 / 反代部署的两个隐性依赖」。
 
 ---
 
@@ -1015,4 +1069,9 @@ docker run --rm -p 8080:8080 \
 - [ ] **MFA 绑定的二维码**：目前「我的账户」只给出密钥与 `otpauth://` URI，让用户在 App 里手动输入。
       加二维码需要引绘图依赖（如 QRCoder）或在前端内置一个 QR 编码器，
       与当前"零外部依赖"的取舍冲突，因此暂缓。
+- [ ] **升级到 .NET 10（LTS）**：**net9.0 的支持在 2026-11-10 结束**，之后不再有安全补丁，
+      而本项目是一个认证中心，跑在无补丁的运行时上风险偏高。目标版本 .NET 10（LTS，支持到 2028-11）。
+      需要一并核对：`Directory.Build.props` 的 TFM 与 LangVersion、全部 `Microsoft.*` 包、
+      `Dockerfile` 的两个基础镜像标签、以及 OpenIddict 5.8 在 net10.0 上的兼容性
+      （必要时先升到 6.x —— 那一版还能顺手解决下面「禁用 PKCE 的 `plain` 模式」）。
 - [ ] **密钥轮换流程**：证书轮换需要在 JWKS 中短暂并存新旧公钥，目前未实现。

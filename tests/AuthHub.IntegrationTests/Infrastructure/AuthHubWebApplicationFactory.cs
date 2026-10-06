@@ -34,6 +34,10 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
             ["AuthHub__Seeding__MigrateOnStartup"] = "true",
             ["AuthHub__RateLimiting__TokenRequestsPerMinute"] = "1000",
             ["AuthHub__RateLimiting__LoginRequestsPerMinute"] = "1000",
+            // 显式置空：环境变量是进程级的，而"密钥环目录"这类配置只有个别用例会设。
+            // 不重置的话，那个值会残留下来影响后续所有工厂 —— 测试之间就开始互相污染了。
+            ["AuthHub__Security__DataProtectionKeysPath"] = "",
+            ["AuthHub__Security__TrustForwardedHeaders"] = "false",
             ["AuthHub__Seed__AdminPassword"] = "Admin@12345",
             ["AuthHub__Seed__DemoPassword"] = "Alice@12345",
             ["AuthHub__Seed__WebClientSecret"] = "web-secret",

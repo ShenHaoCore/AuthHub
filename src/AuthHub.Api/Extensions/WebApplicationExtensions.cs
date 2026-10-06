@@ -3,7 +3,6 @@ using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
 using AuthHub.Infrastructure.Data;
 using AuthHub.Infrastructure.Data.Seed;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -92,7 +91,9 @@ internal static class WebApplicationExtensions
 
         if (seedingEnabled)
         {
-            await AuthHubSeeder.SeedAsync(services, app.Configuration);
+            // 把"是不是生产"传进去：播种内容含演示账号与源码里公开的演示密钥，
+            // 生产环境必须由 AuthHub:Seeding:AllowInProduction=true 再确认一次（见 AuthHubSeeder.Decide）。
+            await AuthHubSeeder.SeedAsync(services, app.Configuration, app.Environment.IsProduction());
         }
     }
 
@@ -105,14 +106,10 @@ internal static class WebApplicationExtensions
         app.UseMiddleware<ExceptionHandlingMiddleware>();
         app.UseMiddleware<SecurityHeadersMiddleware>();
 
-        if (app.Configuration.GetValue("AuthHub:Security:TrustForwardedHeaders", false))
-        {
-            // 部署在 Nginx / 网关之后时启用，保证 RemoteIpAddress 与 Scheme 正确
-            app.UseForwardedHeaders(new ForwardedHeadersOptions
-            {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-            });
-        }
+        // 部署在 Nginx / 网关之后时启用，保证 RemoteIpAddress 与 Scheme 正确。
+        // 信任范围的配置与"只信任了什么"的日志都在 ForwardedHeadersExtensions 里 ——
+        // 默认只信任 loopback 这件事必须被说出来，否则转发头会被静默忽略。
+        app.UseAuthHubForwardedHeaders();
 
         if (requireHttps)
         {
