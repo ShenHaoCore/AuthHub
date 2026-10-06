@@ -13,14 +13,10 @@ using AuthHub.Infrastructure.Data.Seed;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using OpenIddict.Abstractions;
-using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
 using Serilog;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -396,7 +392,16 @@ if (requireHttps)
 // 位置刻意放在限流与请求日志之前：静态资源是终端处理、不经过认证，
 // 先命中它们就不会在每次页面加载时去消耗登录 / 令牌接口的限流额度，
 // 也不会把请求日志刷满 .css/.js 的噪声。
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    // 默认情况下 wwwroot 的资源响应不带 Cache-Control，浏览器于是按启发式规则
+    // 自行决定缓存期：改了 authhub.js 之后按 F5 也拿不到新文件，必须 Ctrl+F5，
+    // 页面上看起来就像"修复没生效"。这里显式要求每次重新验证 ——
+    // 内容没变回 304（开销极小），变了立刻拿到新版本。
+    // 与视图侧的 asp-append-version（让 URL 随内容变化）互为双保险。
+    OnPrepareResponse = staticFile =>
+        staticFile.Context.Response.Headers.CacheControl = "no-cache"
+});
 
 app.UseSerilogRequestLogging();
 

@@ -47,8 +47,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>@title · AuthHub</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="stylesheet" href="/css/authhub.css" />
+    @* 静态资源一律带内容指纹（asp-append-version 会追加 ?v=<内容哈希>）。
+       没有它，改了 authhub.js 之后浏览器会继续用启发式缓存里的旧副本 ——
+       页面上表现为"修复没生效"，用户按 F5 也刷不出来，必须 Ctrl+F5。
+       URL 随内容变，缓存就无从复用。 *@
+    <link rel="icon" type="image/svg+xml" href="~/favicon.svg" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/authhub.css" asp-append-version="true" />
     <noscript>
         @* 渐进增强的兜底：脚本被禁用（或被 CSP 意外拦下）时，
            页内标签条点了不会有反应，且带 hidden 的面板也无法再被切换出来 ——
@@ -191,6 +195,6 @@
         </div>
     </div>
 
-    <script src="/js/authhub.js"></script>
+    <script src="~/js/authhub.js" asp-append-version="true"></script>
 </body>
 </html>

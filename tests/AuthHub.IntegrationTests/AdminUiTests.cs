@@ -349,6 +349,44 @@ public class AdminUiTests
         response.Content.Headers.ContentType?.MediaType.Should().Be(expectedContentType);
     }
 
+    /// <summary>
+    /// 静态资源必须显式要求重新验证。
+    ///
+    /// 响应里没有 Cache-Control 时，浏览器按启发式规则自己决定缓存期（RFC 9111 建议取
+    /// 距 Last-Modified 的 10%）。于是改了 authhub.js 之后按 F5 也可能拿不到新文件 ——
+    /// 用户看到的是"修复没生效"，非得 Ctrl+F5 才行。这条用例把它钉住。
+    /// </summary>
+    [Fact]
+    public async Task Static_assets_should_require_revalidation()
+    {
+        using var session = NewSession();
+
+        var response = await session.GetAsync("/js/authhub.js");
+
+        response.Headers.CacheControl?.NoCache.Should().BeTrue(
+            because: "缺了它，改完的 JS 会被浏览器缓存挡住，用户按 F5 也看不到");
+    }
+
+    /// <summary>
+    /// 页面引用静态资源时要带内容指纹（<c>asp-append-version</c> 追加的 <c>?v=</c>）。
+    ///
+    /// 与上一条互补：no-cache 让浏览器每次回来验证，指纹则把"内容变了"直接体现到 URL 上 ——
+    /// 连验证都不必，旧副本不可能被复用。
+    /// </summary>
+    [Fact]
+    public async Task Static_assets_should_be_referenced_with_a_content_fingerprint()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/profile"));
+
+        html.Should().Contain("src=\"/js/authhub.js?v=",
+            because: "脚本 URL 必须随内容变化，否则浏览器会继续用缓存里的旧版本");
+        html.Should().Contain("href=\"/css/authhub.css?v=", because: "样式表同理");
+        html.Should().Contain("href=\"/favicon.svg?v=", because: "图标同理");
+    }
+
     [Fact]
     public async Task Protocol_page_and_admin_page_should_share_the_same_design_tokens()
     {
