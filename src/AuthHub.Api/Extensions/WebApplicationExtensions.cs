@@ -1,9 +1,11 @@
 using AuthHub.Api.Middleware;
 using AuthHub.Application.Interfaces;
+using AuthHub.Application.Options;
 using AuthHub.Infrastructure.Data;
 using AuthHub.Infrastructure.Data.Seed;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace AuthHub.Api.Extensions;
@@ -19,13 +21,38 @@ internal static class WebApplicationExtensions
     /// 启动期自检：**强制求值**一次权限归属配置，让写错的配置在进程正式提供服务之前就失败。
     ///
     /// 为什么要主动求值：Options 是懒加载的，挂在它校验链上的 RolePermissionOptionsValidator
-    /// 要等到第一次解析 <see cref="IRolePermissionMap"/> 才会执行 —— 而那次调用发生在第一个用户登录时。
-    /// 于是"配置写错"的症状会变成"某个角色的菜单少了"，排查方向很难第一时间指回配置文件。
-    /// 在这里求值一次，错误就落在启动日志的第一屏。
+    /// 要等到有人第一次取 <c>IOptions&lt;RolePermissionOptions&gt;.Value</c> 才会执行 ——
+    /// 而自然发生的那次通常在第一个用户登录时。于是"配置写错"的症状会变成"某个角色的菜单少了"，
+    /// 排查方向很难第一时间指回配置文件。在这里求值一次，错误就落在启动日志的第一屏。
+    ///
+    /// 注意这里**只取 Options，不取 IRolePermissionMap** —— 后者会去读数据库里的覆盖表，
+    /// 而本方法刻意安排在数据库初始化之前（配置错误应该比数据库问题更早、更清楚地报出来）。
+    /// 需要读库的那部分预热在 <see cref="WarmUpAuthHubRolePermissions"/>。
     /// </summary>
     public static WebApplication ValidateAuthHubStartupConfiguration(this WebApplication app)
     {
-        _ = app.Services.GetRequiredService<IRolePermissionMap>();
+        _ = app.Services.GetRequiredService<IOptions<RolePermissionOptions>>().Value;
+        return app;
+    }
+
+    /// <summary>
+    /// 预热权限归属的生效表（<see cref="IRolePermissionMap.All"/> 是懒加载的，
+    /// 首次访问才会去读 <c>RolePermissionOverrides</c> 表）。
+    ///
+    /// 必须放在数据库初始化**之后**调用：表还没建出来的话，这里会立刻抛，
+    /// 而放在登录路径上懒加载就会变成"第一个登录的人拿到 500"。
+    /// 顺带把生效结果打进启动日志 —— 排查授权问题时这是第一手依据。
+    /// </summary>
+    public static WebApplication WarmUpAuthHubRolePermissions(this WebApplication app)
+    {
+        var map = app.Services.GetRequiredService<IRolePermissionMap>();
+
+        app.Logger.LogInformation(
+            "角色权限归属已就绪 | 角色数={RoleCount} | 其中有自定义覆盖={CustomizedCount} 个 | 覆盖来自 {Source}",
+            map.All.Count,
+            map.All.Keys.Count(map.IsCustomized),
+            "数据库（RolePermissionOverrides），优先级高于配置 AuthHub:RolePermissions");
+
         return app;
     }
 

@@ -45,4 +45,10 @@ public static class AuditActionType
     public const string RoleCreated = "admin.role.created";
     public const string RoleUpdated = "admin.role.updated";
     public const string RoleDeleted = "admin.role.deleted";
+
+    /// <summary>后台修改了角色的权限归属（策略层的运行时覆盖）。</summary>
+    public const string RolePermissionsUpdated = "admin.role.permissions.updated";
+
+    /// <summary>后台删掉了角色的权限覆盖，回落配置 / 出厂默认。</summary>
+    public const string RolePermissionsReset = "admin.role.permissions.reset";
 }

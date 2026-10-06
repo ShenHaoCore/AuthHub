@@ -40,7 +40,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | 4 | 刷新令牌 + 旋转 + 重放防护（自动撤销整条授权） | `AuthorizationController.Exchange` |
 | 5 | 单点登录（`prompt=none` 静默签发）与全局登出 | `AuthorizationController` |
 | 6 | MFA：TOTP（验证器 App）、邮箱 / 短信验证码 | `AccountApiController`、`AccountService`、`ITwoFactorChannel`（各通道自管目标解析与文案） |
-| 7 | RBAC：角色 → 权限 → 令牌内的 `authhub:permission` 声明（角色→权限映射可配置、启动期校验） | `AuthorizationPolicyExtensions`、`RolePermissionOptions` + `RolePermissionMap.CreateDefaultRoles()`、`ConfiguredRolePermissionMap` |
+| 7 | RBAC：角色 → 权限 → 令牌内的 `authhub:permission` 声明（归属三级叠加：出厂默认 / 配置 / 后台落库覆盖，启动期校验） | `AuthorizationPolicyExtensions`、`RolePermissionOptions` + `RolePermissionMap.CreateDefaultRoles()`、`LayeredRolePermissionMap`、`RolePermissionOverrides` 表 |
 | 8 | 客户端 CRUD（密钥哈希存储、支持轮换） | `ClientsController`、`OpenIddictClientAdminService` |
 | 9 | Scope 管理 | `ScopesController`、`ScopeService` |
 | 10 | 令牌撤销与黑名单（未过期 JWT 立即失效） | `TokensController`、`EnableTokenEntryValidation` |
@@ -66,7 +66,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 83 项、集成测试 93 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 89 项、集成测试 100 项 |
 
 ---
 
@@ -75,19 +75,23 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 ```
 AuthHub.slnx
 ├── src/
-│   ├── AuthHub.Domain/           8 个文件   实体、常量、出厂默认的角色-权限映射（不依赖任何框架）
-│   ├── AuthHub.Application/     37 个文件   用例编排、接口、DTO、校验器、Result 体系、
+│   ├── AuthHub.Domain/           9 个文件   实体、常量、出厂默认的角色-权限映射（不依赖任何框架）
+│   ├── AuthHub.Application/     38 个文件   用例编排、接口、DTO、校验器、Result 体系、
 │   │                                        配置绑定与校验（Options/）、
+│   │                                        角色权限覆盖的读写端口（IRolePermissionOverrideStore /
+│   │                                        IRolePermissionAdminService）、
 │   │                                        MFA 下发通道（ITwoFactorChannel + 两个实现）
-│   ├── AuthHub.Infrastructure/  24 个文件   EF Core、迁移、OpenIddict 适配、各类实现
+│   ├── AuthHub.Infrastructure/  29 个文件   EF Core、迁移、OpenIddict 适配、各类实现
+│   │                                        （含三层叠加的 LayeredRolePermissionMap）
 │   └── AuthHub.Api/             47 个 .cs + 11 个 .cshtml + 5 个静态资源
 │                                            控制器、协议页、管理后台（Razor Pages）、
 │                                            视图 TagHelper 组件（TagHelpers/）、
 │                                            中间件、服务注册与管道（Extensions/）、
 │                                            Program.cs（只保留装配清单）、wwwroot
 ├── tests/
-│   ├── AuthHub.UnitTests/        5 个文件   领域规则、Result、校验器、Option 校验器、AccountService（Moq）
-│   └── AuthHub.IntegrationTests/ 12 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置 / 管理后台
+│   ├── AuthHub.UnitTests/        6 个文件   领域规则、Result、校验器、Option 校验器、AccountService（Moq）、
+│   │                                        权限映射三层的叠加语义（用 Fake 覆盖存储，不碰数据库）
+│   └── AuthHub.IntegrationTests/ 13 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
@@ -215,8 +219,9 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | `Auditor` | `audit.read` |
 | `User` | 无管理权限 |
 
-表里是**代码里的出厂默认**，实际生效值可以被配置覆盖（`AuthHub:RolePermissions`，见
-[权限模型](#权限模型)）。仓库里 `appsettings.json` 的默认值与这张表逐字一致，
+表里是**代码里的出厂默认**，实际生效值可以被两层覆盖：`AuthHub:RolePermissions`
+配置节（部署期基线）与后台勾选落库的运行时覆盖（见 [权限模型](#权限模型)），
+后者优先级更高。仓库里 `appsettings.json` 的默认值与这张表逐字一致，
 有一条集成测试钉住两者不许漂移。
 
 单元测试里有一条断言专门守着"每个已声明的权限至少被一个内置角色覆盖"，
@@ -287,7 +292,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 |------|------|----------|
 | 仪表盘 | `/admin` | 用户 / 客户端 / Scope / 角色计数，近 7 天审计事件柱状图，协议端点速查，最近事件流 |
 | 用户 | `/admin/users` | 搜索与筛选、新建、编辑资料、分配角色、锁定 / 解锁、强制下线（撤销全部令牌）、删除 |
-| 角色与权限 | `/admin/roles` | 角色列表 + 权限矩阵（权限 × 内置角色）、新建角色、改说明、删除；权限树只读 |
+| 角色与权限 | `/admin/roles` | 角色列表 + 权限矩阵（权限 × 内置角色）、新建角色、改说明、删除；**每个角色的权限树可直接勾选保存，即时生效** |
 | 客户端 | `/admin/clients` | 注册 / 编辑 OAuth 客户端、勾选授权类型与 Scope、轮换密钥（明文只显示一次）、删除 |
 | Scope | `/admin/scopes` | 新建 / 编辑 / 删除 Scope、维护关联资源（进入令牌 `aud`）、查看被多少客户端引用 |
 | 审计日志 | `/admin/audit-logs` | 按动作 / 用户 / 客户端 / 时间区间查询，快捷范围（今天 / 7 天 / 30 天），折叠查看 User-Agent |
@@ -300,8 +305,10 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | 层 | 是什么 | 载体 | 怎么改 | 需要发版吗 |
 |----|--------|------|--------|-----------|
 | ① 能力目录 | 有哪些权限点（`clients.manage` …） | `AuthHubConstants.Permissions`（编译期常量） | 加一行常量 + 在端点上挂 `[Authorize]` | **要**（端点是程序集的一部分） |
-| ② 授权策略 | 每个角色拥有哪些权限点 | `AuthHub:RolePermissions` 配置节（缺省时用 `RolePermissionMap.CreateDefaultRoles()`） | 改配置后重启 | **不要** |
+| ② 授权策略 | 每个角色拥有哪些权限点 | 出厂默认 → `AuthHub:RolePermissions` 配置 → **`RolePermissionOverrides` 表** | 改配置需重启；**后台 `/admin/roles` 勾选即时生效** | **不要** |
 | ③ 授权关系 | 谁拥有哪个角色 | Identity 的用户-角色表 | 后台 `/admin/roles`、`/admin/users` | 不要 |
+
+② 层内部又是**三级叠加**，后者覆盖前者：**出厂默认 ← `AuthHub:RolePermissions` 配置 ← 数据库覆盖**。
 
 侧边栏按权限收敛，但**真正的访问控制在服务端策略上**，不依赖前端是否隐藏了入口
 （`AuthHubConstants.Policies.Ui.*`，见 `AuthorizationPolicyExtensions.AddUiPermissionPolicy`）：
@@ -312,7 +319,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | `Ui.Admin` | 仪表盘：持有 6 个管理权限中的任意一个 |
 | `Ui.UsersManage` / `RolesManage` / `ClientsManage` / `ScopesManage` / `TokensRevoke` / `AuditRead` | 对应的 `authhub:permission` 声明（由 `IRolePermissionMap` 从角色展开） |
 
-#### ② 层怎么配置
+#### ② 层的部署期基线：配置
 
 ```jsonc
 {
@@ -340,11 +347,45 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
   容忍大小写差异等于制造"看起来配上了却没生效"。
 - 校验挂在 `IOptions<RolePermissionOptions>` 上，而 Options 本身是**懒加载**的
   （首次求值通常发生在第一个用户登录时）。为了让配置错误落在**启动日志第一屏**，
-  `Program.cs` 在 `Build()` 之后显式调了一次 `ValidateAuthHubStartupConfiguration()`
-  （它只做一件事：`GetRequiredService<IRolePermissionMap>()`，强制触发求值）。
+  `Program.cs` 在 `Build()` 之后显式调了一次 `ValidateAuthHubStartupConfiguration()`。
+  这个方法**刻意只取 `IOptions`、不碰数据库** —— 它跑在迁移**之前**，
+  若在这里解析需要读库的服务，就会埋下"单例先于数据库初始化被解析"的雷。
 - 刻意**不**校验的：角色名是否内置（自定义角色本来就允许配权限）、是否存在"没有任何角色持有"的孤儿权限点。
 - **不要**给自定义角色配一条映射就以为它成了系统角色：`IsBuiltInRole` 的判据是编译期的
   `AuthHubConstants.Roles.All`，与配置无关 —— 否则删一次角色反倒把它变成不可删除的。
+
+#### ② 层的运行时覆盖：后台勾选，即时生效
+
+`/admin/roles` 里点开任一角色的「权限」，弹出的树是**可勾选、可提交**的。保存落进
+`RolePermissionOverrides` 表，**下一位用户登录立刻用新归属签发声明，不需要重启**。
+
+**为什么是一行一角色的完整快照，而不是「角色-权限」关系表**：
+关系表里"没有行"同时表示两件语义完全不同的事 —— "这个角色没被覆盖过"（应回落配置）
+与"这个角色被显式设成没有任何权限"（不该回落）。用关系表就必然出现
+"取消勾选后权限又自己回来了"。快照行天然带这个区分：**有行 = 被覆盖，行内空数组 = 显式收回全部**。
+这条语义由单元测试 `Runtime_override_with_empty_list_should_revoke_everything_and_must_not_fall_back` 钉住。
+
+其余几条设计取舍：
+
+- **主键是角色名，不是角色 Id**：策略、声明、配置基线全以角色名为键，用名字免掉一次 join，
+  也让"配置里声明了但还没建出来"的角色可以预留覆盖。代价是删角色时要顺手清覆盖行（无外键级联），
+  `RoleAdminService.DeleteAsync` 已经这么做了 —— 不然下次建同名角色会"继承"上一任的权限。
+- **防自锁**：唯一能把管理员彻底关在门外的改动。保存/恢复前会检查"改完之后是否仍有角色持有 `roles.manage`"，
+  否则拒绝并提示先把 `roles.manage` 授给另一个角色。没有这道护栏，勾掉最后一个是不可逆的（只能改数据库）。
+- **服务端二次校验**：界面只列目录里的权限，但表单数据一律当不可信输入；权限名用 **ordinal** 比对，
+  未声明的名字直接拒绝（理由同配置校验器）。
+- **快照缓存 + `Invalidate()`**：`IRolePermissionMap` 在登录热路径上（生成 `authhub:permission` 声明），
+  不能每次回库。保存后只失效**本进程**的缓存 —— 多实例部署时其他实例靠缓存自然过期，
+  且它们本来也只影响自己的登录签发。**载入是惰性的**：单例可能先于数据库初始化被解析，构造函数里不碰数据访问。
+- **两阶段启动顺序**：`ValidateAuthHubStartupConfiguration()`（只取 Options，迁移**前**）
+  → `InitializeAuthHubDatabaseAsync()`（迁移）→ `WarmUpAuthHubRolePermissions()`（读库，迁移**后**，打一行
+  `角色权限归属已就绪 | 角色数=… | 其中有自定义覆盖=… 个`）。拆成两段是为了让配置错误落在启动日志，
+  又不让读库失败拖到第一个用户登录才暴露。
+- 每次变更都写审计（`admin.role.permissions.updated` / `admin.role.permissions.reset`，
+  正文里带角色名与最终权限清单），并在角色列表上标出「已自定义」。
+  **「恢复默认」按钮只在真的被覆盖过时露出**，删掉覆盖行即回落配置 / 出厂默认。
+- **声明的时效性**：权限声明是登录那一刻写进会话 Cookie 的。已在线用户最迟在一个安全戳校验周期
+  （本项目 5 分钟）后刷新，重新登录立即生效。
 
 > **一个容易踩的坑**：`Extensions/AuthenticationExtensions.cs` 把 `DefaultChallengeScheme`
 > 指向了 OpenIddict Validation
@@ -421,7 +462,9 @@ partial 写错模型属性要等运行期才炸。
 | 编辑客户端时若只提交数据库里的 scope，会把 `openid` / `offline_access` 静默删掉（它们不落 Scope 表） | 把它们作为"协议 Scope"一并列出参与往返；客户端独有的 scope 也单独成组，保证不会被无声丢掉 |
 | 每次保存用户资料都刷新安全戳 → 把用户踢下线 | 只在角色集合**确实变化**时才调 `AssignRolesAsync` |
 | 未改动的字段也会被写进审计 → 假审计记录 | `UnchangedAsNull`：与当前值相同的字段传 `null`（服务端的"不修改"语义） |
-| 权限树/矩阵在界面上是只读的，容易被当成"漏做了编辑功能" | 页面提示讲清原因：权限点（能力目录）与角色→权限映射（授权策略）其中**只有后者可配**，改归属走 `AuthHub:RolePermissions` 配置 + 重启，不必发版；权限点在端点上挂着 `[Authorize]`，属于程序集，运行时改不了 |
+| 权限树/矩阵在界面上看着"漏做了编辑功能" | 现在可直接勾选保存（落 `RolePermissionOverrides` 表、即时生效）。仍**改不了**的是权限点本身：它挂在端点的 `[Authorize]` 上，属于程序集，运行时改不了，页面文案讲清了这条边界 |
+| 用「角色-权限」关系表存覆盖 → "取消勾选后权限又自己回来了" | 表里"没有行"无法区分"没覆盖过"与"显式设成空"，故改用**一行一角色的完整权限快照**：有行=被覆盖，行内空数组=显式收回全部 |
+| 改权限归属能把管理员自己锁在门外（勾掉最后一个 `roles.manage`） | `RolePermissionAdminService.EnsureRolesManageSurvives` 在保存/恢复前检查"改完后是否仍有角色持有 `roles.manage`"，否则拒绝并给出补救文案 |
 | 配置里的权限名拼错/大小写不符 → 运行时静默少给权限 | `RolePermissionOptionsValidator` 在启动期严格比对 `Permissions.All`（ordinal），写错直接让进程起不来，错误信息里带上角色名、非法值、全部合法值 |
 | 按天分桶的审计统计在闭区间下会漏算/重算边界毫秒 | 一天的结束取"次日零点减 1 tick"（仓储用的是 `>=` 与 `<=`） |
 | 弹窗 id 里直接嵌了 Scope 名（可能含 `:`，如 `api:read`），`querySelector('#x:y')` 会抛 `SyntaxError` | `authhub.js` 的 `byIdOrSelector` 回退到 `getElementById`（它接收任意 id 字面量、不做解析） |
@@ -434,17 +477,17 @@ partial 写错模型属性要等运行期才炸。
 # 全解决方案（编译须 0 警告 0 错误）
 dotnet build AuthHub.slnx
 
-# 单元测试：83 项
+# 单元测试：89 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：93 项
+# 集成测试：100 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
-| `AuthHub.UnitTests` | 83 | 角色-权限映射（**含配置覆盖语义**：覆盖单个角色不扰动其他角色、空列表等于收回全部权限、自定义角色拿到权限也不算内置）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
-| `AuthHub.IntegrationTests` | 93 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
+| `AuthHub.UnitTests` | 89 | 角色-权限映射**三级叠加语义**（出厂默认 / 配置基线 / 数据库覆盖各自生效、**覆盖行内空数组必须收回全部而不是回落配置**、`IsCustomized` 判定、`Invalidate()` 后确实重读、快照确实被缓存）、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、**`RolePermissionOptionsValidator`**（默认值通过、未声明权限/大小写不符/空白项各自被拒且报出 offender、空列表合法、自定义角色合法）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
+| `AuthHub.IntegrationTests` | 100 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**角色权限配置**（仓库 `appsettings.json` 的默认值必须与代码出厂默认逐字一致、未声明权限让启动失败、配置的权限能一路走到 `IRolePermissionMap` 而无需改代码）、**后台改权限归属**（渲染出可提交的复选框、仅被覆盖过才露出「恢复默认」、保存后权限立即生效且落审计、空选择=收回全部、恢复默认回落基线、未声明权限名被拒、摘掉最后一个 `roles.manage` 被拒且状态不变）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
@@ -848,10 +891,31 @@ System.InvalidOperationException: The LINQ expression 'DbSet<AuditLog>()
 修复：在 `AuthHubDbContext` 里对 **SQLite 专用**地把自定义实体的 `DateTimeOffset`
 属性改为按 `UtcTicks`（`long`）存储 —— 语义不变（库里本来就是 UTC 时刻），
 比较与排序都能被原生翻译，而 SQL Server 仍使用原生 `datetimeoffset` 列类型，
-生产库结构与既有迁移完全不受影响。只处理我们自己的三张实体表，
+生产库结构与既有迁移完全不受影响。只处理我们自己的四张实体表
+（`ApplicationUser` / `ApplicationRole` / `AuditLog` / `RolePermissionOverride`），
 不碰 OpenIddict 的实体（它有自己的时间存储策略）。
 
+> **新增带 `DateTimeOffset` 的实体时，必须把它加进那个类型数组** ——
+> 漏掉的症状是"SQL Server 上完全正常、SQLite 上 500"，只有跑集成测试才发现。
+
 副作用：切换后 SQLite 上的既有数据读不出来，开发 / 测试库删掉重建即可。
+
+### 14. `ClaimTypes.Name` 查不到用户名（本项目实际存在过的缺陷）
+
+`IdentityExtensions` 把 `IdentityOptions.ClaimsIdentity.UserNameClaimType` 设成了
+**OpenIddict 的 `"name"`**（`Claims.Name`），而不是 .NET 那个长 URI
+（`http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name`）。于是任何
+`Principal.FindFirst(ClaimTypes.Name)` 都恒为 `null`。
+
+危害是**静默**的：`ICurrentUser.UserName` 一直是空，所有审计记录少了"操作人"
+（而 `UserId` 还在，页面只是渲染成「（无用户名）」，长时间没人注意）。直到后台改权限
+需要显示操作人时才暴露。
+
+修复：`HttpContextCurrentUser.UserName` 按 `ClaimTypes.Name` → `OpenIddictConstants.Claims.Name`
+→ `PreferredUsername` 依次回退。集成测试里有一条用例断言审计表格渲染出 `admin` 字样钉住它。
+
+> 教训：认证方案改了 `UserNameClaimType` 之后，**所有查声明的地方都要跟着核对**，
+> 编译器不会提醒。
 
 ---
 
@@ -874,8 +938,10 @@ AuthHub__Keys__SigningCertificatePath="/run/secrets/authhub-signing.pfx"
 AuthHub__Keys__SigningCertificatePassword="..."
 AuthHub__Cors__AllowedOrigins__0="https://app.example.com"
 
-# 可选：覆盖角色→权限映射（不写则用代码出厂默认，见「权限模型」）。
+# 可选：部署期基线，覆盖角色→权限映射（不写则用代码出厂默认，见「权限模型」）。
 # 只列要改的角色即可；权限名写错会让进程起不来（启动期校验）。
+# 注意：这只是**基线**，后台在 /admin/roles 上的勾选（落 RolePermissionOverrides 表）
+#       优先级更高，会盖过这里配的值。想让它说了算，就别在后台改该角色。
 AuthHub__RolePermissions__Auditor__0="audit.read"
 AuthHub__RolePermissions__UserManager__0="users.manage"
 AuthHub__RolePermissions__UserManager__1="tokens.revoke"
@@ -931,11 +997,15 @@ docker run --rm -p 8080:8080 \
       后续可补：审计日志导出 CSV、客户端「测试连接」、
       用户的 MFA 重置（目前需用户本人在「我的账户」里关闭后重新绑定）。
 - [x] **角色→权限映射可配置**：已完成。授权拆成三层（能力目录 / 授权策略 / 授权关系），
-      只有 ② 授权策略可配（`AuthHub:RolePermissions`，配错在启动期就失败），
-      "把已有权限换个角色"从此不必发版；③ 授权关系本来就走后台 UI。详见 [权限模型](#权限模型)。
-- [ ] **权限归属的后台编辑**：② 层的延伸 —— 让 `AuthHub:RolePermissions` 能在后台改（落库 + 审计 + 内置角色保护）。
-      **暂缓**：这会把"改配置"变回"改数据"，而授权关系的每次变更都该有审计与回滚口径，
-      在没想清楚这两件事之前，配置 + 重启反而是更可追溯的方案。
+      ② 授权策略既可在 `AuthHub:RolePermissions` 里配（配错在启动期就失败），
+      也可在后台 `/admin/roles` 勾选落库（即时生效）；③ 授权关系本来就走后台 UI。详见 [权限模型](#权限模型)。
+- [x] **权限归属的后台编辑**：已完成。`/admin/roles` 的权限树改成可勾选提交，落
+      `RolePermissionOverrides` 表（一行一角色的**完整权限快照**，空数组=显式收回全部），
+      `IRolePermissionMap` 变成"出厂默认 ← 配置 ← 数据库覆盖"三级叠加 + 快照缓存 + `Invalidate()`。
+      带防自锁护栏（不许摘掉最后一个持有 `roles.manage` 的角色）、服务端二次校验（ordinal 比对权限名）、
+      每次变更写审计，并在角色列表上标「已自定义」、只在真被覆盖过时露出「恢复默认」。
+      **已知边界**：缓存失效只覆盖本进程，多实例部署时其他实例靠缓存自然过期（它们各自只影响自己的登录签发）；
+      权限点本身仍改不了（挂在端点的 `[Authorize]` 上，属程序集）。
 - [ ] **MFA 渠道补齐**：邮件与短信当前是"写日志"实现（`LoggingEmailSender` / `LoggingSmsSender`），
       接真实 SMTP / 短信服务商时替换 `IEmailSender` / `ISmsSender` 的注册即可，业务代码无需改动。
       **加一条新通道**（如企业微信、WhatsApp）则是实现一个 `ITwoFactorChannel`
