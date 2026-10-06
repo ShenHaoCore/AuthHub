@@ -59,7 +59,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Entity Framework Core | 9.0.20 | Identity / OpenIddict / 自定义表共用一个 `DbContext` |
 | ASP.NET Core Identity | 9.0 | 用户、角色、密码哈希、锁定、MFA |
 | 数据库 | SQL Server（生产）/ SQLite（开发与测试） | 二者切换只需改配置 |
-| AutoMapper | 13.x | 实体 → DTO |
+| 实体 → DTO 映射 | — | 手写扩展方法（`EntityToDtoMapper`）。曾经用 AutoMapper 13.x，因 13.x 存在无补丁的高危漏洞（CVE-2026-32933）且 15+ 改为 RPL/商业双许可而移除——映射只有三张扁平表，手写成本更低 |
 | FluentValidation | 11.x | 校验规则集中在 Application 层，经 `ValidationFilter` 自动执行 |
 | Serilog | 8.x | Console + 按天滚动文件，可平滑接入 Seq / ELK |
 | Microsoft.AspNetCore.OpenApi | 9.0（框架内置） | 生成 OpenAPI 文档 JSON（`AddOpenApi` / `MapOpenApi`），原生读取 `[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` |

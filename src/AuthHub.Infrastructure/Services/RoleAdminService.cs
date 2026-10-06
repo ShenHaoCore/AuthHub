@@ -1,11 +1,11 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Roles;
 using AuthHub.Application.Interfaces;
+using AuthHub.Application.Mappings;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
 using AuthHub.Infrastructure.Data;
-using AutoMapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,18 +31,15 @@ public sealed class RoleAdminService : IRoleAdminService
 
     private readonly AuthHubDbContext _dbContext;
     private readonly RoleManager<ApplicationRole> _roleManager;
-    private readonly IMapper _mapper;
     private readonly IAuditLogService _audit;
 
     public RoleAdminService(
         AuthHubDbContext dbContext,
         RoleManager<ApplicationRole> roleManager,
-        IMapper mapper,
         IAuditLogService audit)
     {
         _dbContext = dbContext;
         _roleManager = roleManager;
-        _mapper = mapper;
         _audit = audit;
     }
 
@@ -159,9 +156,9 @@ public sealed class RoleAdminService : IRoleAdminService
             role => (IReadOnlyCollection<string>)RolePermissionMap.GetPermissions(role).ToArray(),
             StringComparer.OrdinalIgnoreCase);
 
-    private RoleDto ToDto(ApplicationRole role, int userCount)
+    private static RoleDto ToDto(ApplicationRole role, int userCount)
     {
-        var dto = _mapper.Map<RoleDto>(role);
+        var dto = role.ToDto();
 
         return dto with
         {
