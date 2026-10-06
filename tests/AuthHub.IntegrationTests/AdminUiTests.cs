@@ -432,6 +432,32 @@ public class AdminUiTests
             because: "已经在本页时点该链接不会重新加载页面，只能靠 hashchange 监听接管");
     }
 
+    // ==================================================================== 卡片布局
+
+    /// <summary>
+    /// <c>.ah-card + .ah-card { margin-top: 18px }</c> 只该服务普通文档流里的相邻卡片。
+    /// 卡片一旦成为 flex（<c>.ah-stack</c>）或 grid（<c>.ah-grid</c>）容器的直接子项，
+    /// 间距已由容器的 gap 负责，这条外边距会叠加出两种毛病：
+    /// ① sidebar 网格右列的卡片被在自己格子里整体下推 18px，头部与左列错位
+    ///   （「我的账户」的「会话」「为什么要刷新安全戳」、仪表盘的「协议端点」都中过招）；
+    /// ② stack 里相邻卡片的间距变成 14 + 18 = 32px，比设计节奏宽了一倍。
+    ///
+    /// 渲染层面的几何（headerTop 是否相等）在集成测试里量不了（无浏览器），
+    /// 故退而钉住 CSS 里必须存在的归零规则 —— 真实效果已用浏览器在渲染页面上量过。
+    /// </summary>
+    [Fact]
+    public async Task Adjacent_cards_inside_flex_or_grid_containers_should_not_inherit_the_flow_margin()
+    {
+        using var session = NewSession();
+
+        var css = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub.css"));
+
+        css.Should().Contain(".ah-stack > .ah-card + .ah-card",
+            because: "stack 里间距由 gap 负责，流式外边距会把相邻卡片叠成 32px");
+        css.Should().Contain(".ah-grid > .ah-card + .ah-card",
+            because: "grid 里的卡片按格子对齐，流式外边距会把第二列卡片整体下推、头部错位");
+    }
+
     // ==================================================================== 表单往返
 
     [Fact]
