@@ -62,6 +62,12 @@ builder.Services.AddAuthHubRateLimiting(builder.Configuration);
 builder.Services.AddAuthHubCors(builder.Configuration);
 builder.Services.AddAuthHubWebApi(enableApiDocs);
 
+// Data Protection 密钥环（会话 Cookie / 防伪令牌 / MFA 票据都依赖它）。
+// 返回密钥环位置留给启动日志：容器里没挂卷时它落在镜像层内，重建即丢，
+// 而症状是"所有人被登出 + 表单提交 400"，很难联想到密钥环。返回描述里带警告。
+var dataProtectionDescription = builder.Services.AddAuthHubDataProtection(
+    builder.Configuration, builder.Environment);
+
 // 分层注册
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
@@ -96,6 +102,12 @@ app.Logger.LogInformation(
     requireHttps,
     enablePasswordFlow,
     enableApiDocs);
+
+// 单独一行，因为这几项是"配错了也不会报错、只会在运行期以别的面目出现"的部署事实：
+// 密钥环丢了对应用户被登出、信任范围配错了对应审计 IP 失真。
+app.Logger.LogInformation(
+    "运行时保护 | Data Protection 密钥环={DataProtectionDescription}",
+    dataProtectionDescription);
 
 app.Run();
 
