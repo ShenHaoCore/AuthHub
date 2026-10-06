@@ -13,9 +13,14 @@ namespace AuthHub.Infrastructure.Services;
 
 /// <summary>
 /// 角色管理。
-/// 角色与权限的关系是“代码内固定映射”（<see cref="RolePermissionMap"/>）而非数据库配置：
-/// 内置角色对应的是服务端的授权策略，允许运行时随意改写会带来提权风险。
-/// 自定义角色可以创建，但目前不授予任何内置权限，保留扩展位。
+///
+/// 「角色 → 权限」的归属来自配置（见 <see cref="IRolePermissionMap"/>，配置节 AuthHub:RolePermissions）。
+/// 之所以敢让它可配置：权限点（能力目录）与授权策略都编译在服务端，端点上那道 [Authorize]
+/// 是程序集的一部分，配置能改变的只有“已存在的权限发给谁”，凭空发明不出一个新能力。
+/// 于是调整归属改配置后重启即可，不必重新部署；但**新增权限点**仍属代码变更，要走发版。
+///
+/// 用户与角色的绑定（谁属于哪个角色）是数据库数据，由用户管理页负责；
+/// 本服务只负责角色自身的增删改，以及它对应的权限归属。
 /// </summary>
 public sealed class RoleAdminService : IRoleAdminService
 {
@@ -32,15 +37,18 @@ public sealed class RoleAdminService : IRoleAdminService
     private readonly AuthHubDbContext _dbContext;
     private readonly RoleManager<ApplicationRole> _roleManager;
     private readonly IAuditLogService _audit;
+    private readonly IRolePermissionMap _rolePermissions;
 
     public RoleAdminService(
         AuthHubDbContext dbContext,
         RoleManager<ApplicationRole> roleManager,
-        IAuditLogService audit)
+        IAuditLogService audit,
+        IRolePermissionMap rolePermissions)
     {
         _dbContext = dbContext;
         _roleManager = roleManager;
         _audit = audit;
+        _rolePermissions = rolePermissions;
     }
 
     public async Task<IReadOnlyCollection<RoleDto>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -79,7 +87,7 @@ public sealed class RoleAdminService : IRoleAdminService
         var role = new ApplicationRole(request.Name)
         {
             Description = request.Description,
-            IsSystemRole = RolePermissionMap.IsBuiltInRole(request.Name)
+            IsSystemRole = _rolePermissions.IsBuiltInRole(request.Name)
         };
 
         var result = await _roleManager.CreateAsync(role);
@@ -127,7 +135,7 @@ public sealed class RoleAdminService : IRoleAdminService
             return Result.Failure(Error.NotFound($"角色 {name} 不存在。"));
         }
 
-        if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(name))
+        if (role.IsSystemRole || _rolePermissions.IsBuiltInRole(name))
         {
             return Result.Failure(Error.Forbidden($"内置角色 {name} 不允许删除。"));
         }
@@ -150,13 +158,14 @@ public sealed class RoleAdminService : IRoleAdminService
             .Select(p => new PermissionDescriptor(p, PermissionDescriptions.GetValueOrDefault(p)))
             .ToArray();
 
+    /// <summary>
+    /// 全部角色的权限归属。取自配置（含配置里额外补充的自定义角色），
+    /// 既是管理端“谁拥有什么”的展示数据，也是排查授权问题的第一手依据。
+    /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyCollection<string>> GetRolePermissionMap()
-        => AuthHubConstants.Roles.All.ToDictionary(
-            role => role,
-            role => (IReadOnlyCollection<string>)RolePermissionMap.GetPermissions(role).ToArray(),
-            StringComparer.OrdinalIgnoreCase);
+        => _rolePermissions.All;
 
-    private static RoleDto ToDto(ApplicationRole role, int userCount)
+    private RoleDto ToDto(ApplicationRole role, int userCount)
     {
         var dto = role.ToDto();
 
@@ -164,7 +173,7 @@ public sealed class RoleAdminService : IRoleAdminService
         {
             Permissions = role.Name is null
                 ? Array.Empty<string>()
-                : RolePermissionMap.GetPermissions(role.Name).ToArray(),
+                : _rolePermissions.GetPermissions(role.Name).ToArray(),
             UserCount = userCount
         };
     }

@@ -6,8 +6,8 @@
     <div>
         <h1 class="ah-page-title">角色与权限</h1>
         <p class="ah-page-sub">
-            角色的权限由代码内的 <code>RolePermissionMap</code> 固定映射 —— 内置角色直接对应服务端的授权策略，
-            因此界面上不可编辑。要调整权限，请修改该映射表并重新部署。
+            角色的权限归属来自配置 <code>AuthHub:RolePermissions</code>：调整归属改配置后重启即可，不必重新部署；
+            新增权限点则要改代码并重新发版。此处只做可视化 —— 允许在界面上随手改写归属会带来提权风险。
         </p>
     </div>
     <div class="ah-page-header-actions">
@@ -35,9 +35,11 @@
         <div class="ah-alert-body">
             <strong>为什么权限不能在这里勾选</strong>
             <span>
-                权限点是服务端授权策略的组成部分，允许运行时改写等于开放了一条提权路径。
-                新增权限的完整做法：在 <code>AuthHubConstants.Permissions</code> 里加常量 →
-                在 <code>RolePermissionMap</code> 里挂到角色上 → 建同名策略（<code>AuthHubConstants.Policies</code>）→ 在控制器/页面上引用。
+                权限点与授权策略都编译在服务端，端点上那道 <code>[Authorize]</code> 是程序集的一部分，
+                能改变的只有「已存在的权限发给谁」。允许运行时改写归属，等于谁能进后台谁就能把任意已有能力发给自己。
+                <br />
+                调整归属：改配置 <code>AuthHub:RolePermissions</code> 后重启，不必发版。
+                新增权限点：在 <code>AuthHubConstants.Permissions</code> 加常量 → 建同名策略（<code>AuthHubConstants.Policies</code>）→ 在控制器 / 页面上引用，需要发版。
             </span>
         </div>
     </div>
@@ -72,7 +74,7 @@
                                     <div class="ah-cell-sub">@(string.IsNullOrWhiteSpace(role.Description) ? "（无说明）" : role.Description)</div>
                                 </td>
                                 <td>
-                                    @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(name))
+                                    @if (role.IsSystemRole || Model.IsBuiltInRole(name))
                                     {
                                         <span class="ah-badge ah-badge--primary">内置</span>
                                     }
@@ -111,7 +113,7 @@
                                             <ah-icon path="@AdminNav.Icons.Edit" size="15" />
                                         </button>
 
-                                        @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(name))
+                                        @if (role.IsSystemRole || Model.IsBuiltInRole(name))
                                         {
                                             <button type="button" class="ah-act-btn" disabled
                                                     title="内置角色不允许删除" aria-label="内置角色不允许删除">
@@ -213,7 +215,7 @@
                        autocomplete="off" value="@Model.NewRoleName" />
                 <div class="ah-hint">
                     建议使用英文名（会作为令牌里的 <code>role</code> 声明）。
-                    自定义角色当前不绑定任何权限，需要在 <code>RolePermissionMap</code> 中补充映射。
+                    自定义角色默认不绑定任何权限，需要在配置 <code>AuthHub:RolePermissions</code> 里补一条映射并重启。
                 </div>
             </div>
 
@@ -242,13 +244,13 @@
                     <div class="ah-alert-body">
                         <strong>该角色没有任何权限映射</strong>
                         <span>
-                            @if (role.IsSystemRole || RolePermissionMap.IsBuiltInRole(roleName))
+                            @if (Model.IsBuiltInRole(roleName))
                             {
-                                <text>这是内置角色，但 RolePermissionMap 中未给它挂任何权限。</text>
+                                <text>这是内置角色，但配置 AuthHub:RolePermissions 中没有给它挂任何权限。</text>
                             }
                             else
                             {
-                                <text>这是自定义角色。请在 RolePermissionMap 中补上映射，重新部署后生效。</text>
+                                <text>这是自定义角色。请在配置 AuthHub:RolePermissions 中补上映射并重启，之后才会获得权限。</text>
                             }
                         </span>
                     </div>
@@ -279,8 +281,8 @@
             }
 
             <div class="ah-hint" style="margin-top:12px">
-                勾选框为只读展示。权限由 <code>AuthHub.Domain/Constants/RolePermissionMap.cs</code> 决定，
-                修改后需重新部署；权限点还会被展开成 <code>authhub:permission</code> 声明写入会话与令牌。
+                勾选框为只读展示。权限归属由配置 <code>AuthHub:RolePermissions</code> 决定，改后重启生效；
+                权限点会被展开成 <code>authhub:permission</code> 声明写入会话与令牌。
             </div>
         </ah-dialog-body>
         <ah-dialog-foot dismiss="关闭" />

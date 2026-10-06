@@ -27,6 +27,7 @@ public sealed class AccountService : IAccountService
     private readonly IEmailSender _emailSender;
     private readonly IReadOnlyDictionary<string, ITwoFactorChannel> _twoFactorChannels;
     private readonly ICurrentUser _currentUser;
+    private readonly IRolePermissionMap _rolePermissions;
     private readonly ILogger<AccountService> _logger;
 
     public AccountService(
@@ -37,6 +38,7 @@ public sealed class AccountService : IAccountService
         IEmailSender emailSender,
         IEnumerable<ITwoFactorChannel> twoFactorChannels,
         ICurrentUser currentUser,
+        IRolePermissionMap rolePermissions,
         ILogger<AccountService> logger)
     {
         _userManager = userManager;
@@ -50,6 +52,7 @@ public sealed class AccountService : IAccountService
             channel => channel.Provider,
             StringComparer.Ordinal);
         _currentUser = currentUser;
+        _rolePermissions = rolePermissions;
         _logger = logger;
     }
 
@@ -429,7 +432,7 @@ public sealed class AccountService : IAccountService
     private async Task<Result<UserProfileDto>> BuildProfileAsync(ApplicationUser user, CancellationToken cancellationToken)
     {
         var roles = await _userManager.GetRolesAsync(user);
-        var permissions = RolePermissionMap.ResolvePermissions(roles);
+        var permissions = _rolePermissions.ResolvePermissions(roles);
 
         // 权限声明在令牌/会话里也需要，因此额外写回身份
         var profile = new UserProfileDto

@@ -1,4 +1,5 @@
 using AuthHub.Api.Middleware;
+using AuthHub.Application.Interfaces;
 using AuthHub.Infrastructure.Data;
 using AuthHub.Infrastructure.Data.Seed;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -14,6 +15,20 @@ namespace AuthHub.Api.Extensions;
 /// </summary>
 internal static class WebApplicationExtensions
 {
+    /// <summary>
+    /// 启动期自检：**强制求值**一次权限归属配置，让写错的配置在进程正式提供服务之前就失败。
+    ///
+    /// 为什么要主动求值：Options 是懒加载的，挂在它校验链上的 RolePermissionOptionsValidator
+    /// 要等到第一次解析 <see cref="IRolePermissionMap"/> 才会执行 —— 而那次调用发生在第一个用户登录时。
+    /// 于是"配置写错"的症状会变成"某个角色的菜单少了"，排查方向很难第一时间指回配置文件。
+    /// 在这里求值一次，错误就落在启动日志的第一屏。
+    /// </summary>
+    public static WebApplication ValidateAuthHubStartupConfiguration(this WebApplication app)
+    {
+        _ = app.Services.GetRequiredService<IRolePermissionMap>();
+        return app;
+    }
+
     /// <summary>
     /// 建库 / 迁移 + 种子数据，由 <c>AuthHub:Seeding</c> 下的开关控制，默认全关。
     /// </summary>

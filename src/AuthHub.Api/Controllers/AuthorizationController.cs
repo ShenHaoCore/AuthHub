@@ -42,6 +42,7 @@ public class AuthorizationController : Controller
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IAntiforgery _antiforgery;
     private readonly IConfiguration _configuration;
+    private readonly IRolePermissionMap _rolePermissions;
 
     public AuthorizationController(
         IOpenIddictApplicationManager applicationManager,
@@ -52,7 +53,8 @@ public class AuthorizationController : Controller
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         IAntiforgery antiforgery,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IRolePermissionMap rolePermissions)
     {
         _applicationManager = applicationManager;
         _scopeManager = scopeManager;
@@ -63,6 +65,7 @@ public class AuthorizationController : Controller
         _signInManager = signInManager;
         _antiforgery = antiforgery;
         _configuration = configuration;
+        _rolePermissions = rolePermissions;
     }
 
     // ------------------------------------------------------------------ 授权端点
@@ -426,7 +429,7 @@ public class AuthorizationController : Controller
         {
             claims[Claims.Role] = (await _userManager.GetRolesAsync(user)).ToArray();
 
-            var permissions = RolePermissionMap.ResolvePermissions(claims[Claims.Role] as string[] ?? Array.Empty<string>());
+            var permissions = _rolePermissions.ResolvePermissions(claims[Claims.Role] as string[] ?? Array.Empty<string>());
             claims[AuthHubConstants.ClaimTypes.Permission] = permissions.ToArray();
         }
 
