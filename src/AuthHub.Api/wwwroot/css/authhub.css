@@ -303,6 +303,17 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 }
 .ah-card + .ah-card { margin-top: 18px; }
 
+/*
+ * 这条外边距只该服务普通文档流里的相邻卡片。一旦卡片成了 flex / grid 容器的
+ * 直接子项，间距已由容器的 gap 负责，再叠上外边距就会出两种毛病：
+ *   · .ah-grid-sidebar 里右列的卡片被在自己格子内整体下推 18px，头部与左列错位
+ *     （我的账户的「会话」「为什么要刷新安全戳」、仪表盘的「协议端点」都中过招）；
+ *   · .ah-stack 里相邻卡片间距变成 14 + 18 = 32px，比设计节奏宽了一倍。
+ * 故在两类布局容器里显式归零。
+ */
+.ah-stack > .ah-card + .ah-card,
+.ah-grid > .ah-card + .ah-card { margin-top: 0; }
+
 .ah-card-header {
     display: flex;
     align-items: center;

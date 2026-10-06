@@ -66,7 +66,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 73 项、集成测试 89 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 73 项、集成测试 90 项 |
 
 ---
 
@@ -389,14 +389,14 @@ dotnet build AuthHub.slnx
 # 单元测试：73 项
 dotnet test tests/AuthHub.UnitTests
 
-# 集成测试：89 项
+# 集成测试：90 项
 dotnet test tests/AuthHub.IntegrationTests
 ```
 
 | 项目 | 用例数 | 覆盖内容 |
 |------|--------|----------|
 | `AuthHub.UnitTests` | 73 | 角色-权限映射、`Result` / `PagedResult` 语义、FluentValidation 规则（含重定向 URI 白名单）、`AccountService` 的登录/注册分支（Moq 构造 `UserManager`/`SignInManager`，含"未知用户不得泄露账号存在性"）、**MFA 下发通道**（目标是通道自己解析的、验证码真的进了文案、两条通道互不串台、缺联系方式与未知通道都判校验失败） |
-| `AuthHub.IntegrationTests` | 89 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
+| `AuthHub.IntegrationTests` | 90 | 发现文档、**用公钥集对令牌做真实 RSA 离线验签**、JWS 令牌内容（sub/scope/role/iss/aud）、错误密钥与未知客户端、登录页与防伪令牌、安全响应头、未见令牌 401、会话 Cookie 不能认证 Bearer API、scope 门禁 403、M2M 令牌被 userinfo 拒绝、令牌端点与 HTML 登录表单的限流 429、**错误响应契约**（五条 400 出口的字段集与媒体类型必须一致）、**OpenIddict 声明目标映射**、**API 文档端点**（Scalar 页面及其内嵌脚本资源、OpenAPI JSON 里的 OAuth2 方案、`/connect/*` 未被可见性约定丢掉、**页面型端点不混进文档**、旧 Swagger 路径已下线、未开启时不暴露）、**管理后台**（7 个页面未登录一律 302 到登录页且不发 Bearer 挑战、无权限用户 302 到 `/account/denied`、管理员逐页可访问且渲染出关键内容、页面零站外引用、5 个静态资源可取且 Content-Type 正确、**静态资源可缓存失效**（响应带 `no-cache`、页面引用带内容指纹）、协议页与后台共用同一份样式令牌、**flex/grid 容器内相邻卡片不继承流式外边距**、Scope 页表单完整往返一次创建与删除、审计页时间区间筛选在两种提供程序下都可用、**弹窗的无障碍名称与关闭按钮类型**、**所有图标共用同一份 SVG 契约**、**页内锚点须由 hashchange 监听接管**） |
 
 集成测试用 `WebApplicationFactory<Program>` 起真实管道（认证中间件顺序、限流、CORS、
 安全头都参与），数据库用独立的临时 SQLite 文件，跑完即删。
