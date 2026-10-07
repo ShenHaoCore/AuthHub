@@ -35,14 +35,9 @@
         <div class="ah-alert-body">
             <strong>这里能改什么、不能改什么</strong>
             <span>
-                <strong>能改</strong>：某个已存在的权限点发给哪个角色。改动立刻写库，<strong>不必重启、不必发版</strong>；
-                想回到配置 / 出厂默认，在弹窗里点「恢复默认」。
-                <br />
-                <strong>改不了</strong>：权限点本身与授权策略都编译在服务端，端点上那道 <code>[Authorize]</code> 是程序集的一部分。
-                新增权限点要走代码：在 <code>AuthHubConstants.Permissions</code> 加常量 → 建同名策略（<code>AuthHubConstants.Policies</code>）→ 在控制器 / 页面上引用。
-                <br />
-                <strong>两点须知</strong>：① 能进本页就能改归属，所以每次变更都会写一条审计（动作 <code>admin.role.permissions.updated</code>）；
-                ② 权限声明是登录那一刻写进会话 Cookie 的，已在线的用户最迟 5 分钟刷新，重新登录则立即生效。
+                <strong>能改</strong>：已有权限点发给哪个角色（回默认值：弹窗里点「恢复默认」）；
+                <strong>改不了</strong>：权限点与策略编译在服务端，新增要走代码 —— 加常量（<code>AuthHubConstants.Permissions</code>）→ 建同名策略 → 端点引用。
+                每次变更都会写一条审计（<code>admin.role.permissions.updated</code>）；权限声明随登录写入会话 Cookie，在线用户最迟 5 分钟刷新，重新登录立即生效。
             </span>
         </div>
     </div>
