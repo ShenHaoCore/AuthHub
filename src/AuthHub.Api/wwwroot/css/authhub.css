@@ -284,13 +284,16 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-page-header {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: 4px 16px;
     flex-wrap: wrap;
     margin-bottom: 18px;
 }
+/* 内层分组 div 不参与布局，标题/副标题成为头部直接 flex 项，副标题才能独占整行 */
+.ah-page-header > div:not(.ah-page-header-actions) { display: contents; }
 .ah-page-title { font-size: 21px; }
-.ah-page-sub { margin-top: 4px; color: var(--ah-muted); font-size: 13.5px; max-width: 76ch; }
-.ah-page-header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.ah-page-sub { margin-top: 4px; color: var(--ah-muted); font-size: 13.5px; }
+.ah-page-header .ah-page-sub { order: 2; flex-basis: 100%; margin-top: 0; }
+.ah-page-header-actions { order: 1; margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 /* ============================================================== 卡片 */
 
@@ -657,7 +660,8 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-alert--warning { background: var(--ah-warning-soft); border-color: var(--ah-warning-border); color: var(--ah-warning); }
 .ah-alert--info { background: var(--ah-info-soft); border-color: var(--ah-info-border); color: var(--ah-info); }
 .ah-alert-body { min-width: 0; }
-.ah-alert-body strong { display: block; }
+/* 仅标题行（直接子元素）块级；正文 span 里内联强调的 strong 保持行内 */
+.ah-alert-body > strong { display: block; }
 .ah-alert-body a { color: inherit; text-decoration: underline; }
 
 .ah-toast-host {
