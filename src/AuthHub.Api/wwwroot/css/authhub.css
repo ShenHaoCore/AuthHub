@@ -350,6 +350,9 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    /* 作为 .ah-card-header 的 flex 子项时撑满整行：否则表单收缩为内容宽度，
+       内部 margin-left:auto 的 .ah-toolbar-end 只能贴到收缩后的右缘（视觉上悬在中间） */
+    flex: 1 1 auto;
 }
 .ah-toolbar-end { margin-left: auto; }
 
@@ -512,19 +515,92 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-input::placeholder, .ah-textarea::placeholder { color: #9aa3ad; }
 .ah-input[readonly] { background: #f6f7f9; color: var(--ah-muted); }
 
-/* 日期筛选的日历代理输入框（见 authhub.js 的 initDatePickers）：
-   原生 <input type="date"> 的占位文字由浏览器语言环境决定、页面控制不了，
-   因此筛选框本体是文本框，日历弹在这个透明代理上。必须保持"已渲染"
-   （display:none 会让 showPicker() 抛错），只是不可见、不可交互、不进 tab 序。 */
-.ah-date-proxy {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    border: 0;
-    opacity: 0;
-    pointer-events: none;
+/* 自绘日期弹层（见 authhub.js 的 initDatePickers）：原生日历是浏览器画的独立图层，
+   页面 CSS 够不着，只能跟随 color-scheme 在明/暗两档里二选一 —— 白弹层盖白表格
+   看不清，深色弹层又与浅色后台不搭。自绘面板走设计令牌，风格与后台一致。 */
+.ah-datepicker {
+    position: fixed;
+    z-index: 80; /* 侧边栏 60 / 顶栏 40 之上，toast 90 之下 */
+    display: none;
+    width: 248px;
+    padding: 10px;
+    background: var(--ah-surface);
+    border: 1px solid var(--ah-border);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, .16);
+    user-select: none;
 }
+.ah-datepicker.is-open { display: block; }
+
+.ah-datepicker-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+.ah-datepicker-title { font-size: 13px; font-weight: 600; color: var(--ah-text); }
+.ah-datepicker-nav {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ah-muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+.ah-datepicker-nav:hover { background: #f1f3f5; color: var(--ah-text); }
+
+.ah-datepicker-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+.ah-datepicker-wd {
+    height: 24px;
+    font-size: 12px;
+    color: var(--ah-muted);
+    line-height: 24px;
+    text-align: center;
+}
+.ah-datepicker-day {
+    height: 30px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 12.5px;
+    color: var(--ah-text);
+    cursor: pointer;
+}
+.ah-datepicker-day:hover { background: var(--ah-primary-soft); }
+.ah-datepicker-day.is-today { border-color: var(--ah-primary-border); }
+.ah-datepicker-day.is-selected {
+    background: var(--ah-primary);
+    border-color: var(--ah-primary);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ah-datepicker-foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--ah-border);
+}
+.ah-datepicker-foot button {
+    border: 0;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 12px;
+    cursor: pointer;
+}
+.ah-datepicker-clear { color: var(--ah-muted); }
+.ah-datepicker-clear:hover { background: #f1f3f5; color: var(--ah-text); }
+.ah-datepicker-today { color: var(--ah-primary); font-weight: 600; }
+.ah-datepicker-today:hover { background: var(--ah-primary-soft); }
 
 .ah-hint { margin-top: 5px; color: var(--ah-muted); font-size: 12px; }
 .ah-hint code { background: #f1f3f5; padding: 1px 5px; border-radius: 4px; }
@@ -550,7 +626,8 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-check input { margin: 3px 0 0; flex: 0 0 auto; }
 .ah-check .ah-check-desc { display: block; color: var(--ah-muted); font-size: 12px; font-weight: 400; }
 
-.ah-check-row { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+/* 两列等宽网格而非 flex-wrap：flex 每行独立排布，列起点随上一项宽度漂移，多行列无法对齐 */
+.ah-check-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
 
 .ah-fieldset {
     padding: 14px 15px;

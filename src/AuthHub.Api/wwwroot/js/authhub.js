@@ -13,7 +13,7 @@
      5. data-copy：一键复制（密钥、URI）
      6. 轻提示自动消失
      7. data-tab：页内标签切换
-     8. data-date-picker：文本框日期筛选 —— 点击弹原生日历，显示格式归页面控制
+     8. data-date-picker：文本框日期筛选 —— 点击弹自绘日历（样式走设计令牌，与后台一致）
    ========================================================================== */
 
 (function () {
@@ -321,7 +321,7 @@
     /* ------------------------------------------------- 8. 文本框日期筛选 */
 
     /**
-     * 把用户手输的日期归一成 yyyy-MM-dd（原生日历只认这个格式）。
+     * 把用户手输的日期归一成 yyyy-MM-dd（后端筛选参数只认这个格式）。
      * 兼容连字符 / 斜杠 / 点三种分隔符，月日允许 1~2 位；解析不了返回空串。
      */
     function normalizeDateInput(text) {
@@ -337,7 +337,167 @@
             return '';
         }
 
+        return formatYmd(year, month, day);
+    }
+
+    function formatYmd(year, month, day) {
         return year + '-' + ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
+    }
+
+    /* 为什么自绘日历而不是原生气泡：
+       原生 <input type="date"> 的日历是浏览器画的独立图层，页面 CSS 够不着 ——
+       只能跟随 color-scheme 在明/暗两档里二选一（白弹层盖白表格看不清，
+       深色弹层又与浅色后台风格不搭）。自绘面板用设计令牌，风格与后台一致。 */
+
+    var DATE_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+
+    var datepickerEl = null;
+    var datepickerState = null; // { input, year, month(0-11), selected }
+
+    function todayYmd() {
+        var now = new Date();
+        return formatYmd(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    }
+
+    function ensureDatepicker() {
+        if (datepickerEl) {
+            return;
+        }
+
+        datepickerEl = document.createElement('div');
+        datepickerEl.className = 'ah-datepicker';
+        datepickerEl.setAttribute('role', 'dialog');
+        datepickerEl.setAttribute('aria-label', '选择日期');
+        document.body.appendChild(datepickerEl);
+
+        // 面板内部的点击不冒泡到 document（document 上挂着"点外面就关"的监听）
+        on(datepickerEl, 'click', function (event) {
+            var button = event.target.closest('button');
+            if (!button || !datepickerState) {
+                return;
+            }
+
+            if (button.hasAttribute('data-nav')) {
+                datepickerState.month += Number(button.getAttribute('data-nav'));
+                normalizeViewMonth();
+                renderDatepicker();
+            } else if (button.hasAttribute('data-date')) {
+                commitDate(button.getAttribute('data-date'));
+            } else if (button.getAttribute('data-act') === 'clear') {
+                commitDate('');
+            } else if (button.getAttribute('data-act') === 'today') {
+                commitDate(todayYmd());
+            }
+            event.stopPropagation();
+        });
+
+        on(document, 'click', closeDatepicker);
+        on(document, 'keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeDatepicker();
+            }
+        });
+
+        // 弹层是 fixed 定位：页面一滚动锚点就飘了，直接关掉最省事。
+        // 捕获阶段监听（on 助手不支持 options），任何容器内滚动都能收到。
+        window.addEventListener('scroll', closeDatepicker, true);
+        on(window, 'resize', closeDatepicker);
+    }
+
+    function normalizeViewMonth() {
+        var total = datepickerState.year * 12 + datepickerState.month;
+        datepickerState.year = Math.floor(total / 12);
+        datepickerState.month = total % 12;
+        if (datepickerState.month < 0) {
+            datepickerState.year -= 1;
+            datepickerState.month += 12;
+        }
+    }
+
+    function renderDatepicker() {
+        var state = datepickerState;
+        // 周一作为第一列：getDay() 周日=0 … 周六=6，(getDay()+6)%7 即距周一的天数
+        var lead = (new Date(state.year, state.month, 1).getDay() + 6) % 7;
+        var daysInMonth = new Date(state.year, state.month + 1, 0).getDate();
+        var today = todayYmd();
+
+        var html = '<div class="ah-datepicker-head">' +
+            '<button type="button" class="ah-datepicker-nav" data-nav="-1" aria-label="上个月">‹</button>' +
+            '<span class="ah-datepicker-title">' + state.year + ' 年 ' + (state.month + 1) + ' 月</span>' +
+            '<button type="button" class="ah-datepicker-nav" data-nav="1" aria-label="下个月">›</button>' +
+            '</div>' +
+            '<div class="ah-datepicker-grid">';
+        DATE_WEEKDAYS.forEach(function (name) {
+            html += '<span class="ah-datepicker-wd">' + name + '</span>';
+        });
+        for (var i = 0; i < lead; i++) {
+            html += '<span></span>';
+        }
+        for (var day = 1; day <= daysInMonth; day++) {
+            var value = formatYmd(state.year, state.month + 1, day);
+            var cls = 'ah-datepicker-day';
+            if (value === today) {
+                cls += ' is-today';
+            }
+            if (value === state.selected) {
+                cls += ' is-selected';
+            }
+            html += '<button type="button" class="' + cls + '" data-date="' + value + '">' + day + '</button>';
+        }
+        html += '</div>' +
+            '<div class="ah-datepicker-foot">' +
+            '<button type="button" class="ah-datepicker-clear" data-act="clear">清除</button>' +
+            '<button type="button" class="ah-datepicker-today" data-act="today">今天</button>' +
+            '</div>';
+
+        datepickerEl.innerHTML = html;
+    }
+
+    function positionDatepicker() {
+        var rect = datepickerState.input.getBoundingClientRect();
+        var width = datepickerEl.offsetWidth;
+        var height = datepickerEl.offsetHeight;
+
+        var top = rect.bottom + 6;
+        if (top + height > window.innerHeight - 8) {
+            top = Math.max(8, rect.top - height - 6); // 下方放不下就翻到输入框上方
+        }
+        var left = Math.min(rect.left, window.innerWidth - width - 8);
+
+        datepickerEl.style.top = top + 'px';
+        datepickerEl.style.left = Math.max(8, left) + 'px';
+    }
+
+    function openDatepicker(input) {
+        ensureDatepicker();
+
+        // 打开前把文本框里已有的值同步给日历，用户改起来有起点
+        var parsed = normalizeDateInput(input.value);
+        var parts = parsed ? parsed.split('-') : null;
+        var now = new Date();
+        datepickerState = {
+            input: input,
+            selected: parsed,
+            year: parts ? Number(parts[0]) : now.getFullYear(),
+            month: parts ? Number(parts[1]) - 1 : now.getMonth()
+        };
+
+        renderDatepicker();
+        positionDatepicker();
+        datepickerEl.classList.add('is-open');
+    }
+
+    function closeDatepicker() {
+        if (datepickerEl) {
+            datepickerEl.classList.remove('is-open');
+        }
+    }
+
+    function commitDate(value) {
+        var input = datepickerState.input;
+        input.value = value;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        closeDatepicker();
     }
 
     function initDatePickers() {
@@ -347,34 +507,9 @@
             }
             input.setAttribute('data-date-picker-bound', '1');
 
-            // 原生日历必须挂在一个 <input type="date"> 上才能弹。做一个 1px 的
-            // 透明代理放在旁边：display:none 的元素 showPicker() 会抛错，
-            // 所以保持渲染、只让它不可见也不可交互（tabIndex=-1 不进 tab 序，
-            // 不设 name 因此不会随表单提交）。
-            var proxy = document.createElement('input');
-            proxy.type = 'date';
-            proxy.className = 'ah-date-proxy';
-            proxy.tabIndex = -1;
-            proxy.setAttribute('aria-hidden', 'true');
-            input.insertAdjacentElement('afterend', proxy);
-
-            on(proxy, 'change', function () {
-                input.value = proxy.value;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-
-            on(input, 'click', function () {
-                // 打开前把文本框里已有的值同步给日历，用户改起来有起点
-                proxy.value = normalizeDateInput(input.value);
-
-                try {
-                    if (typeof proxy.showPicker === 'function') {
-                        proxy.showPicker();
-                    }
-                } catch (error) {
-                    // showPicker 需要"用户激活"且受浏览器策略限制，失败就静默 ——
-                    // 文本框本身仍可手输（后端兼容 yyyy-MM-dd / yyyy/M/d 等写法）
-                }
+            on(input, 'click', function (event) {
+                event.stopPropagation(); // 别让同一次点击冒泡到 document 的"点外面就关"
+                openDatepicker(input);
             });
         });
     }
