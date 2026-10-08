@@ -84,8 +84,8 @@ builder.Services.AddInfrastructure();
 
 var app = builder.Build();
 
-// 启动日志带上"哪些第三方登录已启用"：这是"为什么登录页没有 GitHub 按钮"这类问题
-// 最快的第一现场答案。Enabled=false 的提供商既无按钮也无路由，与空字符串等同展示。
+// 启动日志带上"哪些第三方登录已启用"：这是"为什么登录页的 GitHub 按钮是灰的"这类问题
+// 最快的第一现场答案。Enabled=false 的提供商按钮禁用、路由不可达，与空字符串等同展示。
 var externalProviders = builder.Configuration.GetSection(ExternalLoginOptions.SectionName)
     .Get<ExternalLoginOptions>()?.EnabledProviders ?? [];
 var externalLoginDescription = externalProviders.Count > 0 ? string.Join(",", externalProviders) : "关";

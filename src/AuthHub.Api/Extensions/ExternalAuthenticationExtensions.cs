@@ -15,8 +15,8 @@ namespace AuthHub.Api.Extensions;
 /// 第三方登录（GitHub / Google）的认证 handler 注册。
 ///
 /// <para>
-/// 只注册 <see cref="ExternalLoginOptions"/> 里 Enabled=true 的提供商：登录页按同一份配置
-/// 渲染按钮，未启用的提供商既没有入口、路由也不可达 —— 配置即开关。
+/// 只注册 <see cref="ExternalLoginOptions"/> 里 Enabled=true 的提供商：登录页按钮按同一份
+/// 配置点亮（未启用的渲染为禁用态预告），challenge 路由按白名单拦截 —— 配置即开关。
 /// 启用却没给凭据在启动期直接抛异常（fail fast），而不是等到第一次点击才失败。
 /// </para>
 ///
@@ -95,6 +95,18 @@ internal static class ExternalAuthenticationExtensions
             });
         }
 
+        if (options.WeCom.Enabled)
+        {
+            EnsureWeComCredentials(options.WeCom);
+        }
+
+        // 企业微信没有可用的标准认证 handler（回调参数是 auth_code 而非 OAuth 的 code，
+        // aspnet-contrib 也无 provider），协议适配由 WeComLoginService 自实现。
+        // 单例注册：内部缓存 access_token（7200 秒有效且有调用频率限制，不能每次登录都重取）。
+        // 无论是否启用都注册 —— 未启用时控制器白名单会挡住请求，服务永远不会被调用。
+        services.AddHttpClient(WeComLoginService.HttpClientName);
+        services.AddSingleton<WeComLoginService>();
+
         return services;
     }
 
@@ -165,9 +177,23 @@ internal static class ExternalAuthenticationExtensions
                 "或把 Enabled 改回 false。");
         }
     }
+
+    /// <summary>企业微信的凭据口径与 OAuth 两家不同（CorpId/AgentId/Secret），单独校验。</summary>
+    private static void EnsureWeComCredentials(WeComProviderOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.CorpId) ||
+            string.IsNullOrWhiteSpace(options.AgentId) ||
+            string.IsNullOrWhiteSpace(options.Secret))
+        {
+            throw new InvalidOperationException(
+                "外部登录 WeCom 已启用（Enabled=true），但 CorpId / AgentId / Secret 未配置。" +
+                "请通过环境变量或密钥库注入（如 AuthHub__Authentication__WeCom__Secret），" +
+                "或把 Enabled 改回 false。");
+        }
+    }
 }
 
-/// <summary>第三方登录配置（AuthHub:Authentication 节）。Enabled=false 的提供商不注册、不渲染。</summary>
+/// <summary>第三方登录配置（AuthHub:Authentication 节）。Enabled=false 的提供商不注册 handler，登录页按钮呈禁用态。</summary>
 public sealed class ExternalLoginOptions
 {
     public const string SectionName = "AuthHub:Authentication";
@@ -176,15 +202,26 @@ public sealed class ExternalLoginOptions
 
     public ExternalProviderOptions Google { get; set; } = new();
 
+    public WeComProviderOptions WeCom { get; set; } = new();
+
     /// <summary>已启用的提供商（认证 scheme 名，顺序即登录页按钮顺序）。</summary>
     public IReadOnlyList<string> EnabledProviders
-        => new[] { (Name: "GitHub", Options: GitHub), (Name: "Google", Options: Google) }
-            .Where(entry => entry.Options.Enabled)
-            .Select(entry => entry.Name)
-            .ToArray();
+        => AllProviders.Where(entry => entry.Enabled).Select(entry => entry.Name).ToArray();
+
+    /// <summary>
+    /// 全部已知提供商及其启用状态（顺序即登录页按钮顺序）。登录页渲染完整入口：
+    /// 未启用的按钮呈禁用态（仅作预告，点击不可提交），启用与否的拦截仍在服务端白名单。
+    /// </summary>
+    public IReadOnlyList<(string Name, bool Enabled)> AllProviders
+        => new (string Name, bool Enabled)[]
+        {
+            ("GitHub", GitHub.Enabled),
+            ("Google", Google.Enabled),
+            ("WeCom", WeCom.Enabled)
+        };
 }
 
-/// <summary>单个第三方提供商的凭据配置。</summary>
+/// <summary>单个 OAuth 提供商的凭据配置（GitHub / Google）。</summary>
 public sealed class ExternalProviderOptions
 {
     public bool Enabled { get; set; }
@@ -192,4 +229,20 @@ public sealed class ExternalProviderOptions
     public string ClientId { get; set; } = string.Empty;
 
     public string ClientSecret { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// 企业微信扫码登录（自建应用）的凭据配置。凭据口径与 OAuth 不同：CorpId 是企业 ID，
+/// AgentId/Secret 来自管理后台的自建应用。注意回调域名必须在企业微信后台配置为可信域名
+/// （需通过所有权验证），因此 localhost 无法联调，只能在有公网域名的环境启用。
+/// </summary>
+public sealed class WeComProviderOptions
+{
+    public bool Enabled { get; set; }
+
+    public string CorpId { get; set; } = string.Empty;
+
+    public string AgentId { get; set; } = string.Empty;
+
+    public string Secret { get; set; } = string.Empty;
 }

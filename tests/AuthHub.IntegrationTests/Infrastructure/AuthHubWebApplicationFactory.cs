@@ -47,6 +47,10 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
             // 不重置的话，那个值会残留下来影响后续所有工厂 —— 测试之间就开始互相污染了。
             ["AuthHub__Security__DataProtectionKeysPath"] = "",
             ["AuthHub__Security__TrustForwardedHeaders"] = "false",
+            // 第三方登录开关同理：个别用例会启用某个提供商，不设回 false 就会残留给后续工厂
+            ["AuthHub__Authentication__GitHub__Enabled"] = "false",
+            ["AuthHub__Authentication__Google__Enabled"] = "false",
+            ["AuthHub__Authentication__WeCom__Enabled"] = "false",
             ["AuthHub__Seed__AdminPassword"] = "Admin@12345",
             ["AuthHub__Seed__DemoPassword"] = "Alice@12345",
             ["AuthHub__Seed__WebClientSecret"] = "web-secret",

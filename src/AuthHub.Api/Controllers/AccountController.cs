@@ -41,20 +41,26 @@ public class AccountController : Controller
     /// <summary>保存“已通过密码校验、等待第二因子”的临时票据。</summary>
     private const string PendingTwoFactorCookie = "authhub.2fa.pending";
 
+    /// <summary>企业微信扫码登录的 state 双提交 Cookie（一次性，回调校验后即删）。</summary>
+    private const string WeComStateCookie = "authhub.wecom.state";
+
     private readonly IAccountService _accountService;
     private readonly IAntiforgery _antiforgery;
     private readonly IOptions<ExternalLoginOptions> _externalOptions;
+    private readonly WeComLoginService _weCom;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         IAccountService accountService,
         IAntiforgery antiforgery,
         IOptions<ExternalLoginOptions> externalOptions,
+        WeComLoginService weCom,
         ILogger<AccountController> logger)
     {
         _accountService = accountService;
         _antiforgery = antiforgery;
         _externalOptions = externalOptions;
+        _weCom = weCom;
         _logger = logger;
     }
 
@@ -64,11 +70,15 @@ public class AccountController : Controller
     [EndpointDescription("浏览器表单页；未登录访问受保护页面时会跳到这里。")]
     [HttpGet("login")]
     public IActionResult Login([FromQuery] string? returnUrl = null, [FromQuery] string? error = null)
-        => Html(HtmlPages.LoginPage(
-            SafeReturnUrl(returnUrl),
+    {
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
+        return Html(HtmlPages.LoginPage(
+            safeReturnUrl,
             IssueAntiforgeryToken(),
             error,
-            externalProviders: _externalOptions.Value.EnabledProviders));
+            externalProviders: _externalOptions.Value.AllProviders,
+            weComScan: BuildWeComScanPanel(safeReturnUrl)));
+    }
 
     [EndpointSummary("提交登录")]
     [EndpointDescription("表单提交；成功 302 回 returnUrl，启用 MFA 则转两步验证页。")]
@@ -86,7 +96,7 @@ public class AccountController : Controller
 
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
-            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), "请输入用户名和密码。", username, _externalOptions.Value.EnabledProviders));
+            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), "请输入用户名和密码。", username, _externalOptions.Value.AllProviders, BuildWeComScanPanel(safeReturnUrl)));
         }
 
         var result = await _accountService.LoginAsync(new LoginRequest(username, password, rememberMe), cancellationToken);
@@ -94,7 +104,7 @@ public class AccountController : Controller
         if (result.IsFailure)
         {
             _logger.LogInformation("登录页登录失败：{Reason}", result.Error.Message);
-            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), result.Error.Message, username, _externalOptions.Value.EnabledProviders));
+            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), result.Error.Message, username, _externalOptions.Value.AllProviders, BuildWeComScanPanel(safeReturnUrl)));
         }
 
         var login = result.Value;
@@ -192,6 +202,13 @@ public class AccountController : Controller
             return Redirect(LoginErrorUrl(safeReturnUrl, "该登录方式未启用。"));
         }
 
+        // 企业微信由登录页「扫码登录」页签承载（二维码必须直接可见才可扫，跳转式 challenge
+        // 不适用）；直接构造的 WeCom POST 一律带回登录页，扫码入口就在那里。
+        if (provider == WeComLoginService.ProviderName)
+        {
+            return Redirect($"/account/login?returnUrl={Uri.EscapeDataString(safeReturnUrl)}");
+        }
+
         // 上一次外部登录残留的外部身份 Cookie 必须清掉：A 提供商流程中断后马上点 B，
         // B 的回调页可能读到 A 的身份，绑定确认页就会张冠李戴。
         await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
@@ -203,6 +220,88 @@ public class AccountController : Controller
         properties.Items["LoginProvider"] = provider; // 回调时从外部 Cookie 读回，键与 GetExternalLoginInfoAsync 对齐
 
         return Challenge(properties, provider);
+    }
+
+    /// <summary>
+    /// 构造登录页「扫码登录」页签的渲染参数。启用时生成限时 state（内嵌 returnUrl）并写
+    /// 双提交 Cookie（与 OAuth handler 的 correlation 机制同构）；二维码 iframe 地址即
+    /// 企业微信官方扫码页，参数里带着本站回调。
+    /// 每次渲染登录页都换新 state，旧二维码随之失效 —— 与「重复发起 challenge 使旧
+    /// correlation 失效」的 OAuth 行为一致，刷新页面即可重获新码。
+    /// </summary>
+    private WeComScanPanel BuildWeComScanPanel(string returnUrl)
+    {
+        if (!_externalOptions.Value.EnabledProviders.Contains(WeComLoginService.ProviderName))
+        {
+            return WeComScanPanel.Disabled;
+        }
+
+        // redirect_uri 必须是绝对地址（企业微信按可信域名精确匹配）。用当前请求的
+        // Scheme/Host 拼装：ForwardedHeaders 已在管线最前面还原了公网入口的协议与域名。
+        var callbackUrl = $"{Request.Scheme}://{Request.Host}{WeComLoginService.CallbackPath}";
+        var qrIframeUrl = _weCom.CreateChallengeUrl(returnUrl, callbackUrl, out var state);
+        Response.Cookies.Append(WeComStateCookie, state, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            MaxAge = TimeSpan.FromMinutes(10)
+        });
+        return new WeComScanPanel(true, qrIframeUrl);
+    }
+
+    /// <summary>
+    /// 企业微信扫码确认后的回跳端点（自建应用 SSO，文档参数名 auth_code 而非 code）。
+    ///
+    /// 职责只有一个：把企业微信协议转换成与其它提供商一致的中间态（Identity 外部 Cookie
+    /// + LoginProvider），然后转交 /account/external-callback 走统一的账号匹配/绑定/建号链路。
+    /// state 的双提交校验（Cookie ↔ 查询串）替代防伪令牌 —— 外部请求不可能携带本站令牌。
+    /// </summary>
+    [EndpointSummary("企业微信扫码登录回调")]
+    [EndpointDescription("校验 state 相关性后用 auth_code 换成员身份，转交统一的外部登录回调。")]
+    [HttpGet("/signin-wecom")]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public async Task<IActionResult> WeComCallback(
+        [FromQuery(Name = "auth_code")] string? authCode,
+        [FromQuery] string? state)
+    {
+        // 未启用时也拒绝（与 external-login 的白名单同口径）：路由存在但流程进不来。
+        // 此刻 returnUrl 还锁在 state 里没法安全解出，错误页一律回登录页默认地址。
+        if (!_externalOptions.Value.EnabledProviders.Contains(WeComLoginService.ProviderName))
+        {
+            return Redirect(LoginErrorUrl("/", "该登录方式未启用。"));
+        }
+
+        // state Cookie 是一次性的：无论校验成败都先删掉，防止旧票据被反复试探
+        var cookieState = Request.Cookies[WeComStateCookie];
+        Response.Cookies.Delete(WeComStateCookie);
+        if (!_weCom.TryValidateState(cookieState, state, out var stateReturnUrl))
+        {
+            return Redirect(LoginErrorUrl("/", "登录状态校验失败或已过期，请重新发起扫码登录。"));
+        }
+
+        var safeReturnUrl = SafeReturnUrl(stateReturnUrl);
+
+        if (string.IsNullOrWhiteSpace(authCode))
+        {
+            return Redirect(LoginErrorUrl(safeReturnUrl, "企业微信回调缺少授权码，请重新扫码。"));
+        }
+
+        var principalResult = await _weCom.CreatePrincipalAsync(authCode, HttpContext.RequestAborted);
+        if (principalResult.IsFailure)
+        {
+            return Redirect(LoginErrorUrl(safeReturnUrl, principalResult.Error.Message));
+        }
+
+        // 转成与 GitHub/Google 一致的中间态：外部 Cookie + LoginProvider + RedirectUri，
+        // 后续账号匹配、绑定确认、自动建号全部走既有链路
+        var redirectUrl = $"/account/external-callback?returnUrl={Uri.EscapeDataString(safeReturnUrl)}";
+        var properties = new AuthenticationProperties { RedirectUri = redirectUrl };
+        properties.Items["LoginProvider"] = WeComLoginService.ProviderName;
+
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        await HttpContext.SignInAsync(IdentityConstants.ExternalScheme, principalResult.Value, properties);
+        return Redirect(redirectUrl);
     }
 
     /// <summary>
