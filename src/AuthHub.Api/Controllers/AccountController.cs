@@ -3,6 +3,7 @@ using AuthHub.Application.Interfaces;
 using AuthHub.Api.Extensions;
 using AuthHub.Api.Pages;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -168,18 +169,60 @@ public class AccountController : Controller
     /// 会按 post_logout_redirect_uri 白名单把用户送回客户端；这里只是清掉本服务的会话，
     /// 然后停在"已退出"提示页。
     ///
-    /// 用 POST + 防伪令牌而不是 GET：GET 登出可以被任意页面用一张图片触发。
+    /// 真正的登出只接受 POST 而不是 GET：GET 登出可以被任意页面用一张图片触发。
+    /// 防伪令牌为手动校验而不用 <c>[ValidateAntiForgeryToken]</c>：
+    /// 会话已结束时（重复点击、返回键重放 POST）直接落到提示页，
+    /// 不让令牌与匿名身份不匹配产生一个突兀的 400 空白页。
     /// </summary>
     [EndpointSummary("退出登录（页面）")]
-    [EndpointDescription("清除会话后停在“已退出”提示页。")]
+    [EndpointDescription("清除会话后停在“已退出”提示页；会话已结束时幂等落到同一页。")]
     [HttpPost("logout")]
-    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
+        // 不能读 User：默认认证方案是 OpenIddict 令牌校验（见 AuthenticationExtensions），
+        // 浏览器页面上的 User 恒为匿名。会话状态必须向 Identity 的 Cookie 方案查询 ——
+        // 与授权端点判断 SSO 会话是同一款写法（见 AuthorizationController.Authorize）。
+        var session = await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+        if (!session.Succeeded)
+            return Redirect("/account/loggedout"); // 重复点击 / 返回键重放：幂等落到提示页
+
+        // 防伪令牌按“当时的登录身份”绑定（令牌里带了用户名）。页面渲染走的是 Identity 会话身份，
+        // 而这里的默认 User 是匿名 —— 直接校验必然报 "meant for a different claims-based user"。
+        // 校验前把 User 换成会话 principal，与渲染端对齐；校验完恢复，不影响后续管线。
+        var originalUser = HttpContext.User;
+        HttpContext.User = session.Principal!;
+        try
+        {
+            await _antiforgery.ValidateRequestAsync(HttpContext);
+        }
+        catch (AntiforgeryValidationException ex)
+        {
+            _logger.LogWarning(ex, "登出请求防伪校验失败（可能是 CSRF，或令牌与当前身份绑定不一致）");
+            return BadRequest(); // 带会话但令牌无效：按可疑请求对待，维持 400
+        }
+        finally
+        {
+            HttpContext.User = originalUser;
+        }
+
         await _accountService.SignOutAsync(HttpContext.RequestAborted);
         Response.Cookies.Delete(PendingTwoFactorCookie);
 
         return Redirect("/account/loggedout");
+    }
+
+    /// <summary>
+    /// GET <c>/account/logout</c>：不做任何登出动作（登出只走上面的 POST），
+    /// 只把直接访问 / 从历史记录回访的人引到有意义的地方，避免 405 空白页。
+    /// 会话查询同样走 Identity Cookie 方案（原因见上面 Logout 的注释）。
+    /// </summary>
+    [HttpGet("logout")]
+    [EndpointSummary("退出登录入口（GET 仅跳转）")]
+    [EndpointDescription("不产生任何会话变化；已登录回后台首页，未登录回登录页。")]
+    public async Task<IActionResult> LogoutGet()
+    {
+        var session = await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+        return Redirect(session.Succeeded ? "/admin" : "/account/login");
     }
 
     // ------------------------------------------------------------------ 提示页
