@@ -35,6 +35,8 @@
     //   "AllowedEmails": [ "you@gmail.com", "you@example.com" ],
     //   "GitHub": { "Enabled": true, "ClientId": "Iv1.xxxx", "ClientSecret": "xxxx" },
     //   "Google": { "Enabled": true, "ClientId": "xxxx.apps.googleusercontent.com", "ClientSecret": "xxxx" }
+    //   // 企业微信扫码（本机联调不可行 —— 回调域名须为企业微信后台验证过的可信域名）：
+    //   // "WeCom": { "Enabled": true, "CorpId": "wwxxxx", "AgentId": "1000002", "Secret": "xxxx" }
     // }
   }
 }
