@@ -22,6 +22,15 @@
     -->
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.6" />
 
+    <!--
+      第三方登录。Google 用框架内置包；GitHub 没有官方包，用 aspnet-contrib 社区实现
+      （这是 .NET 生态事实上的标准选择）。两者都只在 AuthHub:Authentication 对应节
+      Enabled=true 时才注册 handler（见 ExternalAuthenticationExtensions）。
+      版本与 TFM 对齐：Google 跟随框架 9.0.x，aspnet-contrib 取 9.x（.NET 9 目标）。
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.20" />
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="9.4.1" />
+
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.4" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />

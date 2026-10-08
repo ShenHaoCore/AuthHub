@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using AuthHub.Application.DTOs.Account;
 using AuthHub.Application.DTOs.Consents;
 
 namespace AuthHub.Api.Pages;
@@ -27,7 +28,12 @@ namespace AuthHub.Api.Pages;
 /// </summary>
 public static class HtmlPages
 {
-    public static string LoginPage(string returnUrl, string requestToken, string? error = null, string? userName = null)
+    public static string LoginPage(
+        string returnUrl,
+        string requestToken,
+        string? error = null,
+        string? userName = null,
+        IReadOnlyList<string>? externalProviders = null)
     {
         var body = new StringBuilder();
 
@@ -56,6 +62,21 @@ public static class HtmlPages
         body.Append("</div>");
         body.Append("<button class=\"btn-primary\" type=\"submit\">登录</button>");
         body.Append("</form>");
+
+        if (externalProviders is { Count: > 0 })
+        {
+            // 单个表单 + 多个 submit 按钮：点击哪个按钮，就提交哪个按钮的 provider 值
+            body.Append("<div class=\"divider\"><span>或使用以下方式登录</span></div>");
+            body.Append("<form method=\"post\" action=\"/account/external-login\" class=\"external-providers\">");
+            body.Append(Hidden("__RequestVerificationToken", requestToken));
+            body.Append(Hidden("returnUrl", returnUrl));
+            foreach (var provider in externalProviders)
+            {
+                body.Append(CultureInfo.InvariantCulture,
+                    $"<button class=\"btn-external\" type=\"submit\" name=\"provider\" value=\"{E(provider)}\">使用 {E(provider)} 登录</button>");
+            }
+            body.Append("</form>");
+        }
 
         body.Append("<p class=\"hint\">开发环境内置账号：<code>admin</code> / <code>Admin@12345</code>（管理员），"
                     + "<code>alice</code> / <code>Alice@12345</code>（普通用户）。生产环境请通过管理接口创建账号。</p>");
@@ -90,6 +111,46 @@ public static class HtmlPages
         body.Append("</form>");
 
         return Layout("两步验证 - AuthHub", body.ToString());
+    }
+
+    /// <summary>
+    /// 绑定确认页：外部登录的已验证邮箱匹配到现有本地账号时，让用户显式确认后再建立关联。
+    /// 页面上不携带任何身份标识字段 —— 确认 POST 时服务端从外部 Cookie 与数据库重新解析，
+    /// 表单参数无法指定"绑定到哪个账号"。
+    /// </summary>
+    public static string ExternalBindingConfirmPage(
+        ExternalBindingView view,
+        string requestToken,
+        string returnUrl,
+        string? error = null)
+    {
+        var body = new StringBuilder();
+
+        body.Append("<h1>绑定账号</h1>");
+        body.Append(CultureInfo.InvariantCulture,
+            $"<p class=\"subtitle\">{E(view.Provider)} 账号 <span class=\"client-name\">{E(view.ExternalEmail)}</span> 与你的 AuthHub 账号使用了同一个邮箱，确认后即可用该方式登录：</p>");
+        body.Append(CultureInfo.InvariantCulture,
+            $"<p>AuthHub 账号：<strong>{E(view.LocalUserName)}</strong>（{E(view.LocalUserEmail)}）</p>");
+
+        if (!string.IsNullOrEmpty(error))
+        {
+            body.Append(CultureInfo.InvariantCulture, $"<div class=\"alert\" role=\"alert\">{E(error)}</div>");
+        }
+
+        var cancelHref = $"/account/external/cancel?returnUrl={Uri.EscapeDataString(returnUrl)}";
+        body.Append("<form method=\"post\" action=\"/account/external/confirm\">");
+        body.Append(Hidden("__RequestVerificationToken", requestToken));
+        body.Append(Hidden("returnUrl", returnUrl));
+        body.Append("<div class=\"actions\">");
+        body.Append(CultureInfo.InvariantCulture, $"<a class=\"btn-secondary\" href=\"{E(cancelHref)}\">取消</a>");
+        body.Append("<button class=\"btn-primary\" type=\"submit\">确认绑定并登录</button>");
+        body.Append("</div>");
+        body.Append("</form>");
+
+        body.Append("<p class=\"hint\">如果你不认识上面的账号，请选择取消 —— "
+                    + "该邮箱可能正被他人使用，必要时请联系管理员。</p>");
+
+        return Layout("绑定账号 - AuthHub", body.ToString());
     }
 
     /// <summary>
