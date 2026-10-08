@@ -1,5 +1,6 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Account;
+using Microsoft.AspNetCore.Identity;
 
 namespace AuthHub.Application.Interfaces;
 
@@ -41,4 +42,23 @@ public interface IAccountService
 
     /// <summary>列出该用户已开启的 MFA 通道。</summary>
     Task<Result<IReadOnlyCollection<string>>> GetTwoFactorProvidersAsync(CancellationToken cancellationToken = default);
+
+    // ---- 第三方登录（GitHub / Google）----
+
+    /// <summary>
+    /// 处理外部登录回调：
+    /// 已有绑定 → 直接登录（跳过本地 MFA，外部 IdP 已完成身份验证）；
+    /// 邮箱匹配到本地账号 → 返回 <see cref="ExternalLoginStatus.BindingConfirmationRequired"/>（不改数据）；
+    /// 无本地账号且邮箱可信 → 自动建号并登录。
+    /// </summary>
+    Task<Result<ExternalLoginResolution>> SignInWithExternalLoginAsync(ExternalLoginInfo info, CancellationToken cancellationToken = default);
+
+    /// <summary>绑定确认页的展示数据（只读，不做任何变更）。</summary>
+    Task<Result<ExternalBindingView>> GetExternalBindingViewAsync(ExternalLoginInfo info, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 确认绑定：把外部登录关联到（按已验证邮箱重新定位的）本地账号并登录。
+    /// 刻意不信任表单/页面传来的账号标识 —— 一切以外部 Cookie 里的身份 + 服务端查询为准。
+    /// </summary>
+    Task<Result<ExternalLoginResolution>> ConfirmExternalBindingAsync(ExternalLoginInfo info, CancellationToken cancellationToken = default);
 }

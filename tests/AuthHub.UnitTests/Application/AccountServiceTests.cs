@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Account;
 using AuthHub.Application.Interfaces;
@@ -5,6 +6,7 @@ using AuthHub.Application.Options;
 using AuthHub.Application.Services;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
+using AuthHub.Domain.Enums;
 using AuthHub.Infrastructure.Services;
 using AuthHub.UnitTests.Fakes;
 using FluentAssertions;
@@ -78,28 +80,35 @@ public class AccountServiceTests
             .Setup(u => u.UpdateAsync(It.IsAny<ApplicationUser>()))
             .ReturnsAsync(IdentityResult.Success);
 
-        _service = new AccountService(
-            _users.Object,
-            _signIn.Object,
-            _audit.Object,
-            _tickets.Object,
-            _email.Object,
-            // 通道用**真实实现** + 打桩的 sender：这样"取哪个联系方式、发什么文案"都被测到，
-            // 而不是被一个 mock 通道绕过去。
-            new ITwoFactorChannel[]
-            {
-                new EmailTwoFactorChannel(_email.Object),
-                new PhoneTwoFactorChannel(_sms.Object)
-            },
-            _currentUser.Object,
-            // 角色 → 权限用**真实实现** + 出厂默认配置 + 空的运行时覆盖：规则本身由 RolePermissionMapTests
-            // 覆盖，这里只需要一个能正常展开的角色映射，不需要把它的行为再 mock 一遍。
-            new LayeredRolePermissionMap(
-                Options.Create(new RolePermissionOptions()),
-                new FakeRolePermissionOverrideStore(),
-                NullLogger<LayeredRolePermissionMap>.Instance),
-            NullLogger<AccountService>.Instance);
+        _service = CreateService(new ExternalLoginOptions());
     }
+
+    /// <summary>
+    /// 构造 AccountService，可注入第三方登录策略（主要是邮箱白名单）；其余依赖与共享字段一致，
+    /// 让白名单用例在不改动默认夹具的前提下拿到不同配置的服务实例。
+    /// </summary>
+    private AccountService CreateService(ExternalLoginOptions externalLoginOptions) => new(
+        _users.Object,
+        _signIn.Object,
+        _audit.Object,
+        _tickets.Object,
+        _email.Object,
+        // 通道用**真实实现** + 打桩的 sender：这样"取哪个联系方式、发什么文案"都被测到，
+        // 而不是被一个 mock 通道绕过去。
+        new ITwoFactorChannel[]
+        {
+            new EmailTwoFactorChannel(_email.Object),
+            new PhoneTwoFactorChannel(_sms.Object)
+        },
+        _currentUser.Object,
+        // 角色 → 权限用**真实实现** + 出厂默认配置 + 空的运行时覆盖：规则本身由 RolePermissionMapTests
+        // 覆盖，这里只需要一个能正常展开的角色映射，不需要把它的行为再 mock 一遍。
+        new LayeredRolePermissionMap(
+            Options.Create(new RolePermissionOptions()),
+            new FakeRolePermissionOverrideStore(),
+            NullLogger<LayeredRolePermissionMap>.Instance),
+        Options.Create(externalLoginOptions),
+        NullLogger<AccountService>.Instance);
 
     // ------------------------------------------------------------------ 登录
 
@@ -307,6 +316,132 @@ public class AccountServiceTests
         _users.Verify(u => u.AddToRoleAsync(created, AuthHubConstants.Roles.User), Times.Once);
         result.Value.Roles.Should().Contain(AuthHubConstants.Roles.User);
         result.Value.Permissions.Should().BeEmpty();
+    }
+
+    // ------------------------------------------------------------------ 第三方登录邮箱白名单
+
+    [Fact]
+    public async Task External_login_with_email_outside_whitelist_should_be_forbidden_before_account_lookup()
+    {
+        var service = CreateService(new ExternalLoginOptions
+        {
+            AllowedEmails = new[] { "me@example.com" }
+        });
+
+        var result = await service.SignInWithExternalLoginAsync(ExternalInfo(email: "intruder@example.com"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Forbidden);
+
+        // 闸门在一切账号查找之前：连「是否已绑定」都不该查，既不泄露账号状态，也无法被既有绑定绕过
+        _users.Verify(u => u.FindByLoginAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _signIn.Verify(
+            s => s.SignInAsync(It.IsAny<ApplicationUser>(), It.IsAny<bool>(), It.IsAny<string?>()),
+            Times.Never);
+        _audit.Verify(
+            a => a.LogAsync(
+                It.Is<AuditEntry>(e =>
+                    e.Action == AuditActionType.UserExternalLoginFailed &&
+                    !e.Succeeded &&
+                    e.Details != null && e.Details.Contains("允许名单")),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task External_login_with_unverified_email_should_be_blocked_when_whitelist_enabled()
+    {
+        // 名单开启 + 邮箱未验证 = fail-closed：不能因为外部身份「声称」的邮箱恰好命中名单就放行，
+        // 邮箱是否真的归该账号所有只能凭 email_verified=true 判断
+        var service = CreateService(new ExternalLoginOptions
+        {
+            AllowedEmails = new[] { "alice@example.com" }
+        });
+
+        var result = await service.SignInWithExternalLoginAsync(ExternalInfo(emailVerified: false));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Forbidden);
+        _users.Verify(u => u.FindByLoginAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task External_login_with_whitelisted_email_and_existing_binding_should_succeed_case_insensitively()
+    {
+        // 名单写大写、声明给小写：比较必须忽略大小写，否则用户只是换了写法就被挡在门外
+        var service = CreateService(new ExternalLoginOptions
+        {
+            AllowedEmails = new[] { "ALICE@EXAMPLE.COM" }
+        });
+        _users.Setup(u => u.FindByLoginAsync("GitHub", "gh-1")).ReturnsAsync(_alice);
+
+        var result = await service.SignInWithExternalLoginAsync(ExternalInfo());
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Status.Should().Be(ExternalLoginStatus.SignedIn);
+        result.Value.IsNewAccount.Should().BeFalse();
+        _signIn.Verify(s => s.SignInAsync(_alice, false, "GitHub"), Times.Once);
+    }
+
+    [Fact]
+    public async Task External_login_should_not_be_restricted_when_whitelist_is_empty()
+    {
+        // 默认配置（空名单）等价于不限制：任何已验证邮箱的已绑定账号照常登录，这是生产口径
+        _users.Setup(u => u.FindByLoginAsync("GitHub", "gh-1")).ReturnsAsync(_alice);
+
+        var result = await _service.SignInWithExternalLoginAsync(
+            ExternalInfo(email: "random@users.noreply.github.com"));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Status.Should().Be(ExternalLoginStatus.SignedIn);
+    }
+
+    [Fact]
+    public async Task External_binding_confirmation_outside_whitelist_should_be_forbidden()
+    {
+        // 绑定确认是第二个入口：即使外部 Cookie 是名单收紧前留下的，确认时也要按当前名单挡一次，
+        // 既不允许写 UserLogins，也不允许建立会话
+        var service = CreateService(new ExternalLoginOptions
+        {
+            AllowedEmails = new[] { "me@example.com" }
+        });
+
+        var result = await service.ConfirmExternalBindingAsync(ExternalInfo(email: "alice@example.com"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Forbidden);
+        _users.Verify(
+            u => u.AddLoginAsync(It.IsAny<ApplicationUser>(), It.IsAny<UserLoginInfo>()),
+            Times.Never);
+        _signIn.Verify(
+            s => s.SignInAsync(It.IsAny<ApplicationUser>(), It.IsAny<bool>(), It.IsAny<string?>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// 构造外部登录暂存身份 —— 模拟提供商回调后写入外部 Cookie 的 ClaimsPrincipal：
+    /// NameIdentifier 是提供商侧的用户 ID，email_verified 由 OnCreatingTicket 事件统一补写。
+    /// </summary>
+    private static ExternalLoginInfo ExternalInfo(
+        string provider = "GitHub",
+        string providerKey = "gh-1",
+        string email = "alice@example.com",
+        string name = "octocat",
+        bool emailVerified = true)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, providerKey),
+            new(ClaimTypes.Name, name),
+            new(ClaimTypes.Email, email)
+        };
+        if (emailVerified)
+        {
+            claims.Add(new Claim("email_verified", "true"));
+        }
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims));
+        return new ExternalLoginInfo(principal, provider, providerKey, name);
     }
 
     // ------------------------------------------------------------------ MFA 下发通道

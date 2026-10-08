@@ -25,5 +25,16 @@
     // 其他可覆盖项：AuthHub:Seed:AdminPassword / DemoPassword 可换本机演示账号的口令；
     // AuthHub:Features:EnableApiDocs 可开关接口文档。写的时候注意别给空字符串 —— 配置里键存在即生效，
     // 空值会把口令真的置空。
+
+    // 第三方登录（本机联调示例）：在 GitHub / Google 开发者后台创建应用后启用，
+    // 回调地址分别注册为 https://localhost:5001/signin-github 与 https://localhost:5001/signin-google。
+    // AllowedEmails 是本机自测白名单：只放你自己的邮箱（GitHub 若隐藏了公开邮箱，
+    // 填 /settings/emails 里那枚 primary 邮箱，可能是 xxxx@users.noreply.github.com 形态）；
+    // 不写这一行或留空数组表示不限制。
+    // "Authentication": {
+    //   "AllowedEmails": [ "you@gmail.com", "you@example.com" ],
+    //   "GitHub": { "Enabled": true, "ClientId": "Iv1.xxxx", "ClientSecret": "xxxx" },
+    //   "Google": { "Enabled": true, "ClientId": "xxxx.apps.googleusercontent.com", "ClientSecret": "xxxx" }
+    // }
   }
 }

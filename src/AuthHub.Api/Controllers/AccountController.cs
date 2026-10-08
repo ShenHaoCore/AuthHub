@@ -2,11 +2,13 @@ using AuthHub.Application.DTOs.Account;
 using AuthHub.Application.Interfaces;
 using AuthHub.Api.Extensions;
 using AuthHub.Api.Pages;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace AuthHub.Api.Controllers;
 
@@ -41,15 +43,18 @@ public class AccountController : Controller
 
     private readonly IAccountService _accountService;
     private readonly IAntiforgery _antiforgery;
+    private readonly IOptions<ExternalLoginOptions> _externalOptions;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         IAccountService accountService,
         IAntiforgery antiforgery,
+        IOptions<ExternalLoginOptions> externalOptions,
         ILogger<AccountController> logger)
     {
         _accountService = accountService;
         _antiforgery = antiforgery;
+        _externalOptions = externalOptions;
         _logger = logger;
     }
 
@@ -59,7 +64,11 @@ public class AccountController : Controller
     [EndpointDescription("浏览器表单页；未登录访问受保护页面时会跳到这里。")]
     [HttpGet("login")]
     public IActionResult Login([FromQuery] string? returnUrl = null, [FromQuery] string? error = null)
-        => Html(HtmlPages.LoginPage(SafeReturnUrl(returnUrl), IssueAntiforgeryToken(), error));
+        => Html(HtmlPages.LoginPage(
+            SafeReturnUrl(returnUrl),
+            IssueAntiforgeryToken(),
+            error,
+            externalProviders: _externalOptions.Value.EnabledProviders));
 
     [EndpointSummary("提交登录")]
     [EndpointDescription("表单提交；成功 302 回 returnUrl，启用 MFA 则转两步验证页。")]
@@ -77,7 +86,7 @@ public class AccountController : Controller
 
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
-            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), "请输入用户名和密码。", username));
+            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), "请输入用户名和密码。", username, _externalOptions.Value.EnabledProviders));
         }
 
         var result = await _accountService.LoginAsync(new LoginRequest(username, password, rememberMe), cancellationToken);
@@ -85,7 +94,7 @@ public class AccountController : Controller
         if (result.IsFailure)
         {
             _logger.LogInformation("登录页登录失败：{Reason}", result.Error.Message);
-            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), result.Error.Message, username));
+            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), result.Error.Message, username, _externalOptions.Value.EnabledProviders));
         }
 
         var login = result.Value;
@@ -158,6 +167,142 @@ public class AccountController : Controller
         }
 
         return Redirect(safeReturnUrl);
+    }
+
+    // ------------------------------------------------------------------ 第三方登录
+
+    /// <summary>
+    /// 发起第三方登录（登录页的 GitHub / Google 按钮）。
+    ///
+    /// 刻意是 POST + 防伪令牌而不是 GET 链接：GET 发起登录挑战可以被任何第三方页面
+    /// 用一张图片触发（登录 CSRF —— 把受害者的浏览器登录进攻击者的账号）。
+    /// </summary>
+    [EndpointSummary("发起第三方登录")]
+    [EndpointDescription("表单提交；把浏览器重定向到对应提供商的授权页。仅接受已启用的提供商。")]
+    [HttpPost("external-login")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public async Task<IActionResult> ExternalLogin([FromForm] string provider, [FromForm] string? returnUrl = null)
+    {
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
+
+        // 白名单取自与登录页按钮同一份配置：未启用的提供商连按钮都不渲染，直发请求也进不来
+        if (string.IsNullOrWhiteSpace(provider) || !_externalOptions.Value.EnabledProviders.Contains(provider))
+        {
+            return Redirect(LoginErrorUrl(safeReturnUrl, "该登录方式未启用。"));
+        }
+
+        // 上一次外部登录残留的外部身份 Cookie 必须清掉：A 提供商流程中断后马上点 B，
+        // B 的回调页可能读到 A 的身份，绑定确认页就会张冠李戴。
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+
+        // 授权结束后提供商按 RedirectUri 回跳到 /account/external-callback；
+        // returnUrl 挂在回调地址的查询串上，由回调端点再校验一次。
+        var redirectUrl = $"/account/external-callback?returnUrl={Uri.EscapeDataString(safeReturnUrl)}";
+        var properties = new AuthenticationProperties { RedirectUri = redirectUrl };
+        properties.Items["LoginProvider"] = provider; // 回调时从外部 Cookie 读回，键与 GetExternalLoginInfoAsync 对齐
+
+        return Challenge(properties, provider);
+    }
+
+    /// <summary>
+    /// 提供商授权后的回跳端点。
+    ///
+    /// 防伪令牌在这里不适用（外部请求无法携带本站令牌）；请求真实性由 OAuth 协议的
+    /// state 相关性校验保证 —— 处理器只接受携带着本站签发 state 的回调。
+    /// </summary>
+    [EndpointSummary("第三方登录回调")]
+    [EndpointDescription("提供商授权后回跳；已绑定或新建账号直接登录，匹配到本地账号转绑定确认页。")]
+    [HttpGet("external-callback")]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public async Task<IActionResult> ExternalCallback([FromQuery] string? returnUrl = null)
+    {
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
+
+        var info = await GetExternalLoginInfoAsync();
+        if (info is null)
+        {
+            // 直接访问 / 相关 Cookie 过期 / 用户在提供商侧取消 —— 统一回登录页带提示。
+            // 还没有可归属的本地身份，这里不产生审计事件。
+            return Redirect(LoginErrorUrl(safeReturnUrl, "外部登录未完成或已超时，请重试。"));
+        }
+
+        var result = await _accountService.SignInWithExternalLoginAsync(info, HttpContext.RequestAborted);
+        if (result.IsFailure)
+        {
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Redirect(LoginErrorUrl(safeReturnUrl, result.Error.Message));
+        }
+
+        if (result.Value.Status == ExternalLoginStatus.BindingConfirmationRequired)
+        {
+            // 外部身份 Cookie 刻意保留：确认页的 POST 靠它读回外部身份
+            return Redirect($"/account/external/confirm?returnUrl={Uri.EscapeDataString(safeReturnUrl)}");
+        }
+
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        return Redirect(safeReturnUrl);
+    }
+
+    [EndpointSummary("第三方账号绑定确认页")]
+    [EndpointDescription("外部邮箱匹配到本地账号时展示；确认后把外部登录与该账号建立绑定。")]
+    [HttpGet("external/confirm")]
+    public async Task<IActionResult> ExternalConfirm([FromQuery] string? returnUrl = null, [FromQuery] string? error = null)
+    {
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
+
+        var info = await GetExternalLoginInfoAsync();
+        if (info is null)
+        {
+            return Redirect(LoginErrorUrl(safeReturnUrl, "绑定会话已过期，请重新发起第三方登录。"));
+        }
+
+        var view = await _accountService.GetExternalBindingViewAsync(info, HttpContext.RequestAborted);
+        if (view.IsFailure)
+        {
+            return Redirect(LoginErrorUrl(safeReturnUrl, view.Error.Message));
+        }
+
+        return Html(HtmlPages.ExternalBindingConfirmPage(view.Value, IssueAntiforgeryToken(), safeReturnUrl, error));
+    }
+
+    [EndpointSummary("确认绑定第三方账号")]
+    [EndpointDescription("把外部登录与本地账号建立绑定并建立会话；失败回到确认页可重试。")]
+    [HttpPost("external/confirm")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public async Task<IActionResult> ExternalConfirmPost([FromForm] string? returnUrl = null)
+    {
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
+
+        var info = await GetExternalLoginInfoAsync();
+        if (info is null)
+        {
+            return Redirect(LoginErrorUrl(safeReturnUrl, "绑定会话已过期，请重新发起第三方登录。"));
+        }
+
+        var result = await _accountService.ConfirmExternalBindingAsync(info, HttpContext.RequestAborted);
+        if (result.IsFailure)
+        {
+            // 外部身份 Cookie 仍在，回确认页可在同一次授权内重试（如绑定冲突时用户换账号处理）
+            return Redirect($"/account/external/confirm?returnUrl={Uri.EscapeDataString(safeReturnUrl)}&error={Uri.EscapeDataString(result.Error.Message)}");
+        }
+
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        return Redirect(safeReturnUrl);
+    }
+
+    /// <summary>
+    /// 取消绑定 / 登录：只清掉待确认的外部身份中间态，不碰现有会话 ——
+    /// 因此是 GET 也无 CSRF 风险（最坏后果只是"少点一次确认"）。
+    /// </summary>
+    [EndpointSummary("取消第三方登录/绑定")]
+    [EndpointDescription("清掉待确认的外部身份后回登录页；不影响已建立的会话。")]
+    [HttpGet("external/cancel")]
+    public async Task<IActionResult> ExternalCancel([FromQuery] string? returnUrl = null)
+    {
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        return Redirect($"/account/login?returnUrl={Uri.EscapeDataString(SafeReturnUrl(returnUrl))}");
     }
 
     // ------------------------------------------------------------------ 登出
@@ -240,6 +385,45 @@ public class AccountController : Controller
         => Html(HtmlPages.MessagePage("无权访问", "当前账号没有访问该资源的权限。", "/", "返回首页"));
 
     // ------------------------------------------------------------------ 内部辅助
+
+    /// <summary>
+    /// 从 Identity 的外部 Cookie 读回提供商返回的身份，组装成 <see cref="ExternalLoginInfo"/>。
+    ///
+    /// 不用 <c>SignInManager.GetExternalLoginInfoAsync()</c>：它按 Identity 配置的 UserIdClaimType
+    ///（本项目已对齐成 sub，见 IdentityExtensions）找 ProviderKey，而这里需要的是「提供商侧」
+    /// 的稳定 ID。两家处理器的 NameIdentifier 声明都映射自提供商用户 ID（GitHub 的 id /
+    /// Google 的 sub），按 NameIdentifier → sub 的顺序取最稳。
+    /// </summary>
+    private async Task<ExternalLoginInfo?> GetExternalLoginInfoAsync()
+    {
+        var result = await HttpContext.AuthenticateAsync(IdentityConstants.ExternalScheme);
+        if (!result.Succeeded || result.Principal is null || result.Properties is null)
+        {
+            return null;
+        }
+
+        if (!result.Properties.Items.TryGetValue("LoginProvider", out var provider) || string.IsNullOrEmpty(provider))
+        {
+            return null;
+        }
+
+        var providerKey = result.Principal.FindFirstValue(ClaimTypes.NameIdentifier)
+                          ?? result.Principal.FindFirstValue("sub");
+        if (string.IsNullOrEmpty(providerKey))
+        {
+            return null;
+        }
+
+        return new ExternalLoginInfo(
+            result.Principal,
+            provider,
+            providerKey,
+            result.Principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty);
+    }
+
+    /// <summary>带错误提示的登录页跳转地址（错误经 URL 编码，防注入页面文案）。</summary>
+    private static string LoginErrorUrl(string returnUrl, string message)
+        => $"/account/login?returnUrl={Uri.EscapeDataString(returnUrl)}&error={Uri.EscapeDataString(message)}";
 
     private static ContentResult Html(string html, int statusCode = StatusCodes.Status200OK)
         => new()

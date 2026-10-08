@@ -14,6 +14,12 @@ public static class AuditActionType
     public const string UserPasswordChanged = "user.password.changed";
     public const string UserLockedOut = "user.locked_out";
 
+    /// <summary>通过 GitHub / Google 等第三方身份提供方完成登录。</summary>
+    public const string UserExternalLoginSucceeded = "user.login.external.succeeded";
+
+    /// <summary>第三方登录被拒绝（账号停用、邮箱未验证、绑定冲突等）。</summary>
+    public const string UserExternalLoginFailed = "user.login.external.failed";
+
     // MFA
     public const string TwoFactorEnabled = "mfa.enabled";
     public const string TwoFactorDisabled = "mfa.disabled";

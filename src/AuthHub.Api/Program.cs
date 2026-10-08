@@ -53,6 +53,10 @@ var keyDescription = builder.Services.AddAuthHubOpenIddict(builder.Configuration
 builder.Services.AddAuthHubAuthentication();
 builder.Services.AddAuthHubAuthorization();
 
+// 第三方登录（GitHub / Google）：只注册 Enabled=true 的提供商，登录页按钮按同一份配置渲染。
+// 与 AddAuthHubAuthentication 的先后无关（它不写默认方案），放在认证装配区只为可读性。
+builder.Services.AddAuthHubExternalLogin(builder.Configuration);
+
 // 替换掉的默认实现：让 /api/* 的 401/403 由我们统一写成 ProblemDetails。
 // 用 Replace 而不是直接 AddSingleton，是为了不依赖“后注册覆盖先注册”的隐式约定。
 // 背景（多方案 Challenge/Forbid 导致的状态码二次写入异常）见 AuthHubAuthorizationResultHandler。
@@ -80,6 +84,12 @@ builder.Services.AddInfrastructure();
 
 var app = builder.Build();
 
+// 启动日志带上"哪些第三方登录已启用"：这是"为什么登录页没有 GitHub 按钮"这类问题
+// 最快的第一现场答案。Enabled=false 的提供商既无按钮也无路由，与空字符串等同展示。
+var externalProviders = builder.Configuration.GetSection(ExternalLoginOptions.SectionName)
+    .Get<ExternalLoginOptions>()?.EnabledProviders ?? [];
+var externalLoginDescription = externalProviders.Count > 0 ? string.Join(",", externalProviders) : "关";
+
 // 强制求值一次角色 → 权限映射的配置：IOptions 是懒加载的，不主动取一次的话，
 // 挂在它上面的配置校验要等第一个用户登录才跑，配置错误就落不到启动日志里了。
 // 这里刻意安排在数据库初始化之前：配置错误应该比数据库问题更早、更清楚地报出来。
@@ -106,12 +116,13 @@ app.UseAuthHubPipeline(requireHttps);
 app.MapAuthHubEndpoints(enableApiDocs);
 
 app.Logger.LogInformation(
-    "AuthHub 启动完成 | 环境={Environment} | 数据库={Provider} | 密钥={KeyDescription} | 强制HTTPS={RequireHttps} | 密码流程={PasswordFlow} | API文档={ApiDocs}",
+    "AuthHub 启动完成 | 环境={Environment} | 数据库={Provider} | 密钥={KeyDescription} | 强制HTTPS={RequireHttps} | 密码流程={PasswordFlow} | 第三方登录={ExternalLogin} | API文档={ApiDocs}",
     app.Environment.EnvironmentName,
     databaseProvider,
     keyDescription,
     requireHttps,
     enablePasswordFlow,
+    externalLoginDescription,
     enableApiDocs);
 
 // 单独一行，因为这几项是"配错了也不会报错、只会在运行期以别的面目出现"的部署事实：

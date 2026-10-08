@@ -55,6 +55,33 @@ public record EnableTwoFactorRequest(string Code);
 /// <summary>触发一次性验证码下发（Email / Phone 通道）。</summary>
 public record SendTwoFactorCodeRequest(string Provider);
 
+/// <summary>外部登录回调的处置结果。</summary>
+public enum ExternalLoginStatus
+{
+    /// <summary>已建立会话（已有绑定，或自动创建了新账号）。</summary>
+    SignedIn,
+
+    /// <summary>外部邮箱匹配到本地账号但尚未建立绑定：需用户在确认页点击确认。</summary>
+    BindingConfirmationRequired
+}
+
+/// <summary>外部登录回调的处置结果（配合 <see cref="ExternalLoginStatus"/> 一起读）。</summary>
+public sealed record ExternalLoginResolution(
+    ExternalLoginStatus Status,
+    string UserId,
+    string UserName,
+    string DisplayName,
+    bool IsNewAccount);
+
+/// <summary>绑定确认页的展示数据：外部身份与将被绑定的本地账号。</summary>
+public sealed record ExternalBindingView(
+    string Provider,
+    string ExternalEmail,
+    string ExternalUserName,
+    string LocalUserId,
+    string LocalUserName,
+    string LocalUserEmail);
+
 /// <summary>当前用户的档案信息（含角色与展开后的权限）。</summary>
 public sealed record UserProfileDto
 {

@@ -17,6 +17,8 @@ public static class AuditDisplay
         [AuditActionType.UserRegistered] = "注册账号",
         [AuditActionType.UserLoginSucceeded] = "登录成功",
         [AuditActionType.UserLoginFailed] = "登录失败",
+        [AuditActionType.UserExternalLoginSucceeded] = "第三方登录成功",
+        [AuditActionType.UserExternalLoginFailed] = "第三方登录失败",
         [AuditActionType.UserLogout] = "退出登录",
         [AuditActionType.UserPasswordChanged] = "修改密码",
         [AuditActionType.UserLockedOut] = "账号锁定",
@@ -71,6 +73,8 @@ public static class AuditDisplay
             AuditActionType.UserRegistered,
             AuditActionType.UserLoginSucceeded,
             AuditActionType.UserLoginFailed,
+            AuditActionType.UserExternalLoginSucceeded,
+            AuditActionType.UserExternalLoginFailed,
             AuditActionType.UserLogout,
             AuditActionType.UserPasswordChanged,
             AuditActionType.UserLockedOut
@@ -130,6 +134,7 @@ public static class AuditDisplay
         return action switch
         {
             AuditActionType.UserLoginSucceeded => "ah-badge--success",
+            AuditActionType.UserExternalLoginSucceeded => "ah-badge--success",
             AuditActionType.TwoFactorEnabled => "ah-badge--info",
             AuditActionType.UserLockedOut => "ah-badge--warning",
             AuditActionType.TokenRevoked => "ah-badge--warning",

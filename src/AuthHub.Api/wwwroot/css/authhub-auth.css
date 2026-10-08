@@ -119,6 +119,45 @@ button:focus-visible { outline: 2px solid var(--ah-primary); outline-offset: 2px
 .actions { display: flex; gap: 10px; margin-top: 22px; }
 .actions button { flex: 1; }
 
+/* ============================================================== 第三方登录 */
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 14px;
+    color: var(--ah-muted);
+    font-size: 12px;
+}
+.divider::before,
+.divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--ah-border);
+}
+
+.external-providers { display: flex; flex-direction: column; gap: 10px; }
+.btn-external { background: var(--ah-surface); color: var(--ah-text); border: 1px solid var(--ah-border); }
+.btn-external:hover { background: #f3f4f6; }
+
+/* 绑定确认页的取消链接复用按钮外观：button 选择器的排版规则对 a 不生效，单独补齐 */
+.actions a { flex: 1; }
+a.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: var(--ah-radius-sm);
+    border: 1px solid var(--ah-border);
+    background: var(--ah-surface);
+    color: var(--ah-text);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+}
+a.btn-secondary:hover { background: #f3f4f6; }
+
 /* ============================================================== 提示 */
 
 .alert {
