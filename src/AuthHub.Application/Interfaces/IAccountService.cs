@@ -1,6 +1,5 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Account;
-using Microsoft.AspNetCore.Identity;
 
 namespace AuthHub.Application.Interfaces;
 
@@ -10,9 +9,12 @@ namespace AuthHub.Application.Interfaces;
 /// </summary>
 public interface IAccountService
 {
-    Task<Result<UserProfileDto>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default);
+    Task<Result<UserProfileDto>> RegisterAsync(
+        RegisterRequest request,
+        string? emailConfirmationLinkBase = null,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>第一阶段：校验密码。可能返回“需要 MFA”或“已锁定”。</summary>
+    /// <summary>第一阶段：校验密码。可能返回"需要 MFA"或"已锁定"。</summary>
     Task<Result<LoginResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>第二阶段：校验 TOTP / 恢复码，成功后写入登录会话。</summary>
@@ -29,6 +31,21 @@ public interface IAccountService
 
     Task<Result> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 申请密码重置：按邮箱发重置链接。无论邮箱是否存在都返回成功，
+    /// 避免通过响应差异枚举系统账号（用户名枚举攻击）。
+    /// </summary>
+    Task<Result> RequestPasswordResetAsync(string email, string? resetLinkBase, CancellationToken cancellationToken = default);
+
+    /// <summary>用邮箱里的重置令牌改密，成功后使所有旧会话失效。</summary>
+    Task<Result> ResetPasswordAsync(string email, string token, string newPassword, CancellationToken cancellationToken = default);
+
+    /// <summary>消费邮箱确认令牌。已确认的邮箱重复调用幂等成功。</summary>
+    Task<Result> ConfirmEmailAsync(string userId, string token, CancellationToken cancellationToken = default);
+
+    /// <summary>重发邮箱确认邮件。邮箱不存在或已确认时静默成功。</summary>
+    Task<Result> ResendEmailConfirmationAsync(string email, string? confirmationLinkBase, CancellationToken cancellationToken = default);
+
     /// <summary>生成 TOTP 密钥与恢复码（此时尚未启用）。</summary>
     Task<Result<TwoFactorSetupResponse>> BeginTwoFactorSetupAsync(CancellationToken cancellationToken = default);
 
@@ -42,23 +59,4 @@ public interface IAccountService
 
     /// <summary>列出该用户已开启的 MFA 通道。</summary>
     Task<Result<IReadOnlyCollection<string>>> GetTwoFactorProvidersAsync(CancellationToken cancellationToken = default);
-
-    // ---- 第三方登录（GitHub / Google）----
-
-    /// <summary>
-    /// 处理外部登录回调：
-    /// 已有绑定 → 直接登录（跳过本地 MFA，外部 IdP 已完成身份验证）；
-    /// 邮箱匹配到本地账号 → 返回 <see cref="ExternalLoginStatus.BindingConfirmationRequired"/>（不改数据）；
-    /// 无本地账号且邮箱可信 → 自动建号并登录。
-    /// </summary>
-    Task<Result<ExternalLoginResolution>> SignInWithExternalLoginAsync(ExternalLoginInfo info, CancellationToken cancellationToken = default);
-
-    /// <summary>绑定确认页的展示数据（只读，不做任何变更）。</summary>
-    Task<Result<ExternalBindingView>> GetExternalBindingViewAsync(ExternalLoginInfo info, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 确认绑定：把外部登录关联到（按已验证邮箱重新定位的）本地账号并登录。
-    /// 刻意不信任表单/页面传来的账号标识 —— 一切以外部 Cookie 里的身份 + 服务端查询为准。
-    /// </summary>
-    Task<Result<ExternalLoginResolution>> ConfirmExternalBindingAsync(ExternalLoginInfo info, CancellationToken cancellationToken = default);
 }

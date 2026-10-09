@@ -1,15 +1,12 @@
 using System.Globalization;
-using System.Security.Claims;
 using AuthHub.Application.Common;
 using AuthHub.Application.DTOs.Account;
 using AuthHub.Application.Interfaces;
-using AuthHub.Application.Options;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace AuthHub.Application.Services;
 
@@ -31,7 +28,6 @@ public sealed class AccountService : IAccountService
     private readonly IReadOnlyDictionary<string, ITwoFactorChannel> _twoFactorChannels;
     private readonly ICurrentUser _currentUser;
     private readonly IRolePermissionMap _rolePermissions;
-    private readonly ExternalLoginOptions _externalLogin;
     private readonly ILogger<AccountService> _logger;
 
     public AccountService(
@@ -43,7 +39,6 @@ public sealed class AccountService : IAccountService
         IEnumerable<ITwoFactorChannel> twoFactorChannels,
         ICurrentUser currentUser,
         IRolePermissionMap rolePermissions,
-        IOptions<ExternalLoginOptions> externalLoginOptions,
         ILogger<AccountService> logger)
     {
         _userManager = userManager;
@@ -58,13 +53,15 @@ public sealed class AccountService : IAccountService
             StringComparer.Ordinal);
         _currentUser = currentUser;
         _rolePermissions = rolePermissions;
-        _externalLogin = externalLoginOptions.Value;
         _logger = logger;
     }
 
     // ------------------------------------------------------------------ 注册
 
-    public async Task<Result<UserProfileDto>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<UserProfileDto>> RegisterAsync(
+        RegisterRequest request,
+        string? emailConfirmationLinkBase = null,
+        CancellationToken cancellationToken = default)
     {
         var user = new ApplicationUser
         {
@@ -89,8 +86,9 @@ public sealed class AccountService : IAccountService
 
         await _audit.LogAsync(new AuditEntry(AuditActionType.UserRegistered, true, user.Id, user.UserName), cancellationToken);
 
-        // 发送邮箱确认邮件（默认实现只写日志，接入真实邮件服务后即可生效）
-        await TrySendEmailConfirmationAsync(user, cancellationToken);
+        // 发送邮箱确认邮件（默认实现只写日志，接入真实邮件服务后即可生效）。
+        // 链接基址由控制器按当前请求的对外地址拼装（ForwardedHeaders 还原公网入口）。
+        await TrySendEmailConfirmationAsync(user, emailConfirmationLinkBase, cancellationToken);
 
         return await BuildProfileAsync(user, cancellationToken);
     }
@@ -406,290 +404,12 @@ public sealed class AccountService : IAccountService
         return Result.Success<IReadOnlyCollection<string>>(providers.ToArray());
     }
 
-    // ------------------------------------------------------------------ 第三方登录（GitHub / Google）
-
-    public async Task<Result<ExternalLoginResolution>> SignInWithExternalLoginAsync(
-        ExternalLoginInfo info,
-        CancellationToken cancellationToken = default)
-    {
-        var provider = info.LoginProvider;
-        var hasTrustedEmail = TryResolveTrustedEmail(info, out var email, out var externalName);
-
-        // ⓪ 邮箱白名单（典型用途：开发环境只放自己的测试账号）。闸门放在一切账号查找之前，
-        // 已绑定账号也不例外 —— 否则在名单放开期绑定一次，收紧后仍可登录，白名单就形同虚设。
-        // 名单非空却拿不到可信邮箱时按未命中处理（fail-closed），绝不放行。
-        if (!IsExternalEmailAllowed(hasTrustedEmail ? email : null))
-        {
-            var attempted = string.IsNullOrWhiteSpace(externalName) ? provider : externalName;
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginFailed, false, UserName: attempted,
-                    Details: $"{provider} 登录：邮箱不在允许名单内"),
-                cancellationToken);
-            return Result.Failure<ExternalLoginResolution>(Error.Forbidden(
-                "该第三方账号不在允许登录的名单内。如需访问，请联系管理员将你的邮箱加入白名单。"));
-        }
-
-        // ① 已建立过绑定：直接登录
-        var linked = await _userManager.FindByLoginAsync(provider, info.ProviderKey!);
-        if (linked is not null)
-        {
-            if (!linked.IsActive)
-            {
-                await _audit.LogAsync(
-                    new AuditEntry(AuditActionType.UserExternalLoginFailed, false, linked.Id, linked.UserName, Details: $"{provider} 登录：账号已停用"),
-                    cancellationToken);
-                return Result.Failure<ExternalLoginResolution>(Error.Forbidden("账号已被停用，请联系管理员。"));
-            }
-
-            // 有意的决策：外部登录跳过本地 MFA 第二因子 —— 外部 IdP 已完成身份验证
-            //（通常含其自身的两步验证），本地 2FA 保护的只是「密码」这条登录通道。
-            await SignInAndStampAsync(linked, isPersistent: false, provider, cancellationToken);
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginSucceeded, true, linked.Id, linked.UserName, Details: $"{provider} 登录"),
-                cancellationToken);
-            return Result.Success(new ExternalLoginResolution(
-                ExternalLoginStatus.SignedIn, linked.Id, linked.UserName!, linked.DisplayName, IsNewAccount: false));
-        }
-
-        // ② 未绑定：账号匹配与建号都以「提供商已验证的邮箱」为锚点，拿不到就明确拒绝。
-        // 不信未验证邮箱 —— 否则攻击者用可控的未验证邮箱即可冒名匹配本地账号。
-        //（可信邮箱在方法开头已解析一次，白名单闸门外的所有分支共用同一结果。）
-        if (!hasTrustedEmail)
-        {
-            var attempted = string.IsNullOrWhiteSpace(externalName) ? provider : externalName;
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginFailed, false, UserName: attempted, Details: $"{provider} 登录：外部邮箱缺失或未验证"),
-                cancellationToken);
-            return Result.Failure<ExternalLoginResolution>(Error.Unauthorized(
-                "无法从该外部账号获取已验证的邮箱。请先在提供商处完成邮箱验证，或使用账号密码登录。"));
-        }
-
-        var matched = await _userManager.FindByEmailAsync(email);
-        if (matched is not null)
-        {
-            if (!matched.IsActive)
-            {
-                await _audit.LogAsync(
-                    new AuditEntry(AuditActionType.UserExternalLoginFailed, false, matched.Id, matched.UserName, Details: $"{provider} 登录：账号已停用"),
-                    cancellationToken);
-                return Result.Failure<ExternalLoginResolution>(Error.Forbidden("账号已被停用，请联系管理员。"));
-            }
-
-            // 匹配到本地账号：不自动绑定（自动绑定等于承认"控制邮箱即可控制账号"），
-            // 交给用户在确认页显式确认 —— 提供商的已验证邮箱只证明"此刻控制该邮箱"。
-            return Result.Success(new ExternalLoginResolution(
-                ExternalLoginStatus.BindingConfirmationRequired, matched.Id, matched.UserName!, matched.DisplayName, IsNewAccount: false));
-        }
-
-        // ③ 无本地账号：自动建号。邮箱已经提供商验证，直接置为已确认（邮箱通道的 MFA 因此可用）。
-        var userName = await BuildUniqueUserNameAsync(info, email);
-        var user = new ApplicationUser
-        {
-            UserName = userName,
-            Email = email,
-            EmailConfirmed = true,
-            DisplayName = ResolveDisplayName(info.Principal, userName),
-            IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        var create = await _userManager.CreateAsync(user);
-        if (!create.Succeeded)
-        {
-            return Result.Failure<ExternalLoginResolution>(create.ToError());
-        }
-
-        // 新用户默认进入 User 角色（无管理权限），与密码注册的口径一致
-        await _userManager.AddToRoleAsync(user, AuthHubConstants.Roles.User);
-
-        var link = await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, info.ProviderKey!, provider));
-        if (!link.Succeeded)
-        {
-            return Result.Failure<ExternalLoginResolution>(link.ToError());
-        }
-
-        await SignInAndStampAsync(user, isPersistent: false, provider, cancellationToken);
-        await _audit.LogAsync(
-            new AuditEntry(AuditActionType.UserExternalLoginSucceeded, true, user.Id, user.UserName, Details: $"{provider} 首次登录，自动创建账号"),
-            cancellationToken);
-
-        return Result.Success(new ExternalLoginResolution(
-            ExternalLoginStatus.SignedIn, user.Id, user.UserName!, user.DisplayName, IsNewAccount: true));
-    }
-
-    public async Task<Result<ExternalBindingView>> GetExternalBindingViewAsync(
-        ExternalLoginInfo info,
-        CancellationToken cancellationToken = default)
-    {
-        if (!TryResolveTrustedEmail(info, out var email, out var externalName))
-        {
-            return Result.Failure<ExternalBindingView>(Error.Unauthorized("无法从该外部账号获取已验证的邮箱，无法建立绑定。"));
-        }
-
-        // 白名单与登录入口同口径：登录被挡的账号也不该拿到绑定确认页
-        if (!IsExternalEmailAllowed(email))
-        {
-            return Result.Failure<ExternalBindingView>(Error.Forbidden(
-                "该第三方账号不在允许登录的名单内，无法建立绑定。"));
-        }
-
-        var local = await _userManager.FindByEmailAsync(email);
-        if (local is null || !local.IsActive)
-        {
-            return Result.Failure<ExternalBindingView>(Error.NotFound("没有匹配的本地账号，或账号已停用。"));
-        }
-
-        return Result.Success(new ExternalBindingView(
-            info.LoginProvider,
-            email,
-            externalName,
-            local.Id,
-            local.UserName ?? local.Id,
-            local.Email ?? email));
-    }
-
-    public async Task<Result<ExternalLoginResolution>> ConfirmExternalBindingAsync(
-        ExternalLoginInfo info,
-        CancellationToken cancellationToken = default)
-    {
-        var provider = info.LoginProvider;
-
-        if (!TryResolveTrustedEmail(info, out var email, out _))
-        {
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginFailed, false, UserName: provider, Details: $"{provider} 绑定确认：外部邮箱缺失或未验证"),
-                cancellationToken);
-            return Result.Failure<ExternalLoginResolution>(Error.Unauthorized("无法从该外部账号获取已验证的邮箱，无法建立绑定。"));
-        }
-
-        // 即使外部 Cookie 是白名单收紧前留下的，确认绑定这一步仍然按当前名单再挡一次
-        if (!IsExternalEmailAllowed(email))
-        {
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginFailed, false, UserName: provider, Details: $"{provider} 绑定确认：邮箱不在允许名单内"),
-                cancellationToken);
-            return Result.Failure<ExternalLoginResolution>(Error.Forbidden(
-                "该第三方账号不在允许登录的名单内，无法建立绑定。"));
-        }
-
-        // 重新按邮箱定位本地账号 —— 表单里不带任何身份字段，绑定向导无法被表单参数操纵
-        var user = await _userManager.FindByEmailAsync(email);
-        if (user is null || !user.IsActive)
-        {
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginFailed, false, user?.Id, user?.UserName, Details: $"{provider} 绑定确认：本地账号不存在或已停用"),
-                cancellationToken);
-            return Result.Failure<ExternalLoginResolution>(Error.Unauthorized("本地账号不存在或已停用，无法绑定。"));
-        }
-
-        // 绑定键 (LoginProvider, ProviderKey) 在库上有唯一索引：确认页停留期间被另一会话抢先绑定时，
-        // 显式报冲突而不是让数据库异常裸奔
-        var existing = await _userManager.FindByLoginAsync(provider, info.ProviderKey!);
-        if (existing is not null && existing.Id != user.Id)
-        {
-            await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserExternalLoginFailed, false, user.Id, user.UserName, Details: $"{provider} 绑定确认：该外部账号已绑定其他本地账号"),
-                cancellationToken);
-            return Result.Failure<ExternalLoginResolution>(Error.Conflict("该外部账号已绑定其他 AuthHub 账号。"));
-        }
-
-        if (existing is null)
-        {
-            var addResult = await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, info.ProviderKey!, provider));
-            if (!addResult.Succeeded)
-            {
-                return Result.Failure<ExternalLoginResolution>(addResult.ToError());
-            }
-        }
-
-        await SignInAndStampAsync(user, isPersistent: false, provider, cancellationToken);
-        await _audit.LogAsync(
-            new AuditEntry(AuditActionType.UserExternalLoginSucceeded, true, user.Id, user.UserName, Details: $"{provider} 登录（绑定已有账号）"),
-            cancellationToken);
-
-        return Result.Success(new ExternalLoginResolution(
-            ExternalLoginStatus.SignedIn, user.Id, user.UserName!, user.DisplayName, IsNewAccount: false));
-    }
-
     // ------------------------------------------------------------------ 内部辅助
 
     private async Task<ApplicationUser?> FindByIdentifierAsync(string identifier)
         => identifier.Contains('@', StringComparison.Ordinal)
             ? await _userManager.FindByEmailAsync(identifier)
             : await _userManager.FindByNameAsync(identifier);
-
-    /// <summary>
-    /// 从外部身份解析「已验证」的邮箱。
-    ///
-    /// 信任判据只认显式的 <c>email_verified=true</c> 声明（两个提供商的处理器都由
-    /// OnCreatingTicket 事件补写，见 ExternalAuthenticationExtensions），不按提供商名
-    /// 做任何"应该可信"的推断 —— 判据错了就是账号接管，宁可误拒。
-    /// </summary>
-    private static bool TryResolveTrustedEmail(ExternalLoginInfo info, out string email, out string externalName)
-    {
-        email = string.Empty;
-        externalName = info.Principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty;
-
-        var candidate = info.Principal.FindFirstValue(ClaimTypes.Email);
-        if (string.IsNullOrWhiteSpace(candidate) || !IsEmailVerified(info))
-        {
-            return false;
-        }
-
-        email = candidate;
-        return true;
-    }
-
-    private static bool IsEmailVerified(ExternalLoginInfo info)
-        => info.Principal.Claims.Any(claim =>
-            claim.Type.EndsWith("email_verified", StringComparison.OrdinalIgnoreCase) &&
-            bool.TryParse(claim.Value, out var verified) && verified);
-
-    /// <summary>
-    /// 外部邮箱是否在允许名单内：名单为空表示不限制（生产默认）；非空时按忽略大小写精确匹配，
-    /// 配置项里的空白条目会被跳过。<paramref name="email"/> 为 null（拿不到可信邮箱）时
-    /// 在非空名单下返回 false —— 与调用方约定的 fail-closed 口径一致。
-    /// </summary>
-    private bool IsExternalEmailAllowed(string? email)
-    {
-        var allowed = _externalLogin.AllowedEmails;
-        if (allowed is null || allowed.Length == 0)
-        {
-            return true;
-        }
-
-        return !string.IsNullOrWhiteSpace(email) &&
-               allowed.Any(item =>
-                   !string.IsNullOrWhiteSpace(item) &&
-                   string.Equals(item.Trim(), email, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>为新外部用户起一个不冲突的用户名：优先用提供商给的标识，其次邮箱前缀。</summary>
-    private async Task<string> BuildUniqueUserNameAsync(ExternalLoginInfo info, string email)
-    {
-        var preferred = info.Principal.FindFirstValue(ClaimTypes.Name)
-                        ?? email[..email.IndexOf('@', StringComparison.Ordinal)];
-
-        // Identity 默认的用户名字符集（字母数字与 -._@+），超出的剥掉
-        const string Allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-        var baseName = new string(preferred.Where(Allowed.Contains).ToArray());
-
-        if (baseName.Length < 3)
-        {
-            baseName = "user";
-        }
-
-        var candidate = baseName;
-        for (var i = 1; await _userManager.FindByNameAsync(candidate) is not null; i++)
-        {
-            candidate = $"{baseName}{i}";
-        }
-
-        return candidate;
-    }
-
-    private static string ResolveDisplayName(ClaimsPrincipal principal, string fallbackUserName)
-        => principal.FindFirstValue(ClaimTypes.Name) ?? fallbackUserName;
 
     private async Task<ApplicationUser?> GetCurrentUserAsync()
         => _currentUser.UserId is { } userId ? await _userManager.FindByIdAsync(userId) : null;
@@ -744,23 +464,198 @@ public sealed class AccountService : IAccountService
         return codes?.ToArray() ?? Array.Empty<string>();
     }
 
-    private async Task TrySendEmailConfirmationAsync(ApplicationUser user, CancellationToken cancellationToken)
+    /// <returns>是否真正发出确认邮件（失败时已记日志，不抛给调用方）。</returns>
+    private async Task<bool> TrySendEmailConfirmationAsync(ApplicationUser user, string? linkBase, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(user.Email)) return;
+        if (string.IsNullOrWhiteSpace(user.Email)) return false;
 
         try
         {
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var link = BuildTokenLink(linkBase, "/account/confirm-email", ("userId", user.Id), ("token", token));
             await _emailSender.SendAsync(
                 user.Email,
                 "【AuthHub】请确认您的邮箱",
-                $"请调用 POST /api/account/email/confirm 完成确认。\nuserId: {user.Id}\ntoken: {token}",
+                $"请点击下方链接完成邮箱确认（链接 1 小时内有效）：\n\n{link}\n\n" +
+                "如果不是你本人操作，请忽略此邮件。",
                 cancellationToken);
+            await _audit.LogAsync(
+                new AuditEntry(AuditActionType.UserEmailConfirmationRequested, true, user.Id, user.UserName),
+                cancellationToken);
+            return true;
         }
         catch (Exception ex)
         {
             // 邮件通道不可用不能导致注册失败
             _logger.LogWarning(ex, "发送邮箱确认邮件失败，用户 {UserId}", user.Id);
+            return false;
         }
+    }
+
+    // ------------------------------------------------------------------ 忘记密码 / 重置密码
+
+    /// <summary>
+    /// 申请密码重置：按邮箱查找用户，生成 Identity 签名的重置令牌并通过邮件发送重置链接。
+    ///
+    /// <para>
+    /// 无论邮箱是否存在都返回成功 —— 避免通过响应差异枚举系统里有哪些邮箱
+    /// （用户名枚举攻击）。真实的发信只在用户存在时进行。
+    /// </para>
+    /// </summary>
+    public async Task<Result> RequestPasswordResetAsync(string email, string? resetLinkBase, CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.Trim();
+        var user = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (user is null)
+        {
+            // 不泄露"该邮箱是否注册"
+            return Result.Success();
+        }
+
+        if (!user.IsActive)
+        {
+            // 账号已停用：同样不发信、不区分响应
+            return Result.Success();
+        }
+
+        try
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var link = BuildTokenLink(resetLinkBase, "/account/reset-password", ("email", user.Email ?? string.Empty), ("token", token));
+            await _emailSender.SendAsync(
+                user.Email!,
+                "【AuthHub】重置您的密码",
+                $"请点击下方链接重置密码（链接 1 小时内有效）：\n\n{link}\n\n" +
+                "如果不是你本人操作，请忽略此邮件，你的密码不会被修改。",
+                cancellationToken);
+
+            await _audit.LogAsync(
+                new AuditEntry(AuditActionType.UserPasswordResetRequested, true, user.Id, user.UserName),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // 邮件失败不向调用方暴露，避免区分"用户存在但邮件发不出"；审计记失败便于排查
+            _logger.LogWarning(ex, "发送密码重置邮件失败，用户 {UserId}", user.Id);
+            await _audit.LogAsync(
+                new AuditEntry(AuditActionType.UserPasswordResetRequested, false, user.Id, user.UserName, Details: "邮件发送失败"),
+                cancellationToken);
+        }
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// 用重置令牌改密。令牌由 <c>UserManager.GeneratePasswordResetTokenAsync</c> 产出，
+    /// Identity 用 DataProtection 签名，有效期由 <c>DataProtectionTokenProviderOptions.TokenLifespan</c> 控制（本项目 1 小时）。
+    /// 成功后 <c>ResetPasswordAsync</c> 会更新安全戳，使其他设备上的旧 Cookie 会话失效。
+    /// </summary>
+    public async Task<Result> ResetPasswordAsync(string email, string token, string newPassword, CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null)
+        {
+            // 与令牌无效同文案、同错误类型，避免通过 404/400 差异枚举邮箱
+            return Result.Failure(Error.Validation("重置链接无效或已过期，请重新申请。"));
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+        if (!result.Succeeded)
+        {
+            // 密码策略失败（强度不足等）应透出真实原因，方便用户改密重试；
+            // 令牌无效/过期则统一模糊提示，避免泄露校验细节。
+            if (IsPasswordPolicyFailure(result))
+            {
+                await _audit.LogAsync(
+                    new AuditEntry(AuditActionType.UserPasswordReset, false, user.Id, user.UserName, Details: "新密码不符合策略"),
+                    cancellationToken);
+                return Result.Failure(result.ToError());
+            }
+
+            await _audit.LogAsync(
+                new AuditEntry(AuditActionType.UserPasswordReset, false, user.Id, user.UserName, Details: "令牌无效或已过期"),
+                cancellationToken);
+            return Result.Failure(Error.Validation("重置链接无效或已过期，请重新申请。"));
+        }
+
+        // 安全戳已在 UserManager.ResetPasswordAsync → UpdatePasswordHash 内更新，无需再 RefreshSignIn。
+        // 匿名重置场景下 RefreshSignInAsync 是 no-op 且会打 Error 日志。
+
+        await _audit.LogAsync(
+            new AuditEntry(AuditActionType.UserPasswordReset, true, user.Id, user.UserName),
+            cancellationToken);
+
+        return Result.Success();
+    }
+
+    /// <summary>Identity 密码策略错误的 Code 均以 <c>Password</c> 开头（如 PasswordTooShort）。</summary>
+    private static bool IsPasswordPolicyFailure(IdentityResult result)
+        => result.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.OrdinalIgnoreCase));
+
+    // ------------------------------------------------------------------ 邮箱确认
+
+    /// <summary>消费邮箱确认令牌，把 EmailConfirmed 置为 true。</summary>
+    public async Task<Result> ConfirmEmailAsync(string userId, string token, CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+        {
+            return Result.Failure(Error.NotFound("确认链接无效。"));
+        }
+
+        if (user.EmailConfirmed)
+        {
+            // 幂等：已确认再点链接直接成功
+            return Result.Success();
+        }
+
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (!result.Succeeded)
+        {
+            await _audit.LogAsync(
+                new AuditEntry(AuditActionType.UserEmailConfirmed, false, user.Id, user.UserName, Details: "令牌无效或已过期"),
+                cancellationToken);
+            return Result.Failure(Error.Validation("确认链接无效或已过期，请重新申请。"));
+        }
+
+        await _audit.LogAsync(
+            new AuditEntry(AuditActionType.UserEmailConfirmed, true, user.Id, user.UserName),
+            cancellationToken);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// 重发邮箱确认邮件。已确认的邮箱不再重发（避免无意义发信）。
+    /// 同样不区分"邮箱不存在"，统一返回成功。
+    /// </summary>
+    public async Task<Result> ResendEmailConfirmationAsync(string email, string? confirmationLinkBase, CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null || user.EmailConfirmed)
+        {
+            return Result.Success();
+        }
+
+        var sent = await TrySendEmailConfirmationAsync(user, confirmationLinkBase, cancellationToken);
+        if (sent)
+        {
+            await _audit.LogAsync(
+                new AuditEntry(AuditActionType.UserEmailConfirmationResent, true, user.Id, user.UserName),
+                cancellationToken);
+        }
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// 把 token 链接拼成绝对地址。token 由 Identity 产出，可能含 + / = 等 URL 不安全字符，
+    /// 必须用 <c>System.Uri.EscapeDataString</c> 编码。
+    /// </summary>
+    private static string BuildTokenLink(string? baseUrl, string path, params (string Key, string Value)[] query)
+    {
+        var schemeAndHost = string.IsNullOrWhiteSpace(baseUrl) ? string.Empty : baseUrl.TrimEnd('/');
+        var queryString = string.Join("&", query.Select(q => $"{Uri.EscapeDataString(q.Key)}={Uri.EscapeDataString(q.Value)}"));
+        return $"{schemeAndHost}{path}?{queryString}";
     }
 }

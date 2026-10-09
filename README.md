@@ -85,9 +85,8 @@ AuthHub.slnx
 │   ├── AuthHub.Infrastructure/  32 个文件   EF Core、迁移、OpenIddict 适配、各类实现
 │   │                                        （三层叠加的 LayeredRolePermissionMap、
 │   │                                        反代信任范围解析 ProxyTrustParser、
-│   │                                        环境护栏与配置装配 EnvironmentGuard /
-│   │                                        LocalSettingsConfiguration）
-│   └── AuthHub.Api/             49 个 .cs + 11 个 .cshtml + 4 个 appsettings + 5 个静态资源
+│   │                                        环境护栏 EnvironmentGuard）
+│   └── AuthHub.Api/             49 个 .cs + 11 个 .cshtml + 3 个 appsettings + 5 个静态资源
 │                                            控制器、协议页、管理后台（Razor Pages）、
 │                                            视图 TagHelper 组件（TagHelpers/）、
 │                                            中间件、服务注册与管道（Extensions/）、
@@ -95,7 +94,7 @@ AuthHub.slnx
 ├── tests/
 │   ├── AuthHub.UnitTests/        10 个文件  领域规则、Result、校验器、Option 校验器、AccountService（Moq）、
 │   │                                        权限映射三层的叠加语义（用 Fake 覆盖存储，不碰数据库）、
-│   │                                        反代信任范围解析 / 种子护栏 / 环境护栏 / 本机覆盖文件的位置约束
+│   │                                        反代信任范围解析 / 种子护栏 / 环境护栏
 │   └── AuthHub.IntegrationTests/ 15 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 部署安全（密钥环与反代）/ 环境护栏 / 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
@@ -220,12 +219,11 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 |---|------|--------|------|
 | 1 | `appsettings.json` | **所有环境共用**的默认值 | ✅ |
 | 2 | `appsettings.{环境}.json` | 该环境特有的取值 | Development / Production 都入库 |
-| 3 | `appsettings.Local.json` | **本机私有**覆盖（另一台数据库、另一个证书路径） | ❌ 只有 `.example` 模板入库 |
+| 3 | **User Secrets**（仅 Development） | 本机私有密钥（OAuth ClientSecret 等） | ❌ 在用户目录，不进仓库 |
 | 4 | 环境变量 / 命令行参数 | 部署平台注入的连接串、口令、证书 | — |
 
-本机文件刻意排在**第 3 位**：晚于入库的配置文件（否则本机覆盖没有意义），早于环境变量
-（部署平台注入的配置必须是最终裁决者）。反过来的话，「容器里明明设了环境变量却不生效」
-会变成最难排查的一类问题 —— 线索藏在一个可能被遗忘的本地文件里。
+这是 ASP.NET Core 的默认层序（`WebApplication.CreateBuilder` 已装配）。User Secrets
+只在 Development 生效，故生产/容器只能靠环境变量——不会出现「本机文件盖过部署注入」的坑。
 
 **为什么生产配置也入库**：它让「生产该长什么样」有唯一可 review、可被 CI 校验的依据，
 不必去翻部署文档或凭记忆。代价是**绝不能往里写任何口令** —— 写进去即使后来删掉，
@@ -246,7 +244,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 
 ### 配置里的说明文字用 `//` 注释，不用 `_comment_*` 伪键
 
-四个 `appsettings*.json` 里都带大段中文说明（每个开关「为什么是这个值、什么场景下才改」）。
+三份入库的 `appsettings*.json` 里都带大段中文说明（每个开关「为什么是这个值、什么场景下才改」）。
 它们是**真注释**（JSONC 风格），不是配置项：
 
 ```jsonc
@@ -270,23 +268,20 @@ CI 不解析配置、`docker build` 只是复制文件、`dotnet ef` 走的是�
 
 `launchSettings.json` 早就用着 `//` 注释（`dotnet run` 按 `JsonCommentHandling.Skip` 解析），
 所以这不是引入新约定。守门用例见 `ShippedConfigurationFilesTests`：一个用例用**运行时同一个**
-配置提供程序把四个文件各读一遍（注释写坏、漏逗号都会当场失败），另一个禁止 `_comment*` 键出现在
+配置提供程序把三份入库文件各读一遍（注释写坏、漏逗号都会当场失败），另一个禁止 `_comment*` 键出现在
 配置树里。
 
 > 编辑器若给注释画波浪线（VS Code 默认会），把 `appsettings*.json` 关联到 `jsonc` 即可：
 > `"files.associations": { "appsettings*.json": "jsonc" }`。纯显示问题，不影响构建与运行。
 > 仓库根目录的 `.vscode/` 在 `.gitignore` 里，因此这条关联只能各自在本机设置。
 
-### 本机私有覆盖
+### 本机私有密钥（User Secrets）
 
-```bash
-cp src/AuthHub.Api/appsettings.Local.json.example src/AuthHub.Api/appsettings.Local.json
-# 再改你要覆盖的那几项，其余整段删掉 —— 它按路径覆盖，没写的项继续沿用上层取值
-```
+需要写入机密配置时用框架自带的 User Secrets，**不要**写进任何 `appsettings*.json`。
+查看 / 清空：`dotnet user-secrets list`、`dotnet user-secrets clear`。机密落在
+`%APPDATA%\Microsoft\UserSecrets\authhub-api-secrets\`。改完后需**重启**。
 
-模板本身是自解释文档（每个键都写了什么场景下才需要它）。文件同时列进了 `.gitignore`
-与 `.dockerignore`；后者尤其不能漏 —— 构建机上那份 `Local.json` 会被 `COPY` 进镜像，
-进而盖掉容器里由环境变量注入的生产配置。
+当前登录面为**账号密码**（及可选 MFA）；不含第三方 IdP。
 
 ### 启动期环境护栏
 

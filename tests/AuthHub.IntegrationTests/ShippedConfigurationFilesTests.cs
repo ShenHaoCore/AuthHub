@@ -21,15 +21,12 @@ public class ShippedConfigurationFilesTests
     /// <summary>
     /// 库存里所有「随包发布」的配置文件。
     ///
-    /// <c>.example</c> 模板也算 —— 它是给人照着复制去用的，坏了同样会误导人。
-    /// <c>appsettings.Local.json</c> 不在列：它不入库，各机器内容不同。
     /// </summary>
     private static readonly string[] ShippedFiles =
     [
         "src/AuthHub.Api/appsettings.json",
         "src/AuthHub.Api/appsettings.Development.json",
-        "src/AuthHub.Api/appsettings.Production.json",
-        "src/AuthHub.Api/appsettings.Local.json.example"
+        "src/AuthHub.Api/appsettings.Production.json"
     ];
 
     [Theory]

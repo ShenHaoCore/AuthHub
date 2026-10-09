@@ -24,15 +24,18 @@ public class AccountApiController : ApiControllerBase
     private readonly IAccountService _accountService;
     private readonly IConsentService _consentService;
     private readonly ICurrentUser _currentUser;
+    private readonly IConfiguration _configuration;
 
     public AccountApiController(
         IAccountService accountService,
         IConsentService consentService,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        IConfiguration configuration)
     {
         _accountService = accountService;
         _consentService = consentService;
         _currentUser = currentUser;
+        _configuration = configuration;
     }
 
     /// <summary>注册新账号。</summary>
@@ -42,7 +45,45 @@ public class AccountApiController : ApiControllerBase
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
     public Task<IActionResult> Register([FromBody] RegisterRequest request)
-        => ExecuteAsync(() => _accountService.RegisterAsync(request, HttpContext.RequestAborted));
+        => ExecuteAsync(() => _accountService.RegisterAsync(request, GetBaseUrl(), HttpContext.RequestAborted));
+
+    /// <summary>
+    /// 申请密码重置：向邮箱发送重置链接。无论邮箱是否存在都返回 204，
+    /// 避免通过响应差异枚举系统账号。
+    /// </summary>
+    [EndpointSummary("申请密码重置")]
+    [EndpointDescription("向邮箱发送重置链接；无论邮箱是否存在均返回 204。")]
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        => ExecuteAsync(() => _accountService.RequestPasswordResetAsync(request.Email, GetBaseUrl(), HttpContext.RequestAborted));
+
+    /// <summary>用邮箱里的重置令牌改密。</summary>
+    [EndpointSummary("重置密码")]
+    [EndpointDescription("用邮件链接里的令牌设置新密码。")]
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        => ExecuteAsync(() => _accountService.ResetPasswordAsync(request.Email, request.Token, request.NewPassword, HttpContext.RequestAborted));
+
+    /// <summary>消费邮箱确认令牌。</summary>
+    [EndpointSummary("确认邮箱")]
+    [EndpointDescription("用邮件链接里的令牌把邮箱标记为已确认。")]
+    [HttpGet("email/confirm")]
+    [AllowAnonymous]
+    public Task<IActionResult> ConfirmEmail([FromQuery] string userId, [FromQuery] string token)
+        => ExecuteAsync(() => _accountService.ConfirmEmailAsync(userId, token, HttpContext.RequestAborted));
+
+    /// <summary>重发邮箱确认邮件。</summary>
+    [EndpointSummary("重发邮箱确认邮件")]
+    [EndpointDescription("邮箱未确认时重发确认信；已确认或不存在时静默成功。")]
+    [HttpPost("email/resend-confirmation")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
+    public Task<IActionResult> ResendConfirmation([FromBody] ResendEmailConfirmationRequest request)
+        => ExecuteAsync(() => _accountService.ResendEmailConfirmationAsync(request.Email, GetBaseUrl(), HttpContext.RequestAborted));
 
     /// <summary>
     /// 登录。启用 MFA 的账号会返回 <c>requiresTwoFactor=true</c> 与一次性 <c>twoFactorToken</c>，
@@ -156,4 +197,10 @@ public class AccountApiController : ApiControllerBase
     [HttpDelete("consents/{authorizationId}")]
     public Task<IActionResult> RevokeConsent(string authorizationId)
         => ExecuteAsync(() => _consentService.RevokeAsync(authorizationId, HttpContext.RequestAborted));
+
+    /// <summary>
+    /// 邮件链接用的对外基址。优先 <c>AuthHub:PublicBaseUrl</c>，其次 <c>AuthHub:Issuer</c>，
+    /// 都未配置时才回退到当前请求（存在 Host 头投毒风险，仅适合本机临时调试）。
+    /// </summary>
+    private string GetBaseUrl() => PublicBaseUrlResolver.Resolve(_configuration, Request);
 }

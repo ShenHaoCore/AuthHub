@@ -188,7 +188,8 @@ public class OidcEndpointTests
         response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
 
         var html = await response.Content.ReadAsStringAsync();
-        html.Should().Contain("登录 AuthHub");
+        html.Should().Contain("<h1>登录</h1>");
+        html.Should().Contain("brand-name\">AuthHub");
         AuthHubFixture.ExtractAntiforgeryToken(html).Should().NotBeNullOrWhiteSpace();
 
         // 会话 Cookie 必须是 HttpOnly + SameSite=Lax
