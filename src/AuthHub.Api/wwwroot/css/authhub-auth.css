@@ -7,7 +7,7 @@
    直接断言，且不该引入视图引擎的间接层。
 
    调色板来自 authhub-tokens.css，与后台 authhub.css 同源，
-   因此登录页与后台在视觉上是同一套设计语言（ABP 风格的浅色卡片 + 蓝色主色）。
+   因此登录页与后台在视觉上是同一套设计语言（冷灰石板 + 青绿主色）。
 
    类名沿用 HtmlPages.cs 里既有的选择器（.card / .brand / .field / .alert …），
    这样当年把 <style> 抽成外链时，页面标记一字未改，集成测试的断言也无需调整。
@@ -26,8 +26,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px 0;
-    background: var(--ah-bg);
+    padding: 28px 0;
+    /* 氛围：冷石板底 + 青绿径向光晕，非整页仪表盘 */
+    background:
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(var(--ah-primary-rgb), .16), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 100% 100%, rgba(20, 184, 166, .08), transparent 50%),
+        linear-gradient(165deg, #e8eef5 0%, var(--ah-bg) 42%, #eef2f6 100%);
     color: var(--ah-text);
     font-family: var(--ah-font);
     font-size: 14px;
@@ -36,40 +40,68 @@ body {
 }
 
 .card {
+    position: relative;
     width: 100%;
     max-width: 420px;
     margin: 0 24px;
-    padding: 32px;
+    padding: 36px 32px 28px;
     background: var(--ah-surface);
     border: 1px solid var(--ah-border);
     border-radius: var(--ah-radius-lg);
-    box-shadow: var(--ah-shadow-xs), 0 8px 24px rgba(31, 35, 40, .06);
+    box-shadow: var(--ah-shadow-sm), var(--ah-shadow-md);
 }
 
 /* 同意授权页要列一串 scope，给它更宽的版面 */
 .card.wide { max-width: 480px; }
 
-/* ============================================================== 品牌区 */
+/* ============================================================== 品牌区（英雄级） */
 
-.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+}
 .brand-mark {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--ah-radius-sm);
-    background: var(--ah-primary);
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: linear-gradient(145deg, var(--ah-primary-accent), var(--ah-primary));
     color: #fff;
-    font-weight: 700;
-    font-size: 14px;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: .04em;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 6px 16px rgba(var(--ah-primary-rgb), .28);
+    flex-shrink: 0;
 }
-.brand-name { font-weight: 600; font-size: 15px; }
+.brand-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.brand-name {
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1.2;
+    letter-spacing: -.02em;
+    color: var(--ah-text);
+}
+.brand-tagline {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--ah-muted);
+    line-height: 1.3;
+}
 
 /* ============================================================== 标题与表单 */
 
-h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
-.subtitle { color: var(--ah-muted); margin: 0 0 20px; }
+h1 {
+    font-size: 17px;
+    margin: 0 0 6px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--ah-text);
+}
+.subtitle { color: var(--ah-muted); margin: 0 0 22px; font-size: 13.5px; }
 
 label { display: block; font-weight: 500; margin-bottom: 6px; }
 
@@ -77,91 +109,63 @@ input[type=text],
 input[type=password],
 input[type=email] {
     width: 100%;
-    padding: 9px 12px;
+    padding: 10px 12px;
     border: 1px solid var(--ah-border);
     border-radius: var(--ah-radius-sm);
     font-size: 14px;
     font-family: inherit;
     background: var(--ah-surface);
     color: var(--ah-text);
+    transition: border-color .15s ease, box-shadow .15s ease;
 }
 
 input:focus {
     outline: 0;
     border-color: var(--ah-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+    box-shadow: 0 0 0 3px rgba(var(--ah-primary-rgb), .16);
 }
 
-.field { margin-bottom: 14px; }
+.field { margin-bottom: 16px; }
 
-.checkbox { display: flex; align-items: center; gap: 8px; color: var(--ah-muted); margin-bottom: 18px; }
+.checkbox { display: flex; align-items: center; gap: 8px; color: var(--ah-muted); margin-bottom: 20px; }
 .checkbox input { margin: 0; }
 .checkbox label { margin: 0; font-weight: 400; }
 
 button {
     width: 100%;
-    padding: 10px 16px;
+    padding: 11px 16px;
     border: 0;
     border-radius: var(--ah-radius-sm);
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
     font-family: inherit;
+    transition: background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
 }
 button:focus-visible { outline: 2px solid var(--ah-primary); outline-offset: 2px; }
 
-.btn-primary { background: var(--ah-primary); color: #fff; }
+.btn-primary {
+    background: var(--ah-primary);
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(var(--ah-primary-rgb), .2);
+}
 .btn-primary:hover { background: var(--ah-primary-hover); }
+.btn-primary:active { transform: translateY(1px); }
 
 .btn-secondary { background: var(--ah-surface); color: var(--ah-text); border: 1px solid var(--ah-border); }
-.btn-secondary:hover { background: #f3f4f6; }
+.btn-secondary:hover { background: #f8fafc; }
+.btn-secondary:active { transform: translateY(1px); }
 
 .actions { display: flex; gap: 10px; margin-top: 22px; }
 .actions button { flex: 1; }
 
-/* ============================================================== 第三方登录 */
-
-.divider {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 18px 0 14px;
-    color: var(--ah-muted);
-    font-size: 12px;
-}
-.divider::before,
-.divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--ah-border);
-}
-
-.external-providers { display: flex; flex-direction: column; gap: 10px; }
-.btn-external {
-    background: var(--ah-surface);
-    color: var(--ah-text);
-    border: 1px solid var(--ah-border);
-    /* 图标 + 文字水平居中排列：inline-flex 在外层 flex column 里仍占满整行 */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-.provider-icon { display: inline-flex; flex: none; }
-.provider-icon svg { width: 16px; height: 16px; display: block; }
-.btn-external:hover { background: #f3f4f6; }
-/* 未启用的提供商按钮：入口可见但禁用（预告态），悬停不再变色 */
-.btn-external:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-external:disabled:hover { background: var(--ah-surface); }
-
-/* 绑定确认页的取消链接复用按钮外观：button 选择器的排版规则对 a 不生效，单独补齐 */
+/* 绑定确认等页的次要按钮链接（若还有 a.btn-secondary） */
 .actions a { flex: 1; }
 a.btn-secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 16px;
+    padding: 11px 16px;
     border-radius: var(--ah-radius-sm);
     border: 1px solid var(--ah-border);
     background: var(--ah-surface);
@@ -169,65 +173,10 @@ a.btn-secondary {
     font-size: 14px;
     font-weight: 600;
     text-decoration: none;
+    transition: background .15s ease, transform .12s ease;
 }
-a.btn-secondary:hover { background: #f3f4f6; }
-
-/* ============================================================== 登录页签 */
-
-.login-tab-bar {
-    display: flex;
-    gap: 2px;
-    margin-bottom: 18px;
-    padding: 3px;
-    background: #f1f3f5;
-    border-radius: var(--ah-radius-sm);
-}
-.login-tab {
-    flex: 1;
-    padding: 7px 10px;
-    background: transparent;
-    color: var(--ah-muted);
-    border: 0;
-    border-radius: calc(var(--ah-radius-sm) - 2px);
-    font-weight: 500;
-    width: auto;
-}
-.login-tab:hover { color: var(--ah-text); }
-.login-tab.is-active {
-    background: var(--ah-surface);
-    color: var(--ah-text);
-    font-weight: 600;
-    box-shadow: var(--ah-shadow-xs);
-}
-
-/* 无 JS 时两个面板都展开（渐进增强）；JS 激活页签后通过 hidden 属性折叠非活跃面板。
-   显式写 [hidden] 规则是防后续有人给 .login-panel 补 display 属性、盖过 UA 的 hidden 样式。 */
-.login-panel[hidden] { display: none; }
-
-/* 企业微信扫码面板 */
-.wecom-qr {
-    width: 300px;
-    height: 300px;
-    margin: 0 auto;
-    overflow: hidden;
-    border-radius: var(--ah-radius-sm);
-    border: 1px solid var(--ah-border);
-    background: var(--ah-surface);
-}
-.wecom-qr iframe {
-    width: 100%;
-    height: 100%;
-    border: 0;
-    display: block;
-}
-.wecom-qr-disabled {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--ah-muted);
-    font-size: 14px;
-    background: #f9fafb;
-}
+a.btn-secondary:hover { background: #f8fafc; text-decoration: none; }
+a.btn-secondary:active { transform: translateY(1px); }
 
 /* ============================================================== 提示 */
 
@@ -238,6 +187,29 @@ a.btn-secondary:hover { background: #f3f4f6; }
     background: var(--ah-danger-soft);
     border: 1px solid var(--ah-danger-border);
     color: var(--ah-danger);
+    animation: ah-alert-in .28s ease;
+}
+
+@keyframes ah-alert-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .alert,
+    button,
+    a.btn-secondary,
+    input[type=text],
+    input[type=password],
+    input[type=email] {
+        animation: none;
+        transition: none;
+    }
+    .btn-primary:active,
+    .btn-secondary:active,
+    a.btn-secondary:active {
+        transform: none;
+    }
 }
 
 /* ============================================================== 同意授权 */
@@ -252,16 +224,45 @@ a.btn-secondary:hover { background: #f3f4f6; }
 /* ============================================================== 页脚 */
 
 .hint { color: var(--ah-muted); font-size: 12px; margin-top: 18px; }
+
+.field-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+.field-label-row label { margin-bottom: 0; }
+.forgot-link {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--ah-primary);
+    text-decoration: none;
+}
+.forgot-link:hover { text-decoration: underline; }
+
+.dev-sms-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.dev-sms-list li { padding: 12px 0; border-top: 1px solid var(--ah-border); }
+.dev-sms-meta { color: var(--ah-muted); font-size: 12px; margin-bottom: 6px; }
+.dev-sms-body {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--ah-mono);
+    font-size: 13px;
+    line-height: 1.45;
+}
 .hint code {
     font-family: var(--ah-mono);
     font-size: 11.5px;
     padding: 1px 5px;
     border-radius: 4px;
-    background: #f1f3f5;
+    background: #e8eef4;
     color: var(--ah-text);
 }
 
-.footer { margin-top: 22px; text-align: center; color: var(--ah-muted); font-size: 12px; }
+.footer { margin-top: 24px; text-align: center; color: var(--ah-muted); font-size: 11.5px; }
 
 a { color: var(--ah-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }

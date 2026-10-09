@@ -15,8 +15,6 @@ public sealed class SecurityHeadersMiddleware : IMiddleware
     /// <summary>
     /// 两套策略共用的指令。除 <c>script-src</c> 外完全一致 ——
     /// 刻意把公共部分收敛到一处，避免日后只在其中一份上补指令、另一份悄悄退化。
-    /// <c>frame-src</c> 只放行企业微信扫码域：登录页「扫码登录」页签以 iframe 直嵌官方
-    /// 二维码面板（自嵌 iframe 而非官方 wwLogin.js，符合本站「无 CDN 引用」约束）。
     /// </summary>
     private const string SharedDirectives =
         "default-src 'self'; " +
@@ -24,7 +22,7 @@ public sealed class SecurityHeadersMiddleware : IMiddleware
         "img-src 'self' data:; " +
         "font-src 'self'; " +
         "form-action 'self'; " +
-        "frame-src https://login.work.weixin.qq.com; " +
+        "frame-src 'none'; " +
         "frame-ancestors 'none'; " +
         "base-uri 'self'";
 

@@ -14,63 +14,83 @@
 
    约束：本站 CSP 为 script-src 'self'、style-src 'self' 'unsafe-inline'。
    所有 CSS 必须落在 wwwroot 下，不允许任何 CDN 引用；同源 @import 是允许的。
+   字体同理：IBM Plex Sans 以 woff2 自托管于 /fonts，中文回退系统黑体。
    ========================================================================== */
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+}
 
 :root {
     color-scheme: light;
 
-    /* ---- 基础表面与文字 ---- */
-    --ah-bg: #f5f6f8;
+    /* ---- 基础表面与文字（冷灰石板） ---- */
+    --ah-bg: #f1f5f9;
     --ah-surface: #ffffff;
-    --ah-border: #e3e6ea;
-    --ah-text: #1f2328;
-    --ah-muted: #656d76;
+    --ah-border: #e2e8f0;
+    --ah-text: #0f172a;
+    --ah-muted: #64748b;
 
-    /* ---- 主色 ---- */
-    --ah-primary: #2563eb;
-    --ah-primary-hover: #1d4ed8;
-    --ah-primary-soft: #eef3ff;
-    --ah-primary-border: #c7d8fb;
+    /* ---- 主色（青绿） ---- */
+    --ah-primary: #0f766e;
+    --ah-primary-hover: #115e59;
+    --ah-primary-soft: #f0fdfa;
+    --ah-primary-border: #99f6e4;
+    /* 供 rgba(var(--ah-primary-rgb), α) 使用，避免各处硬编码色值 */
+    --ah-primary-rgb: 15, 118, 110;
+    --ah-primary-accent: #14b8a6;
 
     /* ---- 语义色 ---- */
-    --ah-danger: #d1242f;
-    --ah-danger-soft: #fff5f5;
-    --ah-danger-border: #ffd7d7;
+    --ah-danger: #b42318;
+    --ah-danger-soft: #fef3f2;
+    --ah-danger-border: #fecdca;
 
-    --ah-success: #1a7f37;
-    --ah-success-soft: #eaf6ed;
-    --ah-success-border: #bfe3c9;
+    --ah-success: #067647;
+    --ah-success-soft: #ecfdf3;
+    --ah-success-border: #abefc6;
 
-    --ah-warning: #9a6700;
-    --ah-warning-soft: #fff8e6;
-    --ah-warning-border: #f0dcb0;
+    --ah-warning: #b54708;
+    --ah-warning-soft: #fffaeb;
+    --ah-warning-border: #fedf89;
 
-    --ah-info: #0b6bcb;
-    --ah-info-soft: #eaf3fd;
-    --ah-info-border: #bcd8f5;
+    --ah-info: #026aa2;
+    --ah-info-soft: #f0f9ff;
+    --ah-info-border: #b9e6fe;
 
-    /* ---- 侧边栏（深色，ABP 后台的标志性观感；仅后台使用） ---- */
-    --ah-sidebar-bg: #131a2b;
-    --ah-sidebar-bg-soft: #1b2437;
-    --ah-sidebar-text: #a6b0c3;
-    --ah-sidebar-text-strong: #ffffff;
-    --ah-sidebar-divider: rgba(255, 255, 255, .08);
-    --ah-sidebar-hover: rgba(255, 255, 255, .06);
+    /* ---- 侧边栏（深石板；仅后台使用） ---- */
+    --ah-sidebar-bg: #0f172a;
+    --ah-sidebar-bg-soft: #1e293b;
+    --ah-sidebar-text: #94a3b8;
+    --ah-sidebar-text-strong: #f8fafc;
+    --ah-sidebar-divider: rgba(248, 250, 252, .08);
+    --ah-sidebar-hover: rgba(248, 250, 252, .06);
     --ah-sidebar-width: 258px;
 
     /* ---- 形状与阴影 ---- */
-    --ah-radius-lg: 12px;
+    --ah-radius-lg: 14px;
     --ah-radius: 10px;
     --ah-radius-sm: 8px;
 
-    --ah-shadow-xs: 0 1px 2px rgba(31, 35, 40, .04);
-    --ah-shadow-sm: 0 1px 2px rgba(31, 35, 40, .05), 0 2px 8px rgba(31, 35, 40, .04);
-    --ah-shadow-md: 0 2px 6px rgba(31, 35, 40, .06), 0 14px 34px rgba(31, 35, 40, .10);
-    --ah-shadow-lg: 0 24px 64px rgba(12, 18, 30, .26);
+    --ah-shadow-xs: 0 1px 2px rgba(15, 23, 42, .04);
+    --ah-shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 2px 8px rgba(15, 23, 42, .04);
+    --ah-shadow-md: 0 2px 6px rgba(15, 23, 42, .06), 0 14px 34px rgba(15, 23, 42, .10);
+    --ah-shadow-lg: 0 24px 64px rgba(15, 23, 42, .18);
 
     /* ---- 量度 ---- */
     --ah-topbar-height: 60px;
-    --ah-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    --ah-font: "IBM Plex Sans", "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     --ah-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
 }
 

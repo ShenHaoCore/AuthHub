@@ -43,6 +43,18 @@ public record VerifyTwoFactorRequest(string TwoFactorToken, string Code, bool Re
 /// <summary>修改密码请求。</summary>
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+/// <summary>申请密码重置（忘记密码）：只接收邮箱，成功后向该邮箱发送重置链接。</summary>
+public record ForgotPasswordRequest(string Email);
+
+/// <summary>
+/// 重置密码请求。Token 来自邮箱里的重置链接（Identity 签名令牌，带过期），
+/// 校验通过才会真正改密。
+/// </summary>
+public record ResetPasswordRequest(string Email, string Token, string NewPassword);
+
+/// <summary>重发邮箱确认邮件：用户注册后没收到确认信时使用。</summary>
+public record ResendEmailConfirmationRequest(string Email);
+
 /// <summary>启用 TOTP 时的返回：密钥、可扫描 URI、恢复码（仅本次返回）。</summary>
 public sealed record TwoFactorSetupResponse(
     string SharedKey,
@@ -54,33 +66,6 @@ public record EnableTwoFactorRequest(string Code);
 
 /// <summary>触发一次性验证码下发（Email / Phone 通道）。</summary>
 public record SendTwoFactorCodeRequest(string Provider);
-
-/// <summary>外部登录回调的处置结果。</summary>
-public enum ExternalLoginStatus
-{
-    /// <summary>已建立会话（已有绑定，或自动创建了新账号）。</summary>
-    SignedIn,
-
-    /// <summary>外部邮箱匹配到本地账号但尚未建立绑定：需用户在确认页点击确认。</summary>
-    BindingConfirmationRequired
-}
-
-/// <summary>外部登录回调的处置结果（配合 <see cref="ExternalLoginStatus"/> 一起读）。</summary>
-public sealed record ExternalLoginResolution(
-    ExternalLoginStatus Status,
-    string UserId,
-    string UserName,
-    string DisplayName,
-    bool IsNewAccount);
-
-/// <summary>绑定确认页的展示数据：外部身份与将被绑定的本地账号。</summary>
-public sealed record ExternalBindingView(
-    string Provider,
-    string ExternalEmail,
-    string ExternalUserName,
-    string LocalUserId,
-    string LocalUserName,
-    string LocalUserEmail);
 
 /// <summary>当前用户的档案信息（含角色与展开后的权限）。</summary>
 public sealed record UserProfileDto

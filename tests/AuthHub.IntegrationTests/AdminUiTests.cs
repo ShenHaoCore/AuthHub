@@ -339,6 +339,8 @@ public class AdminUiTests
     [InlineData("/css/authhub-auth.css", "text/css")]
     [InlineData("/js/authhub.js", "text/javascript")]
     [InlineData("/favicon.svg", "image/svg+xml")]
+    [InlineData("/fonts/IBMPlexSans-Regular.woff2", "font/woff2")]
+    [InlineData("/fonts/IBMPlexSans-SemiBold.woff2", "font/woff2")]
     public async Task Static_asset_should_be_served(string path, string expectedContentType)
     {
         using var session = NewSession();
@@ -402,6 +404,11 @@ public class AdminUiTests
         // 协议页样式表的调色板来自共享令牌文件，而不是自己复制一份
         css.Should().Contain("@import url(\"/css/authhub-tokens.css\")");
         css.Should().Contain("var(--ah-primary)");
+
+        var tokens = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub-tokens.css"));
+        tokens.Should().Contain("IBM Plex Sans");
+        tokens.Should().Contain("/fonts/IBMPlexSans-Regular.woff2");
+        tokens.Should().Contain("--ah-primary: #0f766e", because: "共用令牌主色为青绿");
     }
 
     // ==================================================================== 页内锚点

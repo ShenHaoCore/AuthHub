@@ -104,3 +104,47 @@ public sealed class SendTwoFactorCodeRequestValidator : AbstractValidator<SendTw
             .WithMessage("验证通道仅支持 Email 或 Phone。");
     }
 }
+
+public sealed class ForgotPasswordRequestValidator : AbstractValidator<ForgotPasswordRequest>
+{
+    public ForgotPasswordRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("邮箱不能为空。")
+            .EmailAddress().WithMessage("邮箱格式不正确。")
+            .MaximumLength(256);
+    }
+}
+
+public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequest>
+{
+    public ResetPasswordRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("邮箱不能为空。")
+            .EmailAddress().WithMessage("邮箱格式不正确。")
+            .MaximumLength(256);
+
+        RuleFor(x => x.Token).NotEmpty().WithMessage("重置令牌不能为空。");
+
+        RuleFor(x => x.NewPassword)
+            .NotEmpty().WithMessage("新密码不能为空。")
+            .MinimumLength(8).WithMessage("新密码长度至少 8 位。")
+            .MaximumLength(128)
+            .Matches("[A-Z]").WithMessage("新密码必须包含大写字母。")
+            .Matches("[a-z]").WithMessage("新密码必须包含小写字母。")
+            .Matches("[0-9]").WithMessage("新密码必须包含数字。")
+            .Matches("[^a-zA-Z0-9]").WithMessage("新密码必须包含特殊字符。");
+    }
+}
+
+public sealed class ResendEmailConfirmationRequestValidator : AbstractValidator<ResendEmailConfirmationRequest>
+{
+    public ResendEmailConfirmationRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("邮箱不能为空。")
+            .EmailAddress().WithMessage("邮箱格式不正确。")
+            .MaximumLength(256);
+    }
+}

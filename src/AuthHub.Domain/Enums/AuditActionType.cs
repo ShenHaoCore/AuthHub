@@ -14,7 +14,22 @@ public static class AuditActionType
     public const string UserPasswordChanged = "user.password.changed";
     public const string UserLockedOut = "user.locked_out";
 
-    /// <summary>通过 GitHub / Google 等第三方身份提供方完成登录。</summary>
+    /// <summary>用户申请密码重置（忘记密码），已向邮箱发送重置链接。</summary>
+    public const string UserPasswordResetRequested = "user.password.reset_requested";
+
+    /// <summary>用户凭重置令牌成功改密。</summary>
+    public const string UserPasswordReset = "user.password.reset";
+
+    /// <summary>注册时发送邮箱确认邮件。</summary>
+    public const string UserEmailConfirmationRequested = "user.email.confirmation_requested";
+
+    /// <summary>用户点击链接完成邮箱确认。</summary>
+    public const string UserEmailConfirmed = "user.email.confirmed";
+
+    /// <summary>用户主动重发邮箱确认邮件。</summary>
+    public const string UserEmailConfirmationResent = "user.email.confirmation_resent";
+
+    /// <summary>通过第三方身份提供方完成登录。</summary>
     public const string UserExternalLoginSucceeded = "user.login.external.succeeded";
 
     /// <summary>第三方登录被拒绝（账号停用、邮箱未验证、绑定冲突等）。</summary>

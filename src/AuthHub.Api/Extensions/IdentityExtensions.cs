@@ -52,6 +52,10 @@ internal static class IdentityExtensions
         .AddEntityFrameworkStores<AuthHubDbContext>()
         .AddDefaultTokenProviders();
 
+        // 邮箱确认 / 密码重置等 DataProtection 令牌共用此时限；与邮件正文「1 小时内有效」对齐。
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+            options.TokenLifespan = TimeSpan.FromHours(1));
+
         // 会话 Cookie 策略
         services.ConfigureApplicationCookie(options =>
         {

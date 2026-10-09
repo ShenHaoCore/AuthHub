@@ -31,7 +31,7 @@ internal static class PersistenceExtensions
                 "缺少数据库连接串。三种提供方式任选一种：" +
                 "环境变量 ConnectionStrings__DefaultConnection、" +
                 "appsettings.{环境}.json 里的 ConnectionStrings:DefaultConnection、" +
-                "或本机私有的 appsettings.Local.json（模板见 appsettings.Local.json.example）。");
+                "或 Development 下的 User Secrets（dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"...\"）。");
         }
 
         services.AddDbContext<AuthHubDbContext>(options =>

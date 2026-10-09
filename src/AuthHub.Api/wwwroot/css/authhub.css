@@ -38,7 +38,7 @@ a:hover { text-decoration: underline; }
 code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 
 :focus-visible {
-    outline: 2px solid rgba(37, 99, 235, .45);
+    outline: 2px solid rgba(var(--ah-primary-rgb), .45);
     outline-offset: 1px;
     border-radius: 4px;
 }
@@ -102,7 +102,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     width: 30px; height: 30px;
     flex: 0 0 auto;
     border-radius: 9px;
-    background: linear-gradient(135deg, var(--ah-primary), #5b8def);
+    background: linear-gradient(135deg, var(--ah-primary-accent), var(--ah-primary));
     color: #fff;
     font-size: 12px; font-weight: 700; letter-spacing: .5px;
     display: flex; align-items: center; justify-content: center;
@@ -143,7 +143,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     background: var(--ah-primary);
     color: #fff;
     font-weight: 600;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, .32);
+    box-shadow: 0 4px 12px rgba(var(--ah-primary-rgb), .32);
 }
 
 .ah-nav-item .ah-icon { flex: 0 0 auto; opacity: .9; }
@@ -445,7 +445,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     background: var(--ah-primary);
     border-color: var(--ah-primary);
     color: #fff;
-    box-shadow: 0 1px 2px rgba(37, 99, 235, .28);
+    box-shadow: 0 1px 2px rgba(var(--ah-primary-rgb), .28);
 }
 .ah-btn--primary:hover { background: var(--ah-primary-hover); border-color: var(--ah-primary-hover); }
 
@@ -510,7 +510,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-input:focus, .ah-select:focus, .ah-textarea:focus {
     outline: none;
     border-color: var(--ah-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+    box-shadow: 0 0 0 3px rgba(var(--ah-primary-rgb), .14);
 }
 .ah-input::placeholder, .ah-textarea::placeholder { color: #9aa3ad; }
 .ah-input[readonly] { background: #f6f7f9; color: var(--ah-muted); }
@@ -958,7 +958,7 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     width: 100%;
     min-height: 3px;
     border-radius: 6px 6px 0 0;
-    background: linear-gradient(180deg, #5b8def, var(--ah-primary));
+    background: linear-gradient(180deg, var(--ah-primary-accent), var(--ah-primary));
 }
 .ah-chart-bar.ah-chart-bar-empty { background: #e6e9ed; }
 .ah-chart-value { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }

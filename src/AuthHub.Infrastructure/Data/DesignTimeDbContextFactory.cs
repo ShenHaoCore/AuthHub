@@ -1,15 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace AuthHub.Infrastructure.Data;
 
 /// <summary>
 /// 设计时（<c>dotnet ef</c>）上下文工厂，让 migrations add / database update 不必启动整个 Api 进程。
 ///
-/// <para><b>连接串的来源刻意与运行时同构</b>（环境变量 &gt; <c>appsettings.{环境}.json</c> &gt;
-/// <c>appsettings.json</c>），而不是像以前那样硬编码一个本机连接串。硬编码的坏处是它会跟着代码
-/// 走到任何机器上：在 CI 或生产机器上执行 <c>dotnet ef</c> 时，命令会安静地去连**本机**实例 ——
+/// <para><b>连接串的来源刻意与运行时同构</b>（环境变量 &gt; User Secrets（仅 Development）&gt;
+/// <c>appsettings.{环境}.json</c> &gt; <c>appsettings.json</c>），而不是像以前那样硬编码一个本机连接串。
+/// 硬编码的坏处是它会跟着代码走到任何机器上：在 CI 或生产机器上执行 <c>dotnet ef</c> 时，命令会安静地去连**本机**实例 ——
 /// 要么失败得莫名其妙（"连接超时"，看不出是连错了地方），要么更糟：那台机器上恰好有个同名库，
 /// 于是结构被改在了一个完全无关的数据库上。这类错误没有报错可看，只有事后对不上账。</para>
 ///
@@ -29,6 +30,9 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Aut
 {
     public const string ProviderEnvironmentVariable = "AUTHHUB_PROVIDER";
     public const string ConnectionEnvironmentVariable = "AUTHHUB_CONNECTION";
+
+    /// <summary>与 <c>AuthHub.Api.csproj</c> 的 <c>UserSecretsId</c> 一致，供设计时读取同一份机密。</summary>
+    private const string ApiUserSecretsId = "authhub-api-secrets";
 
     private const string DefaultSqliteConnection = "Data Source=authhub.design.db";
 
@@ -51,8 +55,8 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Aut
             throw new InvalidOperationException(
                 "设计时（dotnet ef）拿不到数据库连接串。" +
                 $"已尝试：环境变量 {ConnectionEnvironmentVariable}、" +
-                $"配置文件 appsettings.json / appsettings.{{环境}}.json 的 ConnectionStrings:DefaultConnection。" +
-                "请在 src/AuthHub.Api/appsettings.Development.json 里配置它，" +
+                $"配置文件 / Development User Secrets 的 ConnectionStrings:DefaultConnection。" +
+                "请在 src/AuthHub.Api/appsettings.Development.json 或 User Secrets 里配置它，" +
                 $"或用 {ConnectionEnvironmentVariable}=\"Server=...;Database=...;\" 临时指定。" +
                 "刻意不提供任何本机默认值 —— 那会让这条命令在别人的机器上安静地连错数据库。");
         }
@@ -89,14 +93,19 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Aut
             ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? "Development";
 
-        return new ConfigurationBuilder()
+        // 与 WebApplication.CreateBuilder 同序：json →（Development）User Secrets → 环境变量。
+        // UserSecretsId 与 Api 项目 csproj 保持一致；机密文件不存在时提供程序为空，不抛异常。
+        var builder = new ConfigurationBuilder()
             .SetBasePath(ResolveConfigurationBasePath())
             .AddJsonFile("appsettings.json", optional: true)
-            .AddJsonFile($"appsettings.{environment}.json", optional: true)
-            // 与运行时同序：本机覆盖在入库配置之后、环境变量之前
-            .AddJsonFile("appsettings.Local.json", optional: true)
-            .AddEnvironmentVariables()
-            .Build();
+            .AddJsonFile($"appsettings.{environment}.json", optional: true);
+
+        if (string.Equals(environment, Environments.Development, StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AddUserSecrets(ApiUserSecretsId);
+        }
+
+        return builder.AddEnvironmentVariables().Build();
     }
 
     /// <summary>
