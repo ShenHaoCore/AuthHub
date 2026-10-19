@@ -64,11 +64,6 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
             }
         }
 
-        // 清掉已废弃的第三方登录环境变量，避免旧进程残留污染启动
-        Environment.SetEnvironmentVariable("AuthHub__Authentication__Demo__Enabled", null);
-        Environment.SetEnvironmentVariable("AuthHub__Authentication__WeCom__Enabled", null);
-        Environment.SetEnvironmentVariable("AuthHub__Authentication__AllowedEmails__0", null);
-
         foreach (var (key, value) in settings)
         {
             Environment.SetEnvironmentVariable(key, value);
