@@ -97,6 +97,7 @@ AuthHub.slnx
 │   │                                        反代信任范围解析 / 种子护栏 / 环境护栏
 │   └── AuthHub.IntegrationTests/ 15 个文件  WebApplicationFactory 起真实管道跑 OIDC / 鉴权 / 限流 / 错误契约 / 文档端点 / 角色权限配置与后台编辑 / 部署安全（密钥环与反代）/ 环境护栏 / 管理后台
 ├── docs/AuthHub.postman_collection.json    可直接导入的接口集合
+├── docs/engineering-notes.md               框架行为陷阱速查（跨项目复用的踩坑记录）
 ├── .github/workflows/ci.yml                编译 + 单元/集成测试 + 依赖漏洞检查
 └── Dockerfile                              多阶段构建，非 root 运行
 ```
@@ -682,6 +683,14 @@ userinfo → 受保护 API → scope 门禁 → 管理员权限声明 → 撤销
 
 导入后需要先做两步：在 Postman 设置里**关闭 SSL 证书校验**（本机是自签名开发证书），
 以及在本机以 Development 环境启动服务（否则没有种子客户端和账号）。
+
+### 工程笔记
+
+`docs/engineering-notes.md` 记录实现过程中踩到的**框架/依赖库行为级陷阱**
+（多方案 Challenge/Forbid 互相踩、`[Produces]` 静默改写 ProblemDetails 媒体类型、
+400 的五个出口、OpenIddict 5.x API 差异、net9 内置 OpenAPI 的 ApiExplorer 可见性等）。
+分三档：A 与版本无关可长期信任 / B 绑定具体版本升级前重验 / C 与框架无关的工程方法。
+README 讲本项目怎么用，那份笔记讲框架本身怎么坑人，两者不重复。
 
 ---
 
