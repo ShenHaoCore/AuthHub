@@ -1,0 +1,15 @@
+{
+  // 固定 SDK 主次版本，避免"本机 10.0.4xx 能编、CI 的 10.0.1xx 编不过"这类
+  // 只在某台机器上复现的差异。目标框架是 net10.0（见 Directory.Build.props），
+  // 因此这里锁 10.0 —— 允许在 10.0 内按 feature band 向上滚动，
+  // 但绝不允许跨到 11.0（那会重新引入 SDK 与 TFM 不匹配的问题）。
+  //
+  // rollForward 选 latestFeature 而不是 disable：写死 10.0.100 会让装了
+  // 10.0.402 的机器直接报 SDK 找不到；latestFeature 表示"10.0 里最新的
+  // feature band 都行"，本机与 CI 各自取自己装的最新 10.0.x。
+  "sdk": {
+    "version": "10.0.100",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}
