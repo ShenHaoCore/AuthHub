@@ -123,9 +123,10 @@ EF Core 对 SQLite 的 `DateTimeOffset` 只支持相等，`>` `<` 运行期抛�
 | `SetRefreshTokenExpiration(...)` | 不存在，用 `SetRefreshTokenLifetime(...)` |
 | `OpenIddictScopeDescriptor.Claims` | 不存在（Scope 只管 `Resources`；声明归属看 `RegisterClaims`） |
 | `app.UseOpenIddict()` | 不需要，认证中间件承载 |
-| `options.CodeChallengeMethods` | 5.x 无 builder API |
+| `options.CodeChallengeMethods` | 不在 builder 上，但在 `OpenIddictServerOptions` 上有：`builder.Configure(o => ...)` 可以改（7.7.2 实测） |
 
-- `.AddServer(o => ...)` 的 lambda 参数是 **`OpenIddictServerBuilder`**，不是 `OpenIddictServerOptions`——后者上的属性（如 `CodeChallengeMethods`）在这里够不着
+- `.AddServer(o => ...)` 的 lambda 参数是 **`OpenIddictServerBuilder`**，不是 `OpenIddictServerOptions`——后者上的属性（如 `CodeChallengeMethods`）直接够不着，要走 `o.Configure(options => ...)`
+- 限制 PKCE 只用 S256 **不需要**替换内部处理器：`CodeChallengeMethods` 集合同时驱动"授权请求校验"与"发现文档的 `code_challenge_methods_supported`"，`Configure` 里清空再只加 `S256` 一处搞定。7.7.2 实测：`plain` → 400 `invalid_request`（ID2032），发现文档只剩 `S256`
 - `EnableTokenEndpointPassthrough()` 后，`authorization_code` / `refresh_token` / `client_credentials` **全部**要在控制器里显式 `SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)`；漏一个就返回 400 `unsupported_grant_type`，而**日志显示的是 "token request successfully validated"**
 - Server 方案不能作默认方案（`IAuthenticationRequestHandler`，只管 `/connect/*`），默认必须指向 Validation；且 `AddIdentity()` 会把 `DefaultAuthenticateScheme` / `DefaultChallengeScheme` 一起指向 Cookie，三项都要显式覆盖
 - `UseLocalServer()` 在 `OpenIddict.Validation.ServerIntegration` 包里，不引包是 `CS1061`

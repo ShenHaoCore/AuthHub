@@ -4,7 +4,8 @@
 
 | 项 | 做法 |
 |----|------|
-| 授权码拦截 | 强制 PKCE（`RequireProofKeyForCodeExchange`），public 客户端无密钥也安全。**注意**：OpenIddict 7.7.2 仍无 builder API 限制 `code_challenge_method`（升级后已核对），发现文档会同时声明 `plain` 与 `S256`；客户端必须用 **S256**（见[待办](../README.md#待办与扩展方向)） |
+| 授权码拦截 | 强制 PKCE（`RequireProofKeyForCodeExchange`），且把 `CodeChallengeMethods` 收窄成只有 **S256**：`plain` 等价于把 verifier 明文放在前端渠道，OAuth 2.1 已弃用。实测 `plain` → 400 `invalid_request`，发现文档也只声明 S256（两处读的是同一个集合） |
+| 令牌受众 | 资源指示器（RFC 8707）：客户端声明 `resource` 时令牌 `aud` **只**指向该资源，不再叠加 Scope 关联的 `authhub-api`。受众收窄避免"发给 MCP Server 的票同时是 AuthHub API 的通行证"。见 [mcp-integration](mcp-integration.md) |
 | 刷新令牌 | 每次刷新旋转，宽限期 0；**复用已旋转的旧令牌会撤销该授权下全部令牌**（重放防护） |
 | 令牌撤销 | `EnableTokenEntryValidation()` 让每次校验都查令牌状态，未过期的 JWT 也能立即失效 |
 | 令牌形态 | `DisableAccessTokenEncryption()` 产出 JWS 而非 JWE，下游可凭 `/.well-known/jwks` 离线校验 |

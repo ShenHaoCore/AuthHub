@@ -51,6 +51,12 @@ public sealed class CreateClientRequestValidator : AbstractValidator<CreateClien
             .MaximumLength(100)
             .When(x => x.Scopes is not null);
 
+        // RFC 8707 要求资源标识是绝对 URI；写相对路径在 OpenIddict 里会被当成 Uri 解析失败
+        RuleForEach(x => x.Resources)
+            .Must(IsAbsoluteResourceUri)
+            .WithMessage("资源标识必须是绝对 URI（例如 https://mcp.example.com/mcp）。")
+            .When(x => x.Resources is not null);
+
         RuleFor(x => x.RedirectUris)
             .Must(uris => UriRules.HasValidUris(uris, out _))
             .WithMessage(UriRules.Message)
@@ -66,6 +72,11 @@ public sealed class CreateClientRequestValidator : AbstractValidator<CreateClien
             .Must((request, secret) => !(request.ClientType == "public" && !string.IsNullOrWhiteSpace(secret)))
             .WithMessage("public 客户端不允许配置客户端密钥（请依赖 PKCE）。");
     }
+
+    private static bool IsAbsoluteResourceUri(string? resource)
+        => !string.IsNullOrWhiteSpace(resource)
+           && Uri.TryCreate(resource, UriKind.Absolute, out var uri)
+           && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
 }
 
 public sealed class UpdateClientRequestValidator : AbstractValidator<UpdateClientRequest>
@@ -94,7 +105,17 @@ public sealed class UpdateClientRequestValidator : AbstractValidator<UpdateClien
             .Must(uris => UriRules.HasValidUris(uris, out _))
             .WithMessage(UriRules.Message)
             .When(x => x.PostLogoutRedirectUris is not null && x.PostLogoutRedirectUris.Count > 0);
+
+        RuleForEach(x => x.Resources)
+            .Must(IsAbsoluteResourceUri)
+            .WithMessage("资源标识必须是绝对 URI（例如 https://mcp.example.com/mcp）。")
+            .When(x => x.Resources is not null);
     }
+
+    private static bool IsAbsoluteResourceUri(string? resource)
+        => !string.IsNullOrWhiteSpace(resource)
+           && Uri.TryCreate(resource, UriKind.Absolute, out var uri)
+           && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
 }
 
 /// <summary>重定向地址校验规则（供多个验证器复用）。</summary>
