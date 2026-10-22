@@ -27,6 +27,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | [docs/security-design.md](docs/security-design.md) | 安全设计要点逐项（PKCE、令牌轮换、限流、CSRF、CSP…） |
 | [docs/deployment.md](docs/deployment.md) | 生产配置清单、容器 / 反代的两个隐性依赖、迁移、Docker |
 | [docs/testing.md](docs/testing.md) | 测试覆盖清单、端到端脚本、Postman 集合 |
+| [docs/mcp-integration.md](docs/mcp-integration.md) | **接入 MCP**：三种"支持 MCP"的区别、资源登记、`aud` 绑定、MCP Server 侧校验、排错表 |
 | [docs/openiddict-notes.md](docs/openiddict-notes.md) | **踩坑记录**：照 OpenIddict 官方文档写会编译不过 / 运行期才炸的 15 处差异 |
 | [docs/engineering-notes.md](docs/engineering-notes.md) | **框架行为陷阱速查**：ASP.NET Core / OpenIddict 侧的病历式记录，分 A/B/C 三档维护，跨项目复用 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | **分支与协作规范**：`main` / `develop` 模型、分支命名、提交信息、合并方式、发布与 hotfix 流程 |
@@ -48,7 +49,8 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | 8 | 客户端 CRUD（密钥哈希存储、支持轮换） | `ClientsController`、`OpenIddictClientAdminService` |
 | 9 | Scope 管理 | `ScopesController`、`ScopeService` |
 | 10 | 令牌撤销与黑名单（未过期 JWT 立即失效） | `TokensController`、`EnableTokenEntryValidation` |
-| 11 | **管理后台 UI**（Razor Pages，ABP 版式）：仪表盘、用户、角色与权限、客户端、Scope、审计日志、我的账户 | [docs/admin-ui.md](docs/admin-ui.md)、`src/AuthHub.Api/Pages/`、`wwwroot/` |
+| 11 | **资源指示器（RFC 8707）**：`resource` 参数绑定令牌 `aud`，可按 MCP Server 收窄受众 | [docs/mcp-integration.md](docs/mcp-integration.md)、`OpenIddictServerExtensions`、`AuthorizationController.AttachScopesAndDestinationsAsync` |
+| 12 | **管理后台 UI**（Razor Pages，ABP 版式）：仪表盘、用户、角色与权限、客户端、Scope、审计日志、我的账户 | [docs/admin-ui.md](docs/admin-ui.md)、`src/AuthHub.Api/Pages/`、`wwwroot/` |
 
 附带：审计日志（`AuditLogs` 表 + `/api/audit-logs`）、限流、安全响应头、健康检查、OpenAPI 文档（Scalar UI）。
 
@@ -262,15 +264,25 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
       `ForwardedHeadersOptions.KnownNetworks` → `KnownIPNetworks`、
       `Microsoft.Extensions.*` 显式包引用触发 NU1510（已随共享框架自动可用，移除）。
 
+- [x] **资源指示器（RFC 8707）与 PKCE 只留 S256**：已完成，为接入 MCP 做准备。
+      ① 资源白名单走配置 `AuthHub:Resources`（绝对 URI），启动时登记进
+      `OpenIddictServerOptions.Resources`；未登记 → `invalid_target`，客户端还需有 `rsrc:<uri>` 权限。
+      **踩坑**：`RegisterResources(string[])` 内部会 `new Uri(...)`，传内置的 `authhub-api`
+      （非绝对 URI）会直接抛 `UriFormatException` —— 所以它不在这个列表里，它的 `aud` 由 Scope 的
+      `Resources` 带出。
+      ② 关键改动在 `AuthorizationController`：原实现只把 Scope 关联的资源写进 principal，
+      请求里的 `resource` **照收了却从不进 `aud`**。现在声明了 `resource` 就用它、且**不再叠加**
+      Scope 资源（否则发给 MCP Server 的票同时是 AuthHub API 的通行证）。
+      ③ `plain` 模式用 `options.Configure(o => o.CodeChallengeMethods...)` 清成只有 S256 ——
+      **更正上一版的说法**：不是"OpenIddict 没有 API"，而是这个集合挂在 `OpenIddictServerOptions`
+      上、不在 builder 的直接成员里。同一份集合同时驱动请求校验与发现文档，两处天然一致。
+      详见 [docs/mcp-integration.md](docs/mcp-integration.md)。
+
 ### 待办
 
-- [ ] **禁用 PKCE 的 `plain` 模式**：OAuth 2.1 已弃用 `plain`（`code_challenge == code_verifier`，
-      等于把校验值明文放在前端渠道）。本项目强制了 PKCE，但 **OpenIddict 7.7.2 依然没有 builder API**
-      能限制 `code_challenge_method`（已核对 7.7.2 的公开 API，`AttachCodeChallengeMethods` 仍是内部处理器），
-      发现文档会同时声明 `plain` 与 `S256`。彻底禁掉需要两步：
-      ① 加一个 `ValidateAuthorizationRequestContext` 内联事件处理器，拒绝非 `S256` 的请求；
-      ② 替换 `AttachCodeChallengeMethods` 发现文档处理器，只声明 `S256`。
-      原先预期"升到 6.x 就能直接配置"，升级后实测不成立，仍需走事件处理器路线。
+- [ ] **MCP 客户端动态注册**（CIMD / DCR）：现在每个 MCP 客户端都要手工登记，Claude Desktop
+      这类"自动发现 + 自动注册"的客户端接不进来。见 Issue #6。
+- [ ] **管理后台补"资源"字段**：客户端编辑页目前只有 Scope / 授权类型，资源权限得走 `/api/clients`。
 - [ ] **Redis 令牌缓存**：`EnableTokenEntryValidation()` 目前每次校验都查库，
       高并发下会成为瓶颈；可把令牌状态缓存到 Redis 并订阅撤销事件。
 - [ ] **分布式 JWKS 校验**：下游目前可离线验签；进一步可加公钥轮换与缓存控制头。

@@ -108,6 +108,10 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
+        var resources = (request.Resources ?? Array.Empty<string>())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
         var redirectUris = request.RedirectUris ?? Array.Empty<string>();
         var postLogoutUris = request.PostLogoutRedirectUris ?? Array.Empty<string>();
 
@@ -181,7 +185,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         }
 
         var permissions = OpenIddictPermissionTranslator.BuildPermissions(
-            grantTypes, scopes, redirectUris.Count > 0, postLogoutUris.Count > 0);
+            grantTypes, scopes, resources, redirectUris.Count > 0, postLogoutUris.Count > 0);
 
         foreach (var permission in permissions)
         {
@@ -224,6 +228,8 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
 
         var grantTypes = request.GrantTypes?.Distinct(StringComparer.Ordinal).ToArray() ?? existingGrantTypes;
         var scopes = request.Scopes?.Distinct(StringComparer.Ordinal).ToArray() ?? existingScopes;
+        var resources = request.Resources?.Distinct(StringComparer.Ordinal).ToArray()
+                        ?? OpenIddictPermissionTranslator.ExtractResources(existingPermissions);
 
         var invalid = grantTypes.Where(g => !OpenIddictPermissionTranslator.IsSupportedGrantType(g)).ToArray();
         if (invalid.Length > 0)
@@ -272,7 +278,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         }
 
         var permissions = OpenIddictPermissionTranslator.BuildPermissions(
-            grantTypes, scopes, redirectUris.Count > 0, postLogoutUris.Count > 0);
+            grantTypes, scopes, resources, redirectUris.Count > 0, postLogoutUris.Count > 0);
 
         foreach (var permission in permissions)
         {
@@ -368,7 +374,8 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
             Requirements = requirements.ToArray(),
             HasSecret = secretHash is not null,
             GrantTypes = OpenIddictPermissionTranslator.ExtractGrantTypes(permissions),
-            AllowedScopes = OpenIddictPermissionTranslator.ExtractScopes(permissions)
+            AllowedScopes = OpenIddictPermissionTranslator.ExtractScopes(permissions),
+            AllowedResources = OpenIddictPermissionTranslator.ExtractResources(permissions)
         };
     }
 

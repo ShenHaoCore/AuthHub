@@ -57,15 +57,24 @@ internal static class OpenIddictServerExtensions
                     options.AllowPasswordFlow();
                 }
 
-                // 授权码流程强制 PKCE（OAuth 2.1 要求，防授权码被拦截后直接兑换）
+                // 授权码流程强制 PKCE（OAuth 2.1 要求，防授权码被拦截后直接兑换），且只接受 S256。
                 //
-                // 注意：OpenIddict 5.x 没有 builder API 能限制 code_challenge_method，
-                // 因此发现文档里会同时声明 plain 与 S256。plain（code_challenge == code_verifier）
-                // 在 OAuth 2.1 里已被弃用——它把校验值明文放在前端渠道，攻击者只要读到授权请求
-                // 就拿到了 verifier。本项目所有示例客户端都用 S256；要彻底禁掉 plain 需要
-                // 自定义 ValidateAuthorizationRequestContext 事件处理器并替换发现文档处理器，
-                // 见 README「待办与扩展方向」。
+                // plain（code_challenge == code_verifier）在 OAuth 2.1 里已被弃用：它把校验值
+                // 明文放在前端渠道，攻击者只要读到一次授权请求就拿到了 verifier，防护形同虚设。
+                //
+                // 限制手段是 CodeChallengeMethods 这个集合 —— 它同时驱动两处：
+                // ① 授权请求校验（值不在集合内 → invalid_request）；
+                // ② 发现文档的 code_challenge_methods_supported。
+                // 清空后只留 S256，两处天然一致。注意它挂在 OpenIddictServerOptions 上、
+                // 不在 builder 的直接成员里（7.7.2 无 SetCodeChallengeMethods），
+                // 只能经 builder.Configure 改。
                 options.RequireProofKeyForCodeExchange();
+
+                options.Configure(server =>
+                {
+                    server.CodeChallengeMethods.Clear();
+                    server.CodeChallengeMethods.Add("S256");
+                });
 
                 // 访问令牌只签名、不加密。
                 //
@@ -93,6 +102,45 @@ internal static class OpenIddictServerExtensions
                     AuthHubConstants.Scopes.ApiRead,
                     AuthHubConstants.Scopes.ApiWrite,
                     AuthHubConstants.Scopes.Admin);
+
+                // 资源标识（RFC 8707 Resource Indicators）。
+                //
+                // 请求里带 resource 参数时，OpenIddict 会把它写进令牌的 aud；但只会认这里登记过的值，
+                // 未登记的一律 invalid_target。这是 OAuth 2.1 里防"令牌被拿去喂给别的资源服务器"
+                // （confused deputy）的基础，MCP 的授权规范把它列为 MUST。
+                //
+                // 为什么只能在这里登记、不能运行时加：校验直接对照
+                // OpenIddictServerOptions.Resources —— 启动时快照的集合。7.7.2 没有资源实体 /
+                // 资源管理器（Scope 上的 Resources 只是"该 scope 关联哪些资源"的声明），
+                // 所以新增资源 = 改配置 + 重启，没有第二条路。
+                //
+                // 注意内置的 authhub-api **不在这里登记**：RFC 8707 要求 resource 是绝对 URI，
+                // 而 RegisterResources 会逐个 new Uri()，传 "authhub-api" 直接抛 UriFormatException。
+                // 它作为 aud 依然正常工作 —— 那是 Scope 的 Resources 带出来的（AuthHubSeeder），
+                // 走的是另一条代码路径，与这里的登记集合无关。
+                var resources = (configuration
+                        .GetSection("AuthHub:Resources")
+                        .Get<string[]>() ?? Array.Empty<string>())
+                    .Where(resource => !string.IsNullOrWhiteSpace(resource))
+                    .Select(resource => resource.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+
+                // 配置错误在启动期就报出来，别等第一个 MCP 客户端接入时才发现
+                foreach (var resource in resources)
+                {
+                    if (!Uri.TryCreate(resource, UriKind.Absolute, out _))
+                    {
+                        throw new InvalidOperationException(
+                            $"AuthHub:Resources 中的 \"{resource}\" 不是绝对 URI。" +
+                            "RFC 8707 要求资源标识是绝对 URI（例如 https://mcp.example.com/mcp）。");
+                    }
+                }
+
+                if (resources.Length > 0)
+                {
+                    options.RegisterResources(resources);
+                }
 
                 // 显式指定 issuer，保证令牌 iss 与发现文档在反向代理后依然正确
                 var issuer = configuration["AuthHub:Issuer"];

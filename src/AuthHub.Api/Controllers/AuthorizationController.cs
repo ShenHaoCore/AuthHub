@@ -186,7 +186,10 @@ public class AuthorizationController : Controller
         }
 
         // 4) 签发授权码 / 令牌
-        return await SignInWithUserAsync(user, request.GetScopes(), cancellationToken);
+        //
+        // 把请求里的 resource 一并传下去：授权码里会记住这些受众，兑换令牌时才能原样落到 aud
+        //（MCP 的授权规范要求令牌的 aud 就是 MCP Server 自己的地址）。
+        return await SignInWithUserAsync(user, request.GetScopes(), request.GetResources(), cancellationToken);
     }
 
     // ------------------------------------------------------------------ 令牌端点
@@ -297,8 +300,15 @@ public class AuthorizationController : Controller
                 cancellationToken);
         }
 
-        // 用最新的用户资料重建主体，使角色 / 权限变更立即反映到新令牌里
-        return await SignInWithUserAsync(user, scopes, cancellationToken);
+        // 用最新的用户资料重建主体，使角色 / 权限变更立即反映到新令牌里。
+        //
+        // 资源要一并从旧主体带过来：authorization_code / refresh_token 请求本身通常不带 resource，
+        // 受众是在授权那一刻定下的。丢了它，兑换出来的令牌就没有 aud（MCP Server 会直接拒收）。
+        var resources = request.GetResources()
+            .Concat(result.Principal.GetResources())
+            .ToArray();
+
+        return await SignInWithUserAsync(user, scopes, resources, cancellationToken);
     }
 
     /// <summary>客户端凭证流程（M2M）：没有用户参与，主体就是客户端自身。</summary>
@@ -322,7 +332,7 @@ public class AuthorizationController : Controller
             string.IsNullOrWhiteSpace(displayName) ? request.ClientId! : displayName));
 
         var principal = new ClaimsPrincipal(identity);
-        await AttachScopesAndDestinationsAsync(principal, request.GetScopes(), cancellationToken);
+        await AttachScopesAndDestinationsAsync(principal, request.GetScopes(), request.GetResources(), cancellationToken);
 
         await _audit.LogAsync(
             new AuditEntry(
@@ -381,7 +391,7 @@ public class AuthorizationController : Controller
 
         await _audit.LogLoginSucceededAsync(user.Id, user.UserName ?? user.Id, cancellationToken: cancellationToken);
 
-        return await SignInWithUserAsync(user, request.GetScopes(), cancellationToken);
+        return await SignInWithUserAsync(user, request.GetScopes(), request.GetResources(), cancellationToken);
     }
 
     // ------------------------------------------------------------------ 用户信息端点
@@ -474,35 +484,59 @@ public class AuthorizationController : Controller
     private async Task<IActionResult> SignInWithUserAsync(
         ApplicationUser user,
         IEnumerable<string> scopes,
+        IEnumerable<string> resources,
         CancellationToken cancellationToken)
     {
         var principal = await _signInManager.CreateUserPrincipalAsync(user);
-        await AttachScopesAndDestinationsAsync(principal, scopes, cancellationToken);
+        await AttachScopesAndDestinationsAsync(principal, scopes, resources, cancellationToken);
 
         // 以 OpenIddict 的 Server 方案登录：OpenIddict 会据此签发授权码 / 令牌
         return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
     /// <summary>
-    /// 把 Scope 与对应的 API 资源挂到 principal 上，并为每条声明标注“进入哪个令牌”。
+    /// 把 Scope / 资源挂到 principal 上，并为每条声明标注"进入哪个令牌"。
     /// 不标注目标的声明不会出现在任何令牌里（OpenIddict 的默认安全策略）。
     /// </summary>
+    /// <remarks>
+    /// <c>resources</c>（RFC 8707）**非空时只认它**，不再回头叠加 Scope 关联的资源。
+    ///
+    /// 这个"二选一"是有意的：MCP 这类场景下，客户端声明 <c>resource=https://mcp.example.com/mcp</c>
+    /// 是在说"这张票只给那个服务器用"。如果这时还顺手把 Scope 的 <c>authhub-api</c> 塞进 aud，
+    /// 令牌就同时是 AuthHub API 的通行证 —— MCP Server 一旦被攻破，攻击者可以拿用户的票
+    /// 直接调 AuthHub 的管理接口。受众收窄才是 resource 参数存在的意义。
+    ///
+    /// 为空时退回旧行为（按 Scope 关联资源算 aud），既有客户端不受影响。
+    /// </remarks>
     private async Task AttachScopesAndDestinationsAsync(
         ClaimsPrincipal principal,
         IEnumerable<string> scopes,
+        IEnumerable<string> resources,
         CancellationToken cancellationToken)
     {
         principal.SetScopes(scopes);
 
-        var resources = new List<string>();
-        await foreach (var resource in _scopeManager.ListResourcesAsync(principal.GetScopes(), cancellationToken))
-        {
-            resources.Add(resource);
-        }
+        var requested = resources
+            .Where(resource => !string.IsNullOrWhiteSpace(resource))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
-        if (resources.Count > 0)
+        if (requested.Length > 0)
         {
-            principal.SetResources(resources);
+            principal.SetResources(requested);
+        }
+        else
+        {
+            var inherited = new List<string>();
+            await foreach (var resource in _scopeManager.ListResourcesAsync(principal.GetScopes(), cancellationToken))
+            {
+                inherited.Add(resource);
+            }
+
+            if (inherited.Count > 0)
+            {
+                principal.SetResources(inherited);
+            }
         }
 
         foreach (var claim in principal.Claims)

@@ -35,6 +35,12 @@ public sealed record ClientDto
 
     /// <summary>便于前端展示的可用 Scope（由 Permissions 反解）。</summary>
     public IReadOnlyCollection<string> AllowedScopes { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// 允许请求的资源标识（RFC 8707，由 Permissions 的 rsrc: 项反解）。
+    /// 客户端请求里的 <c>resource</c> 必须是这里的某一项，否则报「不允许使用指定资源」。
+    /// </summary>
+    public IReadOnlyCollection<string> AllowedResources { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>创建客户端。不传 ClientSecret 时自动生成，并在响应中一次性返回。</summary>
@@ -48,6 +54,8 @@ public record CreateClientRequest(
     IReadOnlyCollection<string>? PostLogoutRedirectUris = null,
     IReadOnlyCollection<string>? GrantTypes = null,
     IReadOnlyCollection<string>? Scopes = null,
+    // 允许请求的资源标识（绝对 URI）。接入 MCP Server 时填它的地址。
+    IReadOnlyCollection<string>? Resources = null,
     bool RequirePkce = true,
     bool RequireConsent = false);
 
@@ -58,6 +66,7 @@ public record UpdateClientRequest(
     IReadOnlyCollection<string>? PostLogoutRedirectUris = null,
     IReadOnlyCollection<string>? GrantTypes = null,
     IReadOnlyCollection<string>? Scopes = null,
+    IReadOnlyCollection<string>? Resources = null,
     bool? RequirePkce = null,
     bool? RequireConsent = null);
 

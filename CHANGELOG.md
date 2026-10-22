@@ -19,6 +19,22 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 ---
 
+## 未发布
+
+| 类型 | 内容 |
+|---|---|
+| feat | **资源指示器（RFC 8707）**：`resource` 参数绑定令牌 `aud`。资源白名单走配置 `AuthHub:Resources`，启动时登记；未登记 → `invalid_target`；客户端需有 `rsrc:<uri>` 权限。`/api/clients` 的创建 / 更新 / 详情增加 `resources` / `allowedResources` |
+| fix | **`resource` 之前被"照收不用"**：`AuthorizationController` 只把 Scope 关联的资源写进 principal，请求里的 `resource` 从不进 `aud`。现在声明了 `resource` 就用它，且不再叠加 Scope 资源（受众收窄） |
+| change | **PKCE 只留 S256**：`CodeChallengeMethods` 收窄后，发现文档不再声明 `plain`，请求用 `plain` 直接 400。无破坏性影响（示例客户端本就用 S256） |
+| docs | 新增 [docs/mcp-integration.md](docs/mcp-integration.md)：三种"支持 MCP"的区别、资源登记、令牌形状、MCP Server 侧校验、排错表 |
+| docs | 更正 README / engineering-notes 里"OpenIddict 7.7.2 无 API 能限制 `code_challenge_method`"的结论 —— 属性在 `OpenIddictServerOptions` 上，经 `builder.Configure` 可取 |
+
+**升级动作**：无（不配 `AuthHub:Resources` 时行为与之前完全一致）。
+接入 MCP Server 需要：配置资源 → 重启 → 给客户端加 `resources` → 客户端带 `resource` 与 S256。
+详见 [docs/mcp-integration.md](docs/mcp-integration.md)。
+
+---
+
 ## v1.1.4 —— 版本记录集中到 CHANGELOG
 
 2026-10-22
