@@ -1,4 +1,5 @@
 using AuthHub.Domain.Constants;
+using AuthHub.Infrastructure.Configuration;
 using AuthHub.Infrastructure.Data;
 
 namespace AuthHub.Api.Extensions;
@@ -118,24 +119,10 @@ internal static class OpenIddictServerExtensions
                 // 而 RegisterResources 会逐个 new Uri()，传 "authhub-api" 直接抛 UriFormatException。
                 // 它作为 aud 依然正常工作 —— 那是 Scope 的 Resources 带出来的（AuthHubSeeder），
                 // 走的是另一条代码路径，与这里的登记集合无关。
-                var resources = (configuration
-                        .GetSection("AuthHub:Resources")
-                        .Get<string[]>() ?? Array.Empty<string>())
-                    .Where(resource => !string.IsNullOrWhiteSpace(resource))
-                    .Select(resource => resource.Trim())
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-
-                // 配置错误在启动期就报出来，别等第一个 MCP 客户端接入时才发现
-                foreach (var resource in resources)
-                {
-                    if (!Uri.TryCreate(resource, UriKind.Absolute, out _))
-                    {
-                        throw new InvalidOperationException(
-                            $"AuthHub:Resources 中的 \"{resource}\" 不是绝对 URI。" +
-                            "RFC 8707 要求资源标识是绝对 URI（例如 https://mcp.example.com/mcp）。");
-                    }
-                }
+                //
+                // 读取与校验统一走 AuthHubResourceRegistry：CIMD 自动注册客户端授予 rsrc: 权限时
+                // 读的是同一份白名单，两处各读一遍配置迟早会不一致。
+                var resources = AuthHubResourceRegistry.LoadValidated(configuration);
 
                 if (resources.Length > 0)
                 {

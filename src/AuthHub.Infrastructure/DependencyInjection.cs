@@ -1,4 +1,5 @@
 using AuthHub.Application.Interfaces;
+using AuthHub.Application.Options;
 using AuthHub.Domain.Interfaces;
 using AuthHub.Infrastructure.Identity;
 using AuthHub.Infrastructure.Notifications;
@@ -47,6 +48,14 @@ public static class DependencyInjection
         services.AddScoped<IScopeAdminService, OpenIddictScopeAdminService>();
         services.AddScoped<ITokenAdminService, OpenIddictTokenAdminService>();
         services.AddScoped<IConsentService, OpenIddictConsentService>();
+
+        // CIMD 动态客户端注册（AuthHub:Cimd，默认关闭）。
+        //
+        // 拉取器是单例：它持有 SocketsHttpHandler（连接池、ConnectCallback 里的地址策略），
+        // 每个请求新建一个等于关掉连接复用，也让"同一域名连续拉取"变成反复 DNS + TLS 握手。
+        services.Configure<CimdOptions>(configuration.GetSection(CimdOptions.SectionName));
+        services.AddSingleton<ICimdMetadataFetcher, CimdMetadataFetcher>();
+        services.AddScoped<ICimdClientRegistrar, CimdClientRegistrar>();
 
         return services;
     }

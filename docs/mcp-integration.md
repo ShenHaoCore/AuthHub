@@ -148,10 +148,128 @@ AuthHub 只能保证"票是发给你的"，剩下的在 RS 侧：
 | 拿到令牌但 MCP Server 401 | RS 没校验 `aud`，或校验了但比对的是别家 URI | 检查 RS 的受众判断与 metadata 里的 `resource` |
 | 令牌 `aud` 是 `authhub-api` | 客户端没发 `resource` | 按第 3 节补参数 |
 
-## 7. 尚未支持
+## 7. 自动注册（CIMD）—— 可选的 P1 能力
 
-- **动态客户端注册**（DCR / CIMD）：现在每个 MCP 客户端都要手工登记，Claude Desktop 这类
-  "自动发现 + 自动注册"的客户端接不进来。已拆到 [#6](https://github.com/ShenHaoCore/AuthHub/issues/6)，
-  倾向 CIMD（无状态），代价是 SSRF 防护必须做扎实。
+前三节都建立在"客户端已经登记过"这个前提上。Claude Desktop、Cursor、VS Code 这类通用
+MCP 客户端，用户不会为了接入一个服务先去后台建客户端，所以本节解决"客户端自助注册"。
+
+**默认关闭。** 打开它等于让 AuthHub 主动请求外部 URL —— 这是本仓库唯一一处
+"由匿名请求驱动出站连接"的入口。默认关闭意味着升级不会悄悄改变攻击面。
+
+### 7.1 为什么选 CIMD 而不是 DCR
+
+| | DCR（RFC 7591） | CIMD |
+|---|---|---|
+| 做法 | 客户端 `POST /connect/register`，AS 返回 `client_id` | `client_id` 本身是 HTTPS URL，AS 去该 URL 拉元数据 |
+| AS 状态 | 每个客户端一条记录，且会持续增长 | 同一 URL 只有一条记录 |
+| 主要风险 | 开放注册、客户端数爆炸、`redirect_uri` 滥用 | **SSRF**、依赖第三方可用性 |
+
+MCP 2026-07-28 已把 CIMD 列为首选。本仓库实现的是**懒注册**形态：首次见到某个 URL 时
+拉取并落库，之后按 TTL 刷新。
+
+为什么要落库而不是纯无状态：OpenIddict 的整条校验链（回调地址匹配、scope 权限、PKCE 要求）
+都读库里的应用记录。纯无状态意味着替换 `IOpenIddictApplicationManager` 或绕过全部内置校验 ——
+那是把安全边界交给自研代码。懒注册同时保住了内置校验和"记录不随请求无限增长"。
+
+### 7.2 开启
+
+```jsonc
+"AuthHub": {
+  "Cimd": {
+    "Enabled": true,
+    "RefreshIntervalHours": 24,      // 元数据缓存有效期；到期重取，失败则降级用缓存
+    "FetchTimeoutSeconds": 5,        // 覆盖全部重定向跳的总预算
+    "MaxRedirects": 3,
+    "MaxMetadataBytes": 65536,
+    "AllowedScopes": [ "openid", "profile", "email", "roles" ],
+    "AllowedHosts": [],              // 过渡期收窄 SSRF 面：只允许这些 Host
+    "AllowedResources": [],          // 空 = 沿用 AuthHub:Resources 全集
+    "RequireConsent": true
+  }
+}
+```
+
+`AllowedScopes` 刻意不含 `api:read` / `api:write` / `admin`：那是 AuthHub 自身 API 的授权范围，
+不该由一台外部 MCP 服务器替用户决定。
+
+### 7.3 元数据文档要求
+
+`client_id` 必须是一个 `https://` 地址（443 端口、无凭据、无片段）。该地址返回的 JSON 需要满足：
+
+| 字段 | 要求 |
+|---|---|
+| `client_id` | 必填，且必须**逐字符等于**请求用的 URL |
+| `client_name` | 必填。同意页要展示"是哪个应用在要权限"，缺了等于没有知情同意 |
+| `redirect_uris` | 必填、非空、绝对地址、无片段；非回环地址必须是 `https` |
+| `application_type` | `web`（缺省）或 `native` |
+| `token_endpoint_auth_method` | 只能是 `none` —— CIMD 没有登记密钥的环节，客户端一律按 public 处理 |
+| `grant_types` | 只允许 `authorization_code` / `refresh_token`，且必须含前者 |
+| `scope` | 与 `AllowedScopes` 取**交集**；声明了但一个都不在白名单内 → 拒绝 |
+
+`application_type` 的两种取值直接决定回调地址的放行规则：
+
+- **native** 允许 `http://localhost` / `http://127.0.0.1` / `[::1]`，且入库时**去掉端口**。
+  RFC 8252 §7.3 要求忽略 loopback 端口，而 OpenIddict 的 native relaxed 比较只在
+  "请求带非默认端口、库里是默认端口"时生效 —— 存了 `:33418` 就永远匹配不上桌面客户端
+  下次启动时的新端口。
+- **web** 不允许回环地址：一个"网页应用"把回调指向用户本机，等于借浏览器打通本地服务。
+
+### 7.4 注册出来的客户端长什么样
+
+| 属性 | 值 | 为什么 |
+|---|---|---|
+| `client_type` | `public` | 没有密钥可登记 |
+| `consent_type` | `explicit` | 没人审核过它，用户必须看见"谁在要什么"（`RequireConsent`） |
+| 权限 | `ept:authorization`、`gt:authorization_code`、`gt:refresh_token`、`rst:code`、`scp:*`、`rsrc:*` | `rsrc:` 缺了的话，客户端一带 `resource` 就会被「不允许使用指定资源」拒掉 —— 第 2 节的能力在这里断掉 |
+| 要求 | `ft:pkce` | 公共客户端不带 PKCE，授权码等于明文口令 |
+| Properties | `authhub:cimd`、`authhub:cimd:source`、`authhub:cimd:fetched_at`、`authhub:cimd:digest`、`authhub:cimd:disabled` | 管理后台据此区分来源、展示状态、执行禁用 |
+
+### 7.5 SSRF 防护（本能力最高危项）
+
+授权服务器会主动请求客户端提供的 URL，任何一项漏掉，AuthHub 就变成一把能探测内网的梯子。
+防护分两层：
+
+1. **URL 层**：仅 `https`、端口 443、无凭据、无片段。
+2. **连接层**：每次建连前解析域名，要求**所有**解析结果都是公网地址，并用解析出的 IP 直连
+   （`CimdAddressPolicy` + `ConnectPublicOnlyAsync`）。
+
+第二层才是防 DNS rebinding 的关键：只校验 URL 字符串的话，`https://evil.example.com`
+可以解析到 `10.0.0.5`。连接层拿的是即将建立连接的那个 IP，"校验后再解析一次"的时间窗不存在。
+
+拒绝的地址段：`0/8`、`10/8`、`100.64/10`、`127/8`、`169.254/16`（云元数据服务就在这里）、
+`172.16/12`、`192.0.0/24`、`192.0.2/24`、`192.168/16`、`198.18/15`、`198.51.100/24`、
+`203.0.113/24`、`224/4`、`240/4`，IPv6 的 `::`、`::1`、`fc00::/7`、`fe80::/10`、`ff00::/8`、
+`2001:db8::/32`、`2002::/16`、`100::/64`、`64:ff9b::/96`，以及全部 IPv4 映射地址。
+
+其他限制：不自动跟随重定向（逐跳重新校验，防止 https→http 降级或跳进内网）、
+不解压（防压缩炸弹）、边读边计数（超过 64 KB 直接放弃）、带 Cookie 容器关闭。
+
+### 7.6 缓存、降级与禁用
+
+- **缓存**：有效期内不再出站请求。默认 24 小时。
+- **降级**：过期后重取失败（网络故障、第三方挂了、元数据临时不合法）→ 继续用过期的缓存，
+  只记一条警告。第三方短暂不可用不该把用户挡在门外。
+- **无缓存可降级** → 拒绝，`invalid_client`。
+- **禁用**：管理后台的客户端列表里，自动注册的客户端带 `CIMD 自动注册` 徽标，操作列有锁定按钮。
+  禁用是**标记**而非删记录 —— 删了之后同一个 `client_id` 下次请求会立刻被重新注册回来，
+  删除对自动注册的客户端没有封禁效果。
+
+### 7.7 排错补充
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `invalid_client` + "元数据缺少 client_name" | 元数据不满足 7.3 | 修客户端的元数据文档 |
+| `invalid_client` + "域名 x 解析到非公网地址" | SSRF 防护生效 | 元数据必须托管在纯公网地址上 |
+| `invalid_client` + "不在允许自动注册的名单内" | 配了 `AllowedHosts` 但没包含它 | 加白名单或清空该项 |
+| 自动注册成功但令牌 `aud` 为空 | `AuthHub:Resources` 没配 | 见第 1 节 |
+| 桌面客户端回调被拒 | 元数据声明了 `application_type: web`，或库里存了带端口的 URI | 改成 `native`，并确认入库值无端口 |
+
+## 8. 尚未支持
+
+- **DCR（RFC 7591）**：本仓库只做了 CIMD。若某个客户端只支持 `POST /connect/register`，
+  仍需手工登记（或让它改用 CIMD）。
 - **管理后台的资源字段**：目前只能走 `/api/clients`。补齐后编辑页应能勾选资源，而不是让运维改数据库。
-- **AuthHub 自身作为 MCP Server**（上表的 B）：未立项。
+- **AuthHub 自身作为 MCP Server**（第 0 节的 B）：未立项。
+- **CIMD 元数据的多实例共享缓存**：当前缓存就是数据库里的应用记录，多实例天然共享；
+  但"到期后并发重取"没有做分布式锁，最坏情况是多拉几次。
+
