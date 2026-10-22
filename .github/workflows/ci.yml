@@ -1,11 +1,12 @@
 name: CI
 
-# 触发条件：主干推送、面向主干的 PR，以及手动触发
+# 分支模型：main（生产就绪）+ develop（集成），见 CONTRIBUTING.md。
+# 两者都要跑 CI —— develop 上保护「集成结果可发布」，main 上保护「发出去的是绿的」。
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 # 同一分支的旧流水线在新提交到来时自动取消，省 runner 额度

@@ -1,13 +1,19 @@
 version: 2
 
 # 依赖自动更新：每周一各开一批 PR。
-# PR 标题以 "chore(deps)" 开头，merge 前看 CI 是否绿即可。
+#
+# 目标分支是 develop（不是 main）——依赖升级属于「集成」范畴，
+# 先在 develop 上跑绿，再随发布 PR 一起进 main。见 CONTRIBUTING.md 的分支模型。
+#
+# 注意：GitHub 的「安全更新」（Security → Dependabot alerts 自动修复）
+# 不受 target-branch 影响，仍指向默认分支 main，这是平台行为。
 
 updates:
-  # NuGet 包：版本目前写在各 csproj 里（ManagePackageVersionsCentrally=false），
+  # NuGet 包：版本写在各 csproj 里（ManagePackageVersionsCentrally=false），
   # Dependabot 从仓库根递归发现工程文件，directory 给 "/" 即可。
   - package-ecosystem: "nuget"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -19,6 +25,13 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # FluentAssertions 从 7.0 起改用 Xceed 商业许可（非商业免费、商用需付费），
+      # 且 6 → 8 跨越两个大版本、断言 API 有破坏性变更。
+      # 曾经因为两个测试工程各引一份，Dependabot 开出三个重复 PR 堆积两周。
+      # 保持 6.x 的补丁更新；真要升级时由人显式决策（同时确认许可与重写断言）。
+      - dependency-name: "FluentAssertions"
+        versions: [">=7.0.0"]
     labels:
       - "dependencies"
       - "nuget"
@@ -26,6 +39,7 @@ updates:
   # GitHub Actions 的版本落后同样有风险（镜像被投毒、API 弃用）
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
