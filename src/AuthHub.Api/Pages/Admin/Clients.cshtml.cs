@@ -99,6 +99,9 @@ public class ClientsModel : AdminPageModel
 
     [BindProperty] public string? TargetClientId { get; set; }
 
+    /// <summary>禁用 / 恢复自动注册客户端时提交的目标状态。</summary>
+    [BindProperty] public bool SetDisabled { get; set; }
+
     // ------------------------------------------------------------------ 视图状态
 
     public PagedResult<ClientDto> Clients { get; private set; } = PagedResult<ClientDto>.Empty(1, DefaultPageSize);
@@ -251,6 +254,32 @@ public class ClientsModel : AdminPageModel
             result.Value.ClientId,
             result.Value.PlainTextSecret,
             $"已轮换客户端 {result.Value.ClientId} 的密钥，旧密钥立即失效。");
+    }
+
+    // ------------------------------------------------------------------ POST：禁用 / 恢复自动注册的客户端
+
+    /// <summary>
+    /// 禁用（或恢复）一个由 CIMD 自动注册的客户端。
+    ///
+    /// 为什么给的是"禁用"而不是"删除"：自动注册的客户端删掉之后，同一个 client_id
+    /// 下一次授权请求会立刻把它重新注册回来 —— 删除对这类客户端没有封禁效果。
+    /// </summary>
+    public async Task<IActionResult> OnPostToggleAutoRegisteredAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(TargetClientId))
+        {
+            return await FailAsync(null, Error.Validation("缺少 ClientId。"), cancellationToken);
+        }
+
+        var result = await _clients.SetAutoRegisteredDisabledAsync(TargetClientId, SetDisabled, cancellationToken);
+        if (result.IsFailure)
+        {
+            return await FailAsync(null, result.Error, cancellationToken);
+        }
+
+        return RedirectBackWithSuccess(SetDisabled
+            ? $"已禁用自动注册的客户端 {TargetClientId}。它的授权请求会被直接拒绝。"
+            : $"已恢复自动注册的客户端 {TargetClientId}。");
     }
 
     // ------------------------------------------------------------------ POST：删除

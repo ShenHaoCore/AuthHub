@@ -41,6 +41,18 @@ public sealed record ClientDto
     /// 客户端请求里的 <c>resource</c> 必须是这里的某一项，否则报「不允许使用指定资源」。
     /// </summary>
     public IReadOnlyCollection<string> AllowedResources { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// 是否由 CIMD 自动注册（<c>client_id</c> 是一个 HTTPS 元数据地址）。
+    /// 这类客户端没有经过人工审核，管理后台需要能把它们与手工登记的区分开。
+    /// </summary>
+    public bool IsAutoRegistered { get; init; }
+
+    /// <summary>自动注册客户端的元数据来源地址（等于 client_id）。手工客户端为 null。</summary>
+    public string? MetadataSourceUrl { get; init; }
+
+    /// <summary>管理员是否已禁用该自动注册客户端。禁用后授权端点直接拒绝。</summary>
+    public bool IsDisabled { get; init; }
 }
 
 /// <summary>创建客户端。不传 ClientSecret 时自动生成，并在响应中一次性返回。</summary>
