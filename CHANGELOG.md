@@ -3,15 +3,40 @@
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.修订号`。
 破坏性变更在条目里显式标注 **BREAKING** 并附升级动作，不靠版本号让人猜。
 
-GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。
+GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。每个版本对应的 git tag
+保留在 Tags 页（`v1.0.0` … `v1.1.4`），可下载当时的源码快照。
 
-| 版本 | 主题 | 日期 |
-|---|---|---|
-| [v1.1.3](#v113--依赖升级与-sdk-固定) | 依赖升级与 SDK 固定 | 2026-10-22 |
-| [v1.1.2](#v112--依赖升级汇总) | 依赖升级汇总 | 2026-10-22 |
-| [v1.1.1](#v111--分支模型治理) | 分支模型治理（`main` + `develop`） | 2026-10-22 |
-| [v1.1.0](#v110--升级到-net-10-lts-与-openiddict-772) | 升级到 .NET 10（LTS）与 OpenIddict 7.7.2 | 2026-10-22 |
-| [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 |
+| 版本 | 主题 | 日期 | 源码 |
+|---|---|---|---|
+| [v1.1.4](#v114--版本记录集中到-changelog) | 版本记录集中到 CHANGELOG | 2026-10-22 | [`v1.1.4`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.4) |
+| [v1.1.3](#v113--依赖升级与-sdk-固定) | 依赖升级与 SDK 固定 | 2026-10-22 | [`v1.1.3`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.3) |
+| [v1.1.2](#v112--依赖升级汇总) | 依赖升级汇总 | 2026-10-22 | [`v1.1.2`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.2) |
+| [v1.1.1](#v111--分支模型治理) | 分支模型治理（`main` + `develop`） | 2026-10-22 | [`v1.1.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.1) |
+| [v1.1.0](#v110--升级到-net-10-lts-与-openiddict-772) | 升级到 .NET 10（LTS）与 OpenIddict 7.7.2 | 2026-10-22 | [`v1.1.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.0) |
+| [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
+
+`源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+---
+
+## v1.1.4 —— 版本记录集中到 CHANGELOG
+
+2026-10-22
+
+| 类型 | 内容 |
+|---|---|
+| docs | 新增本文件，集中收录 v1.0.0 → v1.1.3 的全部版本说明 |
+| docs | `README.md` 文档索引挂链；`CONTRIBUTING.md` 发布流程补「打 tag 后同步补 CHANGELOG」一步 |
+
+### 为什么
+
+发布页不适合当版本档案：版本一多就要一路往下滚，而 Releases 只展示当前版本时，
+历史说明会散落在各自的 tag 页里。集中到 `CHANGELOG.md` 后一处可查，也便于按
+「症状 → 版本」反查。
+
+### 验证
+
+纯文档变更，不涉及代码与依赖；CI 的编译与测试照常校验链接与格式。
 
 ---
 
