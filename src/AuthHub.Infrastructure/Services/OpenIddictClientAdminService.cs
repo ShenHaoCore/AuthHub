@@ -19,8 +19,10 @@ namespace AuthHub.Infrastructure.Services;
 /// 1) 客户端密钥只以哈希形式存储，OpenIddict 不提供回读明文的接口，
 ///    因此“密钥已配置”这一状态通过 EF Store 读取哈希是否存在来判断；
 ///    轮换时使用 <c>UpdateAsync(application, secret)</c> 重载，旧密钥立即失效。
-/// 2) 更新客户端时如果 Populate 覆盖了密钥字段，会显式把原哈希写回，
-///    保证“不改密钥的更新”不会意外让客户端失去密钥（见 PreserveSecretAsync）。
+/// 2) 更新客户端走「先取出原描述符、改字段、再写回」的路径（见 UpdateAsync），
+///    因为 <c>PopulateAsync(application, descriptor)</c> 会无条件覆盖密钥与 Properties ——
+///    空描述符会让 confidential 客户端失去密钥（校验阶段直接抛异常），
+///    也会抹掉 CIMD 自动注册客户端的内部标记。
 /// </summary>
 public sealed class OpenIddictClientAdminService : IClientAdminService
 {
@@ -248,19 +250,25 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
 
         var existingRequirements = await _applicationManager.GetRequirementsAsync(application, cancellationToken);
 
-        var descriptor = new OpenIddictApplicationDescriptor
-        {
-            ClientId = clientId,
-            DisplayName = request.DisplayName ?? await _applicationManager.GetDisplayNameAsync(application, cancellationToken),
-            ApplicationType = await _applicationManager.GetApplicationTypeAsync(application, cancellationToken),
-            ClientType = await _applicationManager.GetClientTypeAsync(application, cancellationToken),
-            ConsentType = request.RequireConsent is null
-                ? await _applicationManager.GetConsentTypeAsync(application, cancellationToken)
-                : request.RequireConsent.Value ? Oidc.ConsentTypes.Explicit : Oidc.ConsentTypes.Implicit
-        };
+        // 先把原记录读成描述符再改，而不是新建一个空描述符：
+        // UpdateAsync(application, descriptor) 内部会 PopulateAsync(application, descriptor)，
+        // 那一步**无条件**把 descriptor.ClientSecret 写回实体（null 就是清空），
+        // 并且会覆盖 Properties。空描述符因此有两个后果：
+        //   ① confidential 客户端失去密钥 → 紧接着的校验直接抛 ValidationException；
+        //   ② CIMD 自动注册客户端丢掉 marker / disabled / source 标记。
+        // 原描述符里带的是库里的哈希与全部属性，原样写回既保住密钥（哈希相同 →
+        // Manager 走"不换密钥"的分支，不会被二次哈希），也保住这些内部状态。
+        var descriptor = new OpenIddictApplicationDescriptor();
+        await _applicationManager.PopulateAsync(descriptor, application, cancellationToken);
+
+        descriptor.DisplayName = request.DisplayName ?? await _applicationManager.GetDisplayNameAsync(application, cancellationToken);
+        descriptor.ConsentType = request.RequireConsent is null
+            ? await _applicationManager.GetConsentTypeAsync(application, cancellationToken)
+            : request.RequireConsent.Value ? Oidc.ConsentTypes.Explicit : Oidc.ConsentTypes.Implicit;
 
         // 不触碰密钥：密钥轮换走 RotateSecretAsync
-        descriptor.ClientSecret = null;
+        descriptor.RedirectUris.Clear();
+        descriptor.PostLogoutRedirectUris.Clear();
 
         foreach (var uri in redirectUris)
         {
@@ -281,10 +289,13 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         var permissions = OpenIddictPermissionTranslator.BuildPermissions(
             grantTypes, scopes, resources, redirectUris.Count > 0, postLogoutUris.Count > 0);
 
+        descriptor.Permissions.Clear();
         foreach (var permission in permissions)
         {
             descriptor.Permissions.Add(permission);
         }
+
+        descriptor.Requirements.Clear();
 
         var keepPkce = request.RequirePkce
                        ?? existingRequirements.Contains(Oidc.Requirements.Features.ProofKeyForCodeExchange, StringComparer.Ordinal);
@@ -294,10 +305,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
             descriptor.Requirements.Add(Oidc.Requirements.Features.ProofKeyForCodeExchange);
         }
 
-        var secretHashBefore = await TryGetSecretHashAsync(application, cancellationToken);
-
         await _applicationManager.UpdateAsync(application, descriptor, cancellationToken);
-        await PreserveSecretAsync(application, secretHashBefore, cancellationToken);
 
         await _audit.LogAsync(
             new AuditEntry(AuditActionType.ClientUpdated, true, ClientId: clientId),
@@ -449,7 +457,7 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
 
     /// <summary>
     /// 「拿不到真实哈希、但客户端确实是 confidential」时的哨兵值。
-    /// 只参与 <see cref="PreserveSecretAsync"/> 的“别把已有密钥改没”判断，不能当哈希用。
+    /// 只用于 <see cref="ClientDto.HasSecret"/> 的判断，不能当哈希用。
     /// </summary>
     private const string UnknownSecretHash = "unknown";
 
@@ -468,42 +476,5 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         }
 
         return await store.GetClientSecretAsync(entity, cancellationToken);
-    }
-
-    /// <summary>
-    /// 更新时保证密钥不被清空：若更新前存在哈希、更新后哈希消失，则写回原值。
-    /// 这样“只改显示名”之类的操作不会意外导致客户端失去密钥。
-    /// </summary>
-    private async Task PreserveSecretAsync(object application, string? secretHashBefore, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(secretHashBefore) || secretHashBefore == UnknownSecretHash)
-        {
-            return;
-        }
-
-        try
-        {
-            var store = _services.GetService<IOpenIddictApplicationStore<OpenIddictEntityFrameworkCoreApplication>>();
-            if (store is null || application is not OpenIddictEntityFrameworkCoreApplication entity)
-            {
-                return;
-            }
-
-            var currentHash = await store.GetClientSecretAsync(entity, cancellationToken);
-            if (!string.IsNullOrEmpty(currentHash))
-            {
-                return;
-            }
-
-            await store.SetClientSecretAsync(entity, secretHashBefore, cancellationToken);
-            await store.UpdateAsync(entity, cancellationToken);
-
-            _logger.LogDebug("客户端 {ClientId} 更新时密钥字段被清空，已恢复原密钥哈希。",
-                await _applicationManager.GetClientIdAsync(application, cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "恢复客户端密钥哈希失败，密钥可能已失效，请通过轮换接口重新签发。");
-        }
     }
 }

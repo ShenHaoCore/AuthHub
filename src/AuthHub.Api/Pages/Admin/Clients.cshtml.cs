@@ -3,6 +3,7 @@ using AuthHub.Application.DTOs.Clients;
 using AuthHub.Application.DTOs.Scopes;
 using AuthHub.Application.Interfaces;
 using AuthHub.Domain.Constants;
+using AuthHub.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -42,11 +43,13 @@ public class ClientsModel : AdminPageModel
 
     private readonly IClientAdminService _clients;
     private readonly IScopeAdminService _scopes;
+    private readonly IConfiguration _configuration;
 
-    public ClientsModel(IClientAdminService clients, IScopeAdminService scopes)
+    public ClientsModel(IClientAdminService clients, IScopeAdminService scopes, IConfiguration configuration)
     {
         _clients = clients;
         _scopes = scopes;
+        _configuration = configuration;
     }
 
     // ------------------------------------------------------------------ 查询条件（GET）
@@ -77,6 +80,9 @@ public class ClientsModel : AdminPageModel
 
     [BindProperty] public string[] NewScopes { get; set; } = Array.Empty<string>();
 
+    /// <summary>新建时勾选的资源标识（RFC 8707）。空数组表示该客户端不能用 <c>resource</c> 参数。</summary>
+    [BindProperty] public string[] NewResources { get; set; } = Array.Empty<string>();
+
     [BindProperty] public bool NewRequirePkce { get; set; } = true;
 
     [BindProperty] public bool NewRequireConsent { get; set; }
@@ -93,6 +99,9 @@ public class ClientsModel : AdminPageModel
 
     [BindProperty] public string[] EditScopes { get; set; } = Array.Empty<string>();
 
+    /// <summary>编辑时勾选的资源标识。整组覆盖 —— 未勾选的会在保存后从该客户端移除。</summary>
+    [BindProperty] public string[] EditResources { get; set; } = Array.Empty<string>();
+
     [BindProperty] public bool EditRequirePkce { get; set; }
 
     [BindProperty] public bool EditRequireConsent { get; set; }
@@ -108,6 +117,14 @@ public class ClientsModel : AdminPageModel
 
     /// <summary>可勾选的 Scope（协议 scope + 数据库中的 scope）。</summary>
     public IReadOnlyList<ScopeOption> ScopeOptions { get; private set; } = Array.Empty<ScopeOption>();
+
+    /// <summary>
+    /// 可勾选的资源标识（<c>AuthHub:Resources</c> 白名单，即 RFC 8707 的 resource）。
+    ///
+    /// <para>为空数组是**正常状态**：没有接入 MCP Server 的部署不需要登记任何资源，
+    /// 此时表单里只有一句提示，不会出现一个空的多选框。</para>
+    /// </summary>
+    public IReadOnlyList<string> ResourceOptions { get; private set; } = Array.Empty<string>();
 
     /// <summary>支持的授权类型（与验证器 / 翻译器的白名单一致）。</summary>
     public static IReadOnlyList<string> GrantTypeOptions { get; } = new[]
@@ -146,6 +163,23 @@ public class ClientsModel : AdminPageModel
             .ToArray();
 
         return extras.Length == 0 ? ScopeOptions : ScopeOptions.Concat(extras).ToArray();
+    }
+
+    /// <summary>
+    /// 某个客户端的资源选项：白名单 + 该客户端独有的资源。
+    ///
+    /// <para>第二半是必须的：资源从 <c>AuthHub:Resources</c> 里删掉之后，已经持有该资源权限的
+    /// 客户端仍带着旧值。若编辑弹窗只列白名单，管理员改一次显示名就会把它悄悄清掉 ——
+    /// 那正是「改了个无关字段，MCP 突然 401」的成因。</para>
+    /// </summary>
+    public IReadOnlyList<string> ResourceOptionsFor(ClientDto client)
+    {
+        var known = ResourceOptions.ToHashSet(StringComparer.Ordinal);
+        var extras = client.AllowedResources
+            .Where(resource => !known.Contains(resource))
+            .ToArray();
+
+        return extras.Length == 0 ? ResourceOptions : ResourceOptions.Concat(extras).ToArray();
     }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
@@ -191,6 +225,7 @@ public class ClientsModel : AdminPageModel
                 PostLogoutRedirectUris: SplitLines(NewPostLogoutRedirectUris),
                 GrantTypes: grantTypes,
                 Scopes: scopes,
+                Resources: NewResources,
                 RequirePkce: NewRequirePkce,
                 RequireConsent: NewRequireConsent),
             cancellationToken);
@@ -223,6 +258,8 @@ public class ClientsModel : AdminPageModel
                 PostLogoutRedirectUris: SplitLines(EditPostLogoutRedirectUris),
                 GrantTypes: EditGrantTypes,
                 Scopes: EditScopes,
+                // 表单是整组覆盖：不传会把资源权限原样保留，传空数组才是「清空」
+                Resources: EditResources,
                 RequirePkce: EditRequirePkce,
                 RequireConsent: EditRequireConsent),
             cancellationToken);
@@ -320,6 +357,10 @@ public class ClientsModel : AdminPageModel
             IsProtocol: false)));
 
         ScopeOptions = options;
+
+        // 与启动期同一份读取逻辑（AuthHubResourceRegistry），避免后台显示的资源
+        // 与 OpenIddict 实际登记的资源出现偏差
+        ResourceOptions = AuthHubResourceRegistry.Load(_configuration);
 
         Clients = await _clients.QueryAsync(CurrentPage, DefaultPageSize, Search, cancellationToken);
     }
