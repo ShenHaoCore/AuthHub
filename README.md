@@ -4,7 +4,7 @@
 [![CodeQL](https://github.com/ShenHaoCore/AuthHub/actions/workflows/codeql.yml/badge.svg)](https://github.com/ShenHaoCore/AuthHub/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-基于 **.NET 9 + OpenIddict 5.8** 的统一认证授权中心（Identity Provider）。
+基于 **.NET 10 + OpenIddict 7.7** 的统一认证授权中心（Identity Provider）。
 
 为下游多个应用提供一套账号体系与登录入口：一处登录，多处通行（SSO）；下游服务既能用
 Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无需回源。
@@ -54,17 +54,17 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 
 | 组件 | 版本 | 说明 |
 |------|------|------|
-| .NET / ASP.NET Core | 9.0 | `net9.0`，`LangVersion 13`，可空引用开启 |
-| OpenIddict | **5.8.0** | Server + Validation + EF Core 集成 |
-| Entity Framework Core | 9.0.20 | Identity / OpenIddict / 自定义表共用一个 `DbContext` |
-| ASP.NET Core Identity | 9.0 | 用户、角色、密码哈希、锁定、MFA |
+| .NET / ASP.NET Core | 10.0（LTS） | `net10.0`，`LangVersion 14`，可空引用开启 |
+| OpenIddict | **7.7.2** | Server + Validation + EF Core 集成 |
+| Entity Framework Core | 10.0.13 | Identity / OpenIddict / 自定义表共用一个 `DbContext` |
+| ASP.NET Core Identity | 10.0 | 用户、角色、密码哈希、锁定、MFA |
 | 数据库 | SQL Server（生产）/ SQLite（开发与测试） | 二者切换只需改配置 |
 | 实体 → DTO 映射 | — | 手写扩展方法（`EntityToDtoMapper`）。曾经用 AutoMapper 13.x，因 13.x 存在无补丁的高危漏洞（CVE-2026-32933）且 15+ 改为 RPL/商业双许可而移除——映射只有三张扁平表，手写成本更低 |
 | FluentValidation | 11.x | 校验规则集中在 Application 层，经 `ValidationFilter` 自动执行 |
 | Serilog | 8.x | Console + 按天滚动文件，可平滑接入 Seq / ELK |
-| Microsoft.AspNetCore.OpenApi | 9.0（框架内置） | 生成 OpenAPI 文档 JSON（`AddOpenApi` / `MapOpenApi`），原生读取 `[Tags]` / `[EndpointSummary]` / `[EndpointDescription]` |
+| Microsoft.AspNetCore.OpenApi | 10.0（框架内置） | 生成 OpenAPI 文档 JSON（`AddOpenApi` / `MapOpenApi`），原生读取 `[Tags]` / `[EndpointSummary]` / `[EndpointDescription]`；.NET 10 起连 XML 注释也一并读取 |
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
-| Razor Pages | 9.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
+| Razor Pages | 10.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
 | xUnit + Moq + FluentAssertions | — | 单元测试 159 项、集成测试 133 项 |
 
@@ -100,8 +100,8 @@ Api ──▶ Application ──▶ Domain
 
 ### 前置条件
 
-- **.NET SDK 9.0.200 及以上**。运行目标框架是 `net9.0`（见 `Directory.Build.props`），
-  解决方案文件用的是 `.slnx` 格式，同样需要 9.0.200+ 的 SDK / IDE。
+- **.NET SDK 10.0.100 及以上**。运行目标框架是 `net10.0`（见 `Directory.Build.props`），
+  解决方案文件用的是 `.slnx` 格式。
   不想升级 SDK 的话，也可以按项目路径操作：`dotnet build src/AuthHub.Api/AuthHub.Api.csproj`
   （CI 与 Dockerfile 就是这么做的，因此它们对 SDK 版本不敏感）。
 - 数据库，任选其一：
@@ -244,17 +244,32 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 
 ### 待办
 
-- [ ] **升级到 .NET 10（LTS）**：**net9.0 的支持在 2026-11-10 结束**，之后不再有安全补丁，
-      而本项目是一个认证中心，跑在无补丁的运行时上风险偏高。目标版本 .NET 10（LTS，支持到 2028-11）。
-      需要一并核对：`Directory.Build.props` 的 TFM 与 LangVersion、全部 `Microsoft.*` 包、
-      `Dockerfile` 的两个基础镜像标签、以及 OpenIddict 5.8 在 net10.0 上的兼容性
-      （必要时先升 6.x —— 那一版还能顺手解决下面「禁用 PKCE 的 `plain` 模式」）。
+- [x] **升级到 .NET 10（LTS）**：已完成。net9.0 的支持在 2026-11-10 结束，而认证中心跑在
+      无补丁的运行时上风险偏高，因此把 TFM 升到 `net10.0`（LTS，支持到 2028-11）、
+      `LangVersion` 14、全部 `Microsoft.*` 包升到 10.0.13、`Dockerfile` 两个基础镜像换成 10.0。
+      一并处理了迁移代价（实测，不是照文档猜的）：
+      ① **OpenIddict 5.8 → 7.7.2**（7.x 才有 `net10.0` 专属 TFM）：logout 端点更名 end-session
+      （`SetEndSessionEndpointUris` / `Permissions.Endpoints.EndSession`）、`HasPrompt` →
+      `HasPromptValue`、`Prompts` → `PromptValues`、`SetUserinfoEndpointUris` →
+      `SetUserInfoEndpointUris`（大写 I）；
+      ② **数据库 schema 变更**：`OpenIddictTokens.Type` 列长 50 → 150，新增迁移
+      `UpgradeToOpenIddict7`（加宽，无数据丢失风险；回滚时才会截断）；
+      ③ **`Microsoft.OpenApi` 2.x**：`Microsoft.OpenApi.Models` 命名空间合并进根命名空间、
+      `document.SecurityRequirements` → `document.Security`、安全方案引用改用
+      `OpenApiSecuritySchemeReference`；
+      ④ **.NET 10 弃用项**：`Microsoft.AspNetCore.HttpOverrides.IPNetwork` → `System.Net.IPNetwork`、
+      `ForwardedHeadersOptions.KnownNetworks` → `KnownIPNetworks`、
+      `Microsoft.Extensions.*` 显式包引用触发 NU1510（已随共享框架自动可用，移除）。
+
+### 待办
+
 - [ ] **禁用 PKCE 的 `plain` 模式**：OAuth 2.1 已弃用 `plain`（`code_challenge == code_verifier`，
-      等于把校验值明文放在前端渠道）。本项目强制了 PKCE，但 OpenIddict 5.8 没有 builder API
-      能限制 `code_challenge_method`，发现文档仍会声明 `plain`。彻底禁掉需要两步：
+      等于把校验值明文放在前端渠道）。本项目强制了 PKCE，但 **OpenIddict 7.7.2 依然没有 builder API**
+      能限制 `code_challenge_method`（已核对 7.7.2 的公开 API，`AttachCodeChallengeMethods` 仍是内部处理器），
+      发现文档会同时声明 `plain` 与 `S256`。彻底禁掉需要两步：
       ① 加一个 `ValidateAuthorizationRequestContext` 内联事件处理器，拒绝非 `S256` 的请求；
       ② 替换 `AttachCodeChallengeMethods` 发现文档处理器，只声明 `S256`。
-      升级到 OpenIddict 6.x 后可直接配置，届时优先走升级路线。
+      原先预期"升到 6.x 就能直接配置"，升级后实测不成立，仍需走事件处理器路线。
 - [ ] **Redis 令牌缓存**：`EnableTokenEntryValidation()` 目前每次校验都查库，
       高并发下会成为瓶颈；可把令牌状态缓存到 Redis 并订阅撤销事件。
 - [ ] **分布式 JWKS 校验**：下游目前可离线验签；进一步可加公钥轮换与缓存控制头。

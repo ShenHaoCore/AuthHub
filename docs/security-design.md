@@ -4,7 +4,7 @@
 
 | 项 | 做法 |
 |----|------|
-| 授权码拦截 | 强制 PKCE（`RequireProofKeyForCodeExchange`），public 客户端无密钥也安全。**注意**：OpenIddict 5.x 无法限制 `code_challenge_method`，发现文档会同时声明 `plain` 与 `S256`；客户端必须用 **S256**（见[待办](../README.md#待办与扩展方向)） |
+| 授权码拦截 | 强制 PKCE（`RequireProofKeyForCodeExchange`），public 客户端无密钥也安全。**注意**：OpenIddict 7.7.2 仍无 builder API 限制 `code_challenge_method`（升级后已核对），发现文档会同时声明 `plain` 与 `S256`；客户端必须用 **S256**（见[待办](../README.md#待办与扩展方向)） |
 | 刷新令牌 | 每次刷新旋转，宽限期 0；**复用已旋转的旧令牌会撤销该授权下全部令牌**（重放防护） |
 | 令牌撤销 | `EnableTokenEntryValidation()` 让每次校验都查令牌状态，未过期的 JWT 也能立即失效 |
 | 令牌形态 | `DisableAccessTokenEncryption()` 产出 JWS 而非 JWE，下游可凭 `/.well-known/jwks` 离线校验 |

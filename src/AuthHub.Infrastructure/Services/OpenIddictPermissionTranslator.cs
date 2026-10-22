@@ -42,7 +42,9 @@ internal static class OpenIddictPermissionTranslator
 
         if (hasPostLogoutRedirectUris)
         {
-            permissions.Add(Oidc.Permissions.Endpoints.Logout);
+            // OpenIddict 6.0 起 logout 端点更名为 end-session（规范用词），
+            // 权限常量随之改名；数据库里的旧值 ept:logout 仍向后兼容。
+            permissions.Add(Oidc.Permissions.Endpoints.EndSession);
         }
 
         if (grants.Contains("authorization_code"))

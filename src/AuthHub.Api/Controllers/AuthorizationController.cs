@@ -97,7 +97,7 @@ public class AuthorizationController : Controller
         var authentication = await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme);
         if (!authentication.Succeeded || authentication.Principal is null)
         {
-            if (request.HasPrompt(Prompts.None))
+            if (request.HasPromptValue(PromptValues.None))
             {
                 // prompt=none 表示调用方要求“静默授权”，未登录时必须显式报错而不是弹登录页
                 return ForbidWithError(Errors.LoginRequired, "用户尚未登录，无法静默完成授权。");
@@ -111,7 +111,7 @@ public class AuthorizationController : Controller
         {
             await _signInManager.SignOutAsync();
 
-            if (request.HasPrompt(Prompts.None))
+            if (request.HasPromptValue(PromptValues.None))
             {
                 return ForbidWithError(Errors.LoginRequired, "账号不存在或已被停用。");
             }
@@ -153,7 +153,7 @@ public class AuthorizationController : Controller
             // 已授权过（存在 permanent authorization）则直接跳过同意页
             if (!prompt.AlreadyConsented)
             {
-                if (request.HasPrompt(Prompts.None))
+                if (request.HasPromptValue(PromptValues.None))
                 {
                     // prompt=none 表示调用方要求“静默完成”。此时既不能弹登录页（上面已判断），
                     // 也不能弹同意页，必须按 OIDC 规范显式报 consent_required。

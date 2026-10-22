@@ -46,7 +46,7 @@ internal static class ForwardedHeadersExtensions
             // 清空默认的 loopback 列表 = 接受来自任何直连来源的转发头。
             // 此时来源 IP 的可信度完全由网络层（安全组 / 私有网络）保证，因此在日志里留下痕迹。
             options.KnownProxies.Clear();
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
 
             app.Logger.LogWarning(
                 "反向代理信任范围被设为 TrustAnyProxy=true：将接受**任何**直连来源发来的 X-Forwarded-For / X-Forwarded-Proto。" +
@@ -58,7 +58,7 @@ internal static class ForwardedHeadersExtensions
             // 配置了显式范围就整体替换默认值，而不是叠加：
             // 追加语义会让"我明明只信任 172.16/12"与"其实还信任着 loopback"并存，读配置时看不出全貌。
             options.KnownProxies.Clear();
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
 
             foreach (var proxy in proxies)
             {
@@ -67,7 +67,7 @@ internal static class ForwardedHeadersExtensions
 
             foreach (var network in networks)
             {
-                options.KnownNetworks.Add(network);
+                options.KnownIPNetworks.Add(network);
             }
 
             app.Logger.LogInformation(

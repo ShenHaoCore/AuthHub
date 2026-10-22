@@ -12,7 +12,7 @@
       且输出路径默认就是 Scalar 约定的 openapi/{documentName}.json，
       因此不再需要 Swashbuckle 之类的第三方生成器。
     -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.20" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
 
     <!--
       Scalar：OpenAPI 文档的交互式 UI（替代 Swagger UI）。
@@ -34,7 +34,7 @@
       而 Infrastructure 里的引用带 PrivateAssets=all，不会流动到 Api。
       同时它让 DesignTimeDbContextFactory 之外的常规路径（从启动项目解析 DbContext）也可用。
     -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.20">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

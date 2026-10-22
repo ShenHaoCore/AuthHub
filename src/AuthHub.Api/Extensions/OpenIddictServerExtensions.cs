@@ -41,10 +41,10 @@ internal static class OpenIddictServerExtensions
                 // 端点
                 options.SetAuthorizationEndpointUris("/connect/authorize")
                        .SetTokenEndpointUris("/connect/token")
-                       .SetLogoutEndpointUris("/connect/logout")
+                       .SetEndSessionEndpointUris("/connect/logout")
                        .SetIntrospectionEndpointUris("/connect/introspect")
                        .SetRevocationEndpointUris("/connect/revoke")
-                       .SetUserinfoEndpointUris("/connect/userinfo");
+                       .SetUserInfoEndpointUris("/connect/userinfo");
 
                 // 授权类型
                 options.AllowAuthorizationCodeFlow()
@@ -107,8 +107,8 @@ internal static class OpenIddictServerExtensions
                 var aspNetCore = options.UseAspNetCore()
                        .EnableAuthorizationEndpointPassthrough()
                        .EnableTokenEndpointPassthrough()
-                       .EnableLogoutEndpointPassthrough()
-                       .EnableUserinfoEndpointPassthrough()
+                       .EnableEndSessionEndpointPassthrough()
+                       .EnableUserInfoEndpointPassthrough()
                        .EnableStatusCodePagesIntegration();
 
                 if (!requireHttps)

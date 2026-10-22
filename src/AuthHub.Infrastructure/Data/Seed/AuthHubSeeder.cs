@@ -200,7 +200,7 @@ public static class AuthHubSeeder
                 {
                     Oidc.Permissions.Endpoints.Authorization,
                     Oidc.Permissions.Endpoints.Token,
-                    Oidc.Permissions.Endpoints.Logout,
+                    Oidc.Permissions.Endpoints.EndSession,
                     Oidc.Permissions.GrantTypes.AuthorizationCode,
                     Oidc.Permissions.GrantTypes.RefreshToken,
                     Oidc.Permissions.ResponseTypes.Code,
@@ -233,7 +233,7 @@ public static class AuthHubSeeder
                 {
                     Oidc.Permissions.Endpoints.Authorization,
                     Oidc.Permissions.Endpoints.Token,
-                    Oidc.Permissions.Endpoints.Logout,
+                    Oidc.Permissions.Endpoints.EndSession,
                     Oidc.Permissions.GrantTypes.AuthorizationCode,
                     Oidc.Permissions.GrantTypes.RefreshToken,
                     Oidc.Permissions.ResponseTypes.Code,

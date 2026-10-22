@@ -18,7 +18,7 @@ public class ProxyTrustParserTests
         var networks = ProxyTrustParser.ParseNetworks(new[] { "172.16.0.0/12" });
 
         networks.Should().HaveCount(1);
-        networks[0].Prefix.Should().Be(IPAddress.Parse("172.16.0.0"));
+        networks[0].BaseAddress.Should().Be(IPAddress.Parse("172.16.0.0"));
         networks[0].PrefixLength.Should().Be(12);
     }
 

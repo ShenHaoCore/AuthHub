@@ -105,7 +105,17 @@ EF Core 对 SQLite 的 `DateTimeOffset` 只支持相等，`>` `<` 运行期抛�
 
 ## B. 有版本时效（写清版本，升级前重验）
 
-### B1. OpenIddict 5.x
+### B1. OpenIddict 5.x → 7.7.2
+
+5.8 时代的事实（下表）；7.x 又叠加了这些改名（升级时逐条撞过）：
+
+| 5.x 写法 | 7.x 写法 |
+|---|---|
+| `Permissions.Endpoints.Logout` | `Permissions.Endpoints.EndSession`（DB 旧值 `ept:logout` 仍兼容） |
+| `SetLogoutEndpointUris` / `EnableLogoutEndpointPassthrough` | `SetEndSessionEndpointUris` / `EnableEndSessionEndpointPassthrough` |
+| `request.HasPrompt(...)` | `request.HasPromptValue(...)` |
+| `Prompts.None` | `PromptValues.None` |
+| `SetUserinfoEndpointUris` / `EnableUserinfoEndpointPassthrough` | `SetUserInfoEndpointUris` / `EnableUserInfoEndpointPassthrough`（大写 I） |
 
 | 常见写法 | 5.x 实际 |
 |---|---|

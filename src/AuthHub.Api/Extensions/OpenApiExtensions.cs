@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.OpenApi;
-using Microsoft.OpenApi.Models;
+// Microsoft.OpenApi 2.x（随 .NET 10 的 Microsoft.AspNetCore.OpenApi 引入）把
+// 原 Microsoft.OpenApi.Models 命名空间下的模型类型合并到了 Microsoft.OpenApi 根命名空间。
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
 namespace AuthHub.Api.Extensions;
@@ -18,7 +20,7 @@ namespace AuthHub.Api.Extensions;
 /// 「生成文档」这一侧自 .NET 9 起不再需要第三方库：<c>AddOpenApi</c> / <c>MapOpenApi</c>
 /// 随 <c>Microsoft.AspNetCore.OpenApi</c> 提供，且原生读取 <c>[Tags]</c> /
 /// <c>[EndpointSummary]</c> / <c>[EndpointDescription]</c>（.NET 8 就有的端点元数据接口）。
-/// 这就是把目标框架升到 net9.0 之后可以删掉 Swashbuckle 的原因。
+/// 这就是删除 Swashbuckle 的原因。
 ///
 /// 「展示文档」仍是 Scalar，它只认一个 URL，与生成器无关。
 /// 两个约定收敛在 <see cref="DocumentRoutePattern"/> 一个常量上，不需要两边手工同步。
@@ -28,8 +30,8 @@ namespace AuthHub.Api.Extensions;
 ///   <item>ApiExplorer 的可见性：内置生成器只认 ApiExplorer 里「可见」的端点，
 ///         而 MVC 默认只让 <c>[ApiController]</c> 控制器可见 —— 见
 ///         <see cref="AddAuthHubOpenApi"/> 里那段约定；</item>
-///   <item>XML 注释：内置生成器不读它（.NET 10 才有），分组描述由
-///         <see cref="ApplyTagDescriptions"/> 自己补，其余内容本来就不依赖它。</item>
+///   <item>XML 注释：.NET 10 起内置生成器开始读取 XML 注释（此前由
+///         <see cref="ApplyTagDescriptions"/> 自己补的分组描述仍保留）。</item>
 /// </list>
 ///
 /// 收录范围（有意为之，别当成漏了）：文档只收**面向调用方**的端点 ——
@@ -178,26 +180,26 @@ public static class OpenApiExtensions
         {
             Title = "AuthHub —— 统一认证授权中心",
             Version = "v1",
-            Description = "基于 OpenIddict 5.x + ASP.NET Core Identity 的 OIDC 服务端。" +
+            Description = "基于 OpenIddict 7.x + ASP.NET Core Identity 的 OIDC 服务端。" +
                           "在文档里点 Authenticate 可直接走完整的授权码 + PKCE 流程（已预填示例 public 客户端），" +
                           "或用客户端凭证流程获取 M2M 令牌。"
         };
 
         document.Components ??= new OpenApiComponents();
+        // Microsoft.OpenApi 2.x 里 SecuritySchemes 在反序列化/新建后可能是 null，
+        // 即使属性标注为非空 —— 直接索引赋值会 NRE，必须先兜底。
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
         document.Components.SecuritySchemes[OAuth2SchemeName] = BuildOAuth2SecurityScheme();
 
         // 默认按「需要 api:read」标注接口；具体权限由各控制器上的授权策略决定，
         // 这里只是让文档给出一个合理的默认提示。
-        document.SecurityRequirements ??= [];
-        document.SecurityRequirements.Add(new OpenApiSecurityRequirement
+        // 2.x 起安全要求挂在 document.Security 上，且「指向某个安全方案」用独立的引用类型
+        // OpenApiSecuritySchemeReference 表示（OpenApiSecurityScheme.Reference 已移除）。
+        document.Security ??= [];
+        document.Security.Add(new OpenApiSecurityRequirement
         {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = OAuth2SchemeName }
-                },
-                new[] { AuthHubConstants.Scopes.ApiRead }
-            }
+            [new OpenApiSecuritySchemeReference(OAuth2SchemeName, document)] =
+                [AuthHubConstants.Scopes.ApiRead]
         });
 
         return Task.CompletedTask;
@@ -242,7 +244,8 @@ public static class OpenApiExtensions
 
         foreach (var tag in document.Tags)
         {
-            if (!string.IsNullOrEmpty(tag.Description) || !controllerByTag.TryGetValue(tag.Name, out var controller))
+            if (!string.IsNullOrEmpty(tag.Description) ||
+                !controllerByTag.TryGetValue(tag.Name ?? string.Empty, out var controller))
             {
                 continue;
             }

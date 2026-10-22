@@ -1,5 +1,7 @@
 using System.Net;
-using AspNetIpNetwork = Microsoft.AspNetCore.HttpOverrides.IPNetwork;
+// .NET 10 起 Microsoft.AspNetCore.HttpOverrides.IPNetwork 已弃用（ASPDEPR005），
+// ForwardedHeadersOptions.KnownNetworks 改收 BCL 的 System.Net.IPNetwork。
+using AspNetIpNetwork = System.Net.IPNetwork;
 
 namespace AuthHub.Infrastructure.Security;
 
@@ -38,9 +40,9 @@ public static class ProxyTrustParser
                 continue;
             }
 
-            // 注意：这个 TryParse 的 out 参数没有 [NotNullWhen(true)] 标注，
-            // 因此必须显式判空，否则可空性分析会在后面报 CS8602。
-            if (!AspNetIpNetwork.TryParse(raw.Trim(), out var network) || network is null)
+            // System.Net.IPNetwork 是值类型，TryParse 失败时 out 参数为 default，
+            // 因此只需判断返回值，不需要（也无法）判空。
+            if (!AspNetIpNetwork.TryParse(raw.Trim(), out var network))
             {
                 throw new FormatException(
                     $"无法把 \"{raw}\" 解析成 IP 网段。请使用 CIDR 写法并写出前缀长度，" +
@@ -86,9 +88,8 @@ public static class ProxyTrustParser
     /// <summary>
     /// 把网段渲染成 <c>172.16.0.0/12</c> 这种可读形式，用于启动日志。
     ///
-    /// 为什么不直接用 <c>ToString()</c>：<c>Microsoft.AspNetCore.HttpOverrides.IPNetwork</c>
-    /// 没有重写 <c>ToString()</c>，直接打出来只会得到类型全名，日志里毫无信息量。
+    /// <c>System.Net.IPNetwork</c> 的 <c>ToString()</c> 就是 CIDR 形式，直接用。
     /// </summary>
     public static string Describe(IEnumerable<AspNetIpNetwork> networks)
-        => string.Join("、", networks.Select(n => $"{n.Prefix}/{n.PrefixLength}"));
+        => string.Join("、", networks.Select(n => n.ToString()));
 }
