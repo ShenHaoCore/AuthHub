@@ -33,12 +33,12 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      # 解决方案文件是 .slnx，需要 SDK 9.0.200+；
-      # 运行目标框架是 net9.0（见 Directory.Build.props），同一个 SDK 即可覆盖。
+      # 运行目标框架是 net10.0（见 Directory.Build.props），
+      # 必须用 10.x SDK —— 9.x 会以 NETSDK1045 直接拒绝编译。
       - name: 安装 .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       # NuGet 包缓存：键里带上工程文件与 Directory.Build.props 的哈希，
       # 依赖树没变就直接命中缓存，省掉每次几十秒的下载。
@@ -95,7 +95,7 @@ jobs:
       - name: 安装 .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: 还原依赖
         run: dotnet restore AuthHub.slnx
