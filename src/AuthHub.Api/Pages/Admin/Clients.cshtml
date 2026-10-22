@@ -110,6 +110,16 @@
                                     <td>
                                         <div class="ah-cell-main ah-cell-mono">@client.ClientId</div>
                                         <div class="ah-cell-sub">@(string.IsNullOrWhiteSpace(client.DisplayName) ? "（无显示名）" : client.DisplayName)</div>
+                                        @if (client.IsAutoRegistered)
+                                        {
+                                            <div class="ah-cell-sub">
+                                                <span class="ah-badge ah-badge--warning">CIMD 自动注册</span>
+                                                @if (client.IsDisabled)
+                                                {
+                                                    <span class="ah-badge ah-badge--danger">已禁用</span>
+                                                }
+                                            </div>
+                                        }
                                     </td>
                                     <td>
                                         @if (isPublic)
@@ -192,6 +202,24 @@
                                                     <button type="submit" class="ah-act-btn" title="轮换客户端密钥"
                                                             aria-label="轮换 @client.ClientId 的密钥">
                                                         <ah-icon path="@AdminNav.Icons.Key" size="15" />
+                                                    </button>
+                                                </form>
+                                            }
+
+                                            @if (client.IsAutoRegistered)
+                                            {
+                                                <form method="post" asp-page-handler="toggleAutoRegistered"
+                                                      data-confirm="@(client.IsDisabled
+                                                                          ? $"恢复自动注册的客户端 {client.ClientId}？它下次授权请求会重新拉取元数据。"
+                                                                          : $"禁用自动注册的客户端 {client.ClientId}？它的授权请求会被直接拒绝，但记录保留（删除会让它下次请求时立刻被重新注册）。")">
+                                                    <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                    <input type="hidden" name="TargetClientId" value="@client.ClientId" />
+                                                    <input type="hidden" name="SetDisabled" value="@(client.IsDisabled ? "false" : "true")" />
+                                                    <button type="submit"
+                                                            class="ah-act-btn @(client.IsDisabled ? "" : "ah-act-danger")"
+                                                            title="@(client.IsDisabled ? "恢复该自动注册客户端" : "禁用该自动注册客户端")"
+                                                            aria-label="@(client.IsDisabled ? "恢复" : "禁用") @client.ClientId">
+                                                        <ah-icon path="@(client.IsDisabled ? AdminNav.Icons.Unlock : AdminNav.Icons.Lock)" size="15" />
                                                     </button>
                                                 </form>
                                             }
