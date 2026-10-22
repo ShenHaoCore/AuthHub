@@ -3,15 +3,59 @@
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.修订号`。
 破坏性变更在条目里显式标注 **BREAKING** 并附升级动作，不靠版本号让人猜。
 
-GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。
+GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。每个版本对应的 git tag
+保留在 Tags 页（`v1.0.0` … `v1.2.0`），可下载当时的源码快照。
 
-| 版本 | 主题 | 日期 |
-|---|---|---|
-| [v1.1.3](#v113--依赖升级与-sdk-固定) | 依赖升级与 SDK 固定 | 2026-10-22 |
-| [v1.1.2](#v112--依赖升级汇总) | 依赖升级汇总 | 2026-10-22 |
-| [v1.1.1](#v111--分支模型治理) | 分支模型治理（`main` + `develop`） | 2026-10-22 |
-| [v1.1.0](#v110--升级到-net-10-lts-与-openiddict-772) | 升级到 .NET 10（LTS）与 OpenIddict 7.7.2 | 2026-10-22 |
-| [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 |
+| 版本 | 主题 | 日期 | 源码 |
+|---|---|---|---|
+| [v1.2.0](#v120--mcp-授权支持资源指示器与-s256) | MCP 授权支持：资源指示器与 S256 | 2026-10-22 | [`v1.2.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.2.0) |
+| [v1.1.4](#v114--版本记录集中到-changelog) | 版本记录集中到 CHANGELOG | 2026-10-22 | [`v1.1.4`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.4) |
+| [v1.1.3](#v113--依赖升级与-sdk-固定) | 依赖升级与 SDK 固定 | 2026-10-22 | [`v1.1.3`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.3) |
+| [v1.1.2](#v112--依赖升级汇总) | 依赖升级汇总 | 2026-10-22 | [`v1.1.2`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.2) |
+| [v1.1.1](#v111--分支模型治理) | 分支模型治理（`main` + `develop`） | 2026-10-22 | [`v1.1.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.1) |
+| [v1.1.0](#v110--升级到-net-10-lts-与-openiddict-772) | 升级到 .NET 10（LTS）与 OpenIddict 7.7.2 | 2026-10-22 | [`v1.1.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.0) |
+| [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
+
+`源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+---
+
+## v1.2.0 —— MCP 授权支持：资源指示器与 S256
+
+2026-10-22
+
+| 类型 | 内容 |
+|---|---|
+| feat | **资源指示器（RFC 8707）**：`resource` 参数绑定令牌 `aud`。资源白名单走配置 `AuthHub:Resources`，启动时登记；未登记 → `invalid_target`；客户端需有 `rsrc:<uri>` 权限。`/api/clients` 的创建 / 更新 / 详情增加 `resources` / `allowedResources` |
+| fix | **`resource` 之前被"照收不用"**：`AuthorizationController` 只把 Scope 关联的资源写进 principal，请求里的 `resource` 从不进 `aud`。现在声明了 `resource` 就用它，且不再叠加 Scope 资源（受众收窄） |
+| change | **PKCE 只留 S256**：`CodeChallengeMethods` 收窄后，发现文档不再声明 `plain`，请求用 `plain` 直接 400。无破坏性影响（示例客户端本就用 S256） |
+| docs | 新增 [docs/mcp-integration.md](docs/mcp-integration.md)：三种"支持 MCP"的区别、资源登记、令牌形状、MCP Server 侧校验、排错表 |
+| docs | 更正 README / engineering-notes 里"OpenIddict 7.7.2 无 API 能限制 `code_challenge_method`"的结论 —— 属性在 `OpenIddictServerOptions` 上，经 `builder.Configure` 可取 |
+
+**升级动作**：无（不配 `AuthHub:Resources` 时行为与之前完全一致）。
+接入 MCP Server 需要：配置资源 → 重启 → 给客户端加 `resources` → 客户端带 `resource` 与 S256。
+详见 [docs/mcp-integration.md](docs/mcp-integration.md)。
+
+---
+
+## v1.1.4 —— 版本记录集中到 CHANGELOG
+
+2026-10-22
+
+| 类型 | 内容 |
+|---|---|
+| docs | 新增本文件，集中收录 v1.0.0 → v1.1.3 的全部版本说明 |
+| docs | `README.md` 文档索引挂链；`CONTRIBUTING.md` 发布流程补「打 tag 后同步补 CHANGELOG」一步 |
+
+### 为什么
+
+发布页不适合当版本档案：版本一多就要一路往下滚，而 Releases 只展示当前版本时，
+历史说明会散落在各自的 tag 页里。集中到 `CHANGELOG.md` 后一处可查，也便于按
+「症状 → 版本」反查。
+
+### 验证
+
+纯文档变更，不涉及代码与依赖；CI 的编译与测试照常校验链接与格式。
 
 ---
 

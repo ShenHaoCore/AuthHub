@@ -16,10 +16,11 @@ internal static class OpenIddictPermissionTranslator
         "authorization_code", "refresh_token", "client_credentials", "password", "implicit"
     };
 
-    /// <summary>根据授权类型、Scope、重定向地址推导出 OpenIddict 权限集合。</summary>
+    /// <summary>根据授权类型、Scope、资源、重定向地址推导出 OpenIddict 权限集合。</summary>
     public static HashSet<string> BuildPermissions(
         IEnumerable<string> grantTypes,
         IEnumerable<string> scopes,
+        IEnumerable<string> resources,
         bool hasRedirectUris,
         bool hasPostLogoutRedirectUris)
     {
@@ -81,6 +82,13 @@ internal static class OpenIddictPermissionTranslator
             permissions.Add(Oidc.Permissions.Prefixes.Scope + scope);
         }
 
+        // 资源权限（RFC 8707）：客户端只能请求自己被授权的资源。
+        // 缺这一项时，即使资源已在服务端登记，请求也会被以「该客户端不允许使用指定资源」拒绝。
+        foreach (var resource in resources)
+        {
+            permissions.Add(Oidc.Permissions.Prefixes.Resource + resource);
+        }
+
         return permissions;
     }
 
@@ -105,6 +113,14 @@ internal static class OpenIddictPermissionTranslator
             .Where(p => p.StartsWith(Oidc.Permissions.Prefixes.Scope, StringComparison.Ordinal))
             .Select(p => p[Oidc.Permissions.Prefixes.Scope.Length..])
             .Where(s => s.Length > 0)
+            .ToArray();
+
+    /// <summary>从权限集合反解资源标识（RFC 8707）。</summary>
+    public static string[] ExtractResources(IEnumerable<string> permissions)
+        => permissions
+            .Where(p => p.StartsWith(Oidc.Permissions.Prefixes.Resource, StringComparison.Ordinal))
+            .Select(p => p[Oidc.Permissions.Prefixes.Resource.Length..])
+            .Where(r => r.Length > 0)
             .ToArray();
 
     /// <summary>校验授权类型是否在支持范围内。</summary>

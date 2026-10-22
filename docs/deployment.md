@@ -55,6 +55,10 @@ AuthHub__RolePermissions__Auditor__0="audit.read"
 AuthHub__RolePermissions__UserManager__0="users.manage"
 AuthHub__RolePermissions__UserManager__1="tokens.revoke"
 AuthHub__RolePermissions__UserManager__2="audit.read"   # 例：把审计只读也给了用户管理员
+
+# 可选：资源指示器白名单（RFC 8707）。接入 MCP Server 时填它的地址，
+# 令牌的 aud 才能绑定到它。必须写绝对 URI，否则启动直接失败。
+AuthHub__Resources__0="https://mcp.example.com/mcp"
 ```
 
 **签名密钥必须持久化**：`Extensions/OpenIddictKeySetup.cs` 会按 配置证书 → 开发证书 → 临时密钥 依次降级。
