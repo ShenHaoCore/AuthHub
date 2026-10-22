@@ -29,6 +29,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | [docs/testing.md](docs/testing.md) | 测试覆盖清单、端到端脚本、Postman 集合 |
 | [docs/openiddict-notes.md](docs/openiddict-notes.md) | **踩坑记录**：照 OpenIddict 官方文档写会编译不过 / 运行期才炸的 15 处差异 |
 | [docs/engineering-notes.md](docs/engineering-notes.md) | **框架行为陷阱速查**：ASP.NET Core / OpenIddict 侧的病历式记录，分 A/B/C 三档维护，跨项目复用 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | **分支与协作规范**：`main` / `develop` 模型、分支命名、提交信息、合并方式、发布与 hotfix 流程 |
 
 ---
 
@@ -214,11 +215,11 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 
 | 工作流 | 触发 | 内容 |
 |--------|------|------|
-| `ci.yml` | push / PR 到 main、手动 | Release 编译（`-warnaserror`，警告即失败）、单元测试、集成测试、Dockerfile 构建校验（防止镜像烂掉）、`dotnet list package --vulnerable` 依赖漏洞扫描 |
-| `codeql.yml` | push / PR 到 main、每周一 | CodeQL 静态分析（C#），结果进仓库的 Security 标签页 |
-| `.github/dependabot.yml` | 每周 | NuGet 与 GitHub Actions 版本的依赖自动更新 PR |
+| `ci.yml` | push / PR 到 `main`、`develop`、手动 | Release 编译（`-warnaserror`，警告即失败）、单元测试、集成测试、Dockerfile 构建校验（防止镜像烂掉）、`dotnet list package --vulnerable` 依赖漏洞扫描 |
+| `codeql.yml` | push / PR 到 `main`、`develop`、每周一 | CodeQL 静态分析（C#），结果进仓库的 Security 标签页 |
+| `.github/dependabot.yml` | 每周一 | NuGet 与 GitHub Actions 版本的依赖自动更新 PR（目标分支 `develop`） |
 
-分支约定：`main` 开启了轻量保护——**禁止强推与删除**；日常提交直接 push 即可。
+**分支模型**：`main`（生产就绪）+ `develop`（集成）。功能分支从 `develop` 开、合回 `develop`，发布时 `develop` → `main` 并打 tag。两个长期分支都开了保护：**禁止直接 push、禁止强推与删除**。完整规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 测试覆盖清单、端到端脚本与 Postman 集合见 [docs/testing.md](docs/testing.md)。
 安全漏洞的报告方式见 [SECURITY.md](SECURITY.md)（不要开公开 Issue）。
