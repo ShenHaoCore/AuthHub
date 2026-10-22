@@ -30,6 +30,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | [docs/openiddict-notes.md](docs/openiddict-notes.md) | **踩坑记录**：照 OpenIddict 官方文档写会编译不过 / 运行期才炸的 15 处差异 |
 | [docs/engineering-notes.md](docs/engineering-notes.md) | **框架行为陷阱速查**：ASP.NET Core / OpenIddict 侧的病历式记录，分 A/B/C 三档维护，跨项目复用 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | **分支与协作规范**：`main` / `develop` 模型、分支命名、提交信息、合并方式、发布与 hotfix 流程 |
+| [CHANGELOG.md](CHANGELOG.md) | **版本记录**：每个版本的变更、升级动作与破坏性变更说明（历史版本以本文为准） |
 
 ---
 

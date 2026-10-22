@@ -81,9 +81,13 @@ PR 合并时 GitHub 会自动删除 head 分支（仓库已开启 `delete_branch
 git checkout main && git pull --ff-only
 git tag -a v1.2.0 -m "v1.2.0: <一句话说明>"
 git push origin v1.2.0
-# 3. 在 GitHub Releases 里基于该 tag 写发布说明（必须写「升级到本版本要做什么」）
-# 4. 把 main 回合到 develop，保持两边不漂移
+# 3. 在 CHANGELOG.md 顶部补上该版本（变更 / 升级动作 / 破坏性变更）
+# 4. 在 GitHub Releases 里基于该 tag 写发布说明（必须写「升级到本版本要做什么」）
+# 5. 把 main 回合到 develop，保持两边不漂移
 ```
+
+**Release 与 CHANGELOG 的分工**：Releases 上只挂当前版本，历史版本一律以
+[`CHANGELOG.md`](CHANGELOG.md) 为准——发布页不适合当版本档案，翻历史要一路滚。
 
 **版本号**（语义化）：破坏性变更 → major；向后兼容的新能力 → minor；仅修复 → patch。
 数据库迁移属于破坏性变更的强信号，走 major。
