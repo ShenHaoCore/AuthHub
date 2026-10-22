@@ -4,10 +4,11 @@
 破坏性变更在条目里显式标注 **BREAKING** 并附升级动作，不靠版本号让人猜。
 
 GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。每个版本对应的 git tag
-保留在 Tags 页（`v1.0.0` … `v1.2.0`），可下载当时的源码快照。
+保留在 Tags 页（`v1.0.0` … `v1.3.1`），可下载当时的源码快照。
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.3.1](#v131--后台资源字段与客户端编辑修复) | 后台资源字段与客户端编辑修复 | 2026-10-22 | [`v1.3.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.1) |
 | [v1.3.0](#v130--mcp-客户端自动注册cimd) | MCP 客户端自动注册（CIMD） | 2026-10-22 | [`v1.3.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.0) |
 | [v1.2.0](#v120--mcp-授权支持资源指示器与-s256) | MCP 授权支持：资源指示器与 S256 | 2026-10-22 | [`v1.2.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.2.0) |
 | [v1.1.4](#v114--版本记录集中到-changelog) | 版本记录集中到 CHANGELOG | 2026-10-22 | [`v1.1.4`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.4) |
@@ -18,6 +19,24 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+---
+
+## v1.3.1 —— 后台资源字段与客户端编辑修复
+
+2026-10-22
+
+| 类型 | 内容 |
+|---|---|
+| feat | **后台资源字段**：新建 / 编辑客户端弹窗增加「允许的资源」（RFC 8707），勾选即落成 `rsrc:` 权限，不必再走 `/api/clients` |
+| feat | 白名单里已撤掉的资源**不会**从已持有的客户端上消失：仍以「已不在白名单」标记出现在弹窗里并保持勾选 |
+| fix | **编辑 confidential 客户端必定 500**。`UpdateAsync` 用的是新建的空描述符，而 `PopulateAsync(application, descriptor)` 会**无条件**把 `descriptor.ClientSecret`（null）写回实体 —— 紧接着的校验抛 `ValidationException: The client secret cannot be null or empty for a confidential application`。原实现打算在异常后"恢复哈希"，但那行代码永远执行不到 |
+| fix | 同一处还吞掉了描述符里的其他字段：`Properties`（CIMD 自动注册的 marker / disabled / source 标记）、`Settings`、`DisplayNames`、`JsonWebKeySet`。改为先 `PopulateAsync(descriptor, application)` 取原记录再改，这些状态原样保留 |
+| docs | README 待办勾掉"管理后台补资源字段" |
+
+升级动作：无需改配置。已受影响的只有"编辑过 confidential 客户端"的部署 —— 那些客户端在编辑时失去了密钥（表现为 `client_credentials` / 授权码换令牌时 `invalid_client`），需要在后台轮换一次密钥。
+
+测试：单元 227 + 集成 156 = **383 项全绿**，Release 构建 0 警告 0 错误。
 
 ---
 
