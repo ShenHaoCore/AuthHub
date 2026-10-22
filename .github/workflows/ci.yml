@@ -43,7 +43,7 @@ jobs:
       # NuGet 包缓存：键里带上工程文件与 Directory.Build.props 的哈希，
       # 依赖树没变就直接命中缓存，省掉每次几十秒的下载。
       - name: 缓存 NuGet 包
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'AuthHub.slnx') }}
