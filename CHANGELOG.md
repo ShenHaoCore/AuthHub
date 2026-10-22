@@ -4,10 +4,11 @@
 破坏性变更在条目里显式标注 **BREAKING** 并附升级动作，不靠版本号让人猜。
 
 GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。每个版本对应的 git tag
-保留在 Tags 页（`v1.0.0` … `v1.1.4`），可下载当时的源码快照。
+保留在 Tags 页（`v1.0.0` … `v1.2.0`），可下载当时的源码快照。
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.2.0](#v120--mcp-授权支持资源指示器与-s256) | MCP 授权支持：资源指示器与 S256 | 2026-10-22 | [`v1.2.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.2.0) |
 | [v1.1.4](#v114--版本记录集中到-changelog) | 版本记录集中到 CHANGELOG | 2026-10-22 | [`v1.1.4`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.4) |
 | [v1.1.3](#v113--依赖升级与-sdk-固定) | 依赖升级与 SDK 固定 | 2026-10-22 | [`v1.1.3`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.3) |
 | [v1.1.2](#v112--依赖升级汇总) | 依赖升级汇总 | 2026-10-22 | [`v1.1.2`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.2) |
@@ -19,7 +20,9 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 ---
 
-## 未发布
+## v1.2.0 —— MCP 授权支持：资源指示器与 S256
+
+2026-10-22
 
 | 类型 | 内容 |
 |---|---|
