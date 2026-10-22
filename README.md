@@ -30,6 +30,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | [docs/openiddict-notes.md](docs/openiddict-notes.md) | **踩坑记录**：照 OpenIddict 官方文档写会编译不过 / 运行期才炸的 15 处差异 |
 | [docs/engineering-notes.md](docs/engineering-notes.md) | **框架行为陷阱速查**：ASP.NET Core / OpenIddict 侧的病历式记录，分 A/B/C 三档维护，跨项目复用 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | **分支与协作规范**：`main` / `develop` 模型、分支命名、提交信息、合并方式、发布与 hotfix 流程 |
+| [CHANGELOG.md](CHANGELOG.md) | **版本记录**：每个版本的变更、升级动作与破坏性变更说明（历史版本以本文为准） |
 
 ---
 
@@ -102,7 +103,8 @@ Api ──▶ Application ──▶ Domain
 ### 前置条件
 
 - **.NET SDK 10.0.100 及以上**。运行目标框架是 `net10.0`（见 `Directory.Build.props`），
-  解决方案文件用的是 `.slnx` 格式。
+  解决方案文件用的是 `.slnx` 格式。`global.json` 已把 SDK 锁在 10.0 并允许 feature band
+  向上滚动，因此 10.0.x 的任一版本都能用，但不会静默跑到 11.0。
   不想升级 SDK 的话，也可以按项目路径操作：`dotnet build src/AuthHub.Api/AuthHub.Api.csproj`
   （CI 与 Dockerfile 就是这么做的，因此它们对 SDK 版本不敏感）。
 - 数据库，任选其一：
