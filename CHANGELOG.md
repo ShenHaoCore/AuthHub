@@ -8,6 +8,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.3.0](#v130--mcp-客户端自动注册cimd) | MCP 客户端自动注册（CIMD） | 2026-10-22 | [`v1.3.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.0) |
 | [v1.2.0](#v120--mcp-授权支持资源指示器与-s256) | MCP 授权支持：资源指示器与 S256 | 2026-10-22 | [`v1.2.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.2.0) |
 | [v1.1.4](#v114--版本记录集中到-changelog) | 版本记录集中到 CHANGELOG | 2026-10-22 | [`v1.1.4`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.4) |
 | [v1.1.3](#v113--依赖升级与-sdk-固定) | 依赖升级与 SDK 固定 | 2026-10-22 | [`v1.1.3`](https://github.com/ShenHaoCore/AuthHub/tree/v1.1.3) |
@@ -19,6 +20,23 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
 
 ---
+
+## v1.3.0 —— MCP 客户端自动注册（CIMD）
+
+2026-10-22
+
+| 类型 | 内容 |
+|---|---|
+| feat | **CIMD 自动注册**：`client_id` 是一个 HTTPS 元数据地址时，首次授权请求会拉取元数据并自动登记客户端，无需人工建单。默认关闭（`AuthHub:Cimd:Enabled`） |
+| feat | **SSRF 防护**：仅 https/443、禁私网与回环（含 IPv4 映射、NAT64、6to4）、连接期校验解析后的 IP（防 DNS rebinding）、不自动跟随重定向、不解压、响应体上限 64 KB、总超时 5 秒 |
+| feat | **`application_type` 区分**：native 允许 loopback 回调并在入库时去掉端口（RFC 8252 §7.3，也让 OpenIddict 的 native relaxed 比较真正生效）；web 拒绝 loopback 与自定义 scheme |
+| feat | **scope 白名单**：元数据声明的 scope 与 `AuthHub:Cimd:AllowedScopes` 取交集；自动注册客户端同时获得 `AuthHub:Resources` 的 `rsrc:` 权限，否则接入 MCP 后一带 `resource` 就被拒 |
+| feat | **缓存与降级**：元数据按 TTL（默认 24h）缓存；到期重取失败时继续用过期缓存，只有"从未成功拉过"才拒绝 |
+| feat | **管理后台**：客户端列表标出 `CIMD 自动注册` 与 `已禁用`，操作列可一键禁用 / 恢复。禁用是标记而非删记录 —— 删了下次请求会立刻重新注册回来 |
+| fix | `AuthHub:Resources` 的读取与校验收口到 `AuthHubResourceRegistry`。原来 OpenIddict 注册与 CIMD 授权各读一遍配置，容易演变成"白名单加了资源但自动注册客户端仍被拒" |
+| docs | `docs/mcp-integration.md` 新增第 7 节（CIMD 的选型、元数据要求、SSRF 防护清单、排错表）；README 待办改为 DCR |
+
+测试：单元 227 + 集成 151 = **378 项全绿**，Release 构建 0 警告 0 错误。
 
 ## v1.2.0 —— MCP 授权支持：资源指示器与 S256
 

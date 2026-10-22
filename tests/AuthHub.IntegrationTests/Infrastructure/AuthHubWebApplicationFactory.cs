@@ -47,6 +47,9 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
             // 不重置的话，那个值会残留下来影响后续所有工厂 —— 测试之间就开始互相污染了。
             ["AuthHub__Security__DataProtectionKeysPath"] = "",
             ["AuthHub__Security__TrustForwardedHeaders"] = "false",
+            // CIMD 默认关闭。不显式写的话，某个用例打开过它之后会残留在进程环境里，
+            // 让后续所有工厂都变成"动态注册已启用"。
+            ["AuthHub__Cimd__Enabled"] = "false",
             ["AuthHub__Seed__AdminPassword"] = "Admin@12345",
             ["AuthHub__Seed__DemoPassword"] = "Alice@12345",
             ["AuthHub__Seed__WebClientSecret"] = "web-secret",

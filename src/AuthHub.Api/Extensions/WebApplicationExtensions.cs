@@ -198,6 +198,13 @@ internal static class WebApplicationExtensions
         app.UseCors("AuthHubPolicy");
         app.UseRateLimiter();
 
+        // CIMD 动态客户端注册（默认关闭，见 AuthHub:Cimd:Enabled）。
+        //
+        // 位置是硬约束：必须早于 UseAuthentication —— OpenIddict 的端点由认证中间件处理
+        // （见下方注释），而它的授权请求校验第一步就是按 client_id 查应用。URL 型 client_id
+        // 要在那一步之前先落库，否则永远走到"未知的 client_id"。
+        app.UseMiddleware<CimdClientResolutionMiddleware>();
+
         app.UseAuthentication();
         app.UseAuthorization();
 

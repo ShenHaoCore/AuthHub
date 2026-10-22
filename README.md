@@ -280,8 +280,9 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 
 ### 待办
 
-- [ ] **MCP 客户端动态注册**（CIMD / DCR）：现在每个 MCP 客户端都要手工登记，Claude Desktop
-      这类"自动发现 + 自动注册"的客户端接不进来。见 Issue #6。
+- [ ] **DCR（RFC 7591）动态注册**：CIMD 已在 v1.3.0 落地（见
+      [`docs/mcp-integration.md`](docs/mcp-integration.md) 第 7 节），但只支持
+      `POST /connect/register` 的客户端仍需手工登记。做 DCR 需要速率限制与客户端清理策略。
 - [ ] **管理后台补"资源"字段**：客户端编辑页目前只有 Scope / 授权类型，资源权限得走 `/api/clients`。
 - [ ] **Redis 令牌缓存**：`EnableTokenEntryValidation()` 目前每次校验都查库，
       高并发下会成为瓶颈；可把令牌状态缓存到 Redis 并订阅撤销事件。

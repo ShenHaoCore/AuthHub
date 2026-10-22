@@ -3,6 +3,7 @@ using AuthHub.Application.DTOs.Clients;
 using AuthHub.Application.Interfaces;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Enums;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
@@ -349,6 +350,59 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         return Result.Success();
     }
 
+    public async Task<Result> SetAutoRegisteredDisabledAsync(
+        string clientId,
+        bool disabled,
+        CancellationToken cancellationToken = default)
+    {
+        var application = await _applicationManager.FindByClientIdAsync(clientId, cancellationToken);
+        if (application is null)
+        {
+            return Result.Failure(Error.NotFound($"客户端 {clientId} 不存在。"));
+        }
+
+        var properties = await _applicationManager.GetPropertiesAsync(application, cancellationToken);
+
+        if (!properties.TryGetValue(CimdProperties.Marker, out var marker) || marker.ValueKind != JsonValueKind.True)
+        {
+            return Result.Failure(Error.Validation(
+                "只有自动注册（CIMD）的客户端支持禁用；手工客户端请直接修改权限或删除。"));
+        }
+
+        // 直接从 Store 改 Properties 而不是走 UpdateAsync(descriptor)：
+        // 后者会重建整条记录（回调地址、权限、PKCE 要求都得原样抄一遍），
+        // 任何一处漏抄都会静默改变客户端行为。这里只碰"禁用标记"这一个字段。
+        var store = _services.GetService<IOpenIddictApplicationStore<OpenIddictEntityFrameworkCoreApplication>>();
+
+        if (store is null || application is not OpenIddictEntityFrameworkCoreApplication entity)
+        {
+            return Result.Failure(Error.Failure(
+                "NotSupported",
+                "当前存储实现不支持修改客户端属性，无法禁用该客户端。"));
+        }
+
+        await store.SetPropertiesAsync(
+            entity,
+            properties.SetItem(CimdProperties.Disabled, JsonSerializer.SerializeToElement(disabled)),
+            cancellationToken);
+        await store.UpdateAsync(entity, cancellationToken);
+
+        await _audit.LogAsync(
+            new AuditEntry(
+                AuditActionType.ClientUpdated,
+                true,
+                ClientId: clientId,
+                Details: disabled ? "禁用自动注册的客户端" : "恢复自动注册的客户端"),
+            cancellationToken);
+
+        _logger.LogInformation(
+            "CIMD 客户端状态已变更 | ClientId={ClientId} | 禁用={Disabled}",
+            clientId,
+            disabled);
+
+        return Result.Success();
+    }
+
     // ------------------------------------------------------------------ 内部辅助
 
     private async Task<ClientDto> ToDtoAsync(object application, CancellationToken cancellationToken)
@@ -360,6 +414,12 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
         var clientType = await _applicationManager.GetClientTypeAsync(application, cancellationToken);
 
         var secretHash = await TryGetSecretHashAsync(application, cancellationToken);
+
+        // CIMD 自动注册的客户端靠 Properties 里的标记区分：它们与手工登记的客户端共用
+        // OpenIddictApplications 表，没有独立的来源字段。
+        var properties = await _applicationManager.GetPropertiesAsync(application, cancellationToken);
+        var isAutoRegistered = properties.TryGetValue(CimdProperties.Marker, out var marker)
+                               && marker.ValueKind == JsonValueKind.True;
 
         return new ClientDto
         {
@@ -375,7 +435,15 @@ public sealed class OpenIddictClientAdminService : IClientAdminService
             HasSecret = secretHash is not null,
             GrantTypes = OpenIddictPermissionTranslator.ExtractGrantTypes(permissions),
             AllowedScopes = OpenIddictPermissionTranslator.ExtractScopes(permissions),
-            AllowedResources = OpenIddictPermissionTranslator.ExtractResources(permissions)
+            AllowedResources = OpenIddictPermissionTranslator.ExtractResources(permissions),
+            IsAutoRegistered = isAutoRegistered,
+            MetadataSourceUrl = isAutoRegistered
+                && properties.TryGetValue(CimdProperties.Source, out var source)
+                && source.ValueKind == JsonValueKind.String
+                    ? source.GetString()
+                    : null,
+            IsDisabled = properties.TryGetValue(CimdProperties.Disabled, out var disabled)
+                         && disabled.ValueKind == JsonValueKind.True
         };
     }
 
