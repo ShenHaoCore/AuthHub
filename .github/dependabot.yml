@@ -20,11 +20,19 @@ updates:
     # 一次最多 5 个 PR，避免每周一 pr 淹没收件箱
     open-pull-requests-limit: 5
     groups:
-      # 次要/补丁版本合并成一个 PR，减少 PR 数量；主版本（可能有破坏性）单独开
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      # 全量分组：所有 NuGet 更新合成一个 PR。
+      #
+      # 为什么不再按 minor/patch 分组：那样主版本会单独开 PR，于是同一个包会
+      # 同时出现在「组 PR」和「单独 PR」里 —— 实际撞过两次：三个 PR 升同一个
+      # FluentAssertions（6.12.2 → 8.11.0），以及 #28 与 #29 都升
+      # Serilog.Settings.Configuration。
+      #
+      # 单人项目没有精力逐个 review 十几个小 PR，真正的验收闸门是 CI：
+      # Release 构建 -warnaserror + 292 项测试 + 依赖漏洞扫描。
+      # 主版本的风险由 CI 兜底，而不是靠「把 PR 拆开」来体现谨慎。
+      all-dependencies:
+        patterns:
+          - "*"
     ignore:
       # FluentAssertions 从 7.0 起改用 Xceed 商业许可（非商业免费、商用需付费），
       # 且 6 → 8 跨越两个大版本、断言 API 有破坏性变更。
