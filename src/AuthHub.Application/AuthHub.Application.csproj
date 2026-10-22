@@ -23,8 +23,8 @@
       Logging.Abstractions / Options 自 .NET 10 起随 ASP.NET Core 共享框架自动可用
       （NU1510），不再需要显式 PackageReference。
     -->
-    <PackageReference Include="FluentValidation" Version="11.12.0" />
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.12.0" />
+    <PackageReference Include="FluentValidation" Version="12.2.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -102,7 +102,8 @@ Api ──▶ Application ──▶ Domain
 ### 前置条件
 
 - **.NET SDK 10.0.100 及以上**。运行目标框架是 `net10.0`（见 `Directory.Build.props`），
-  解决方案文件用的是 `.slnx` 格式。
+  解决方案文件用的是 `.slnx` 格式。`global.json` 已把 SDK 锁在 10.0 并允许 feature band
+  向上滚动，因此 10.0.x 的任一版本都能用，但不会静默跑到 11.0。
   不想升级 SDK 的话，也可以按项目路径操作：`dotnet build src/AuthHub.Api/AuthHub.Api.csproj`
   （CI 与 Dockerfile 就是这么做的，因此它们对 SDK 版本不敏感）。
 - 数据库，任选其一：
