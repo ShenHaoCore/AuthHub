@@ -242,6 +242,13 @@ public static class OpenApiExtensions
             .GroupBy(x => x.Tag, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First().Controller.ControllerTypeInfo, StringComparer.Ordinal);
 
+        // Microsoft.OpenApi 2.x 的 Tags 在不同引用程序集下可空性标注不一致，
+        // 显式判空：既避免 CS8602（CI 上是警告即失败），也不改变行为。
+        if (document.Tags is null)
+        {
+            return Task.CompletedTask;
+        }
+
         foreach (var tag in document.Tags)
         {
             if (!string.IsNullOrEmpty(tag.Description) ||
