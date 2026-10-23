@@ -3,7 +3,8 @@
 > 面向：要把一个 MCP Server 接进 AuthHub 的人；以及要实现 MCP Server 侧校验的人。
 >
 > 对应工单：[#5 资源指示器与 S256 收紧](https://github.com/ShenHaoCore/AuthHub/issues/5)、
-> [#6 动态客户端注册](https://github.com/ShenHaoCore/AuthHub/issues/6)（未做）。
+> [#6 动态客户端注册](https://github.com/ShenHaoCore/AuthHub/issues/6)、
+> [#23 资源登记库表化](https://github.com/ShenHaoCore/AuthHub/issues/23)。
 
 ## 0. 先分清角色：AuthHub 只做授权服务器
 
@@ -273,7 +274,6 @@ MCP 2026-07-28 已把 CIMD 列为首选。本仓库实现的是**懒注册**形�
 
 - **DCR（RFC 7591）**：本仓库只做了 CIMD。若某个客户端只支持 `POST /connect/register`，
   仍需手工登记（或让它改用 CIMD）。
-- **资源管理后台页面**：资源的登记/启停目前只有 API（`api/resources`），后台界面未做。
 - **AuthHub 自身作为 MCP Server**（第 0 节的 B）：已立项 [#24](https://github.com/ShenHaoCore/AuthHub/issues/24)。
 - **CIMD 元数据的多实例共享缓存**：当前缓存就是数据库里的应用记录，多实例天然共享；
   但"到期后并发重取"没有做分布式锁，最坏情况是多拉几次。
