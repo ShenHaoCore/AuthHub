@@ -4,10 +4,11 @@
 破坏性变更在条目里显式标注 **BREAKING** 并附升级动作，不靠版本号让人猜。
 
 GitHub Releases 只保留当前版本，历史版本的完整说明以本文为准。每个版本对应的 git tag
-保留在 Tags 页（`v1.0.0` … `v1.3.1`），可下载当时的源码快照。
+保留在 Tags 页（`v1.0.0` … `v1.3.2`），可下载当时的源码快照。
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.3.2](#v132--分支与发布规范修正) | 分支与发布规范修正 | 2026-10-23 | [`v1.3.2`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.2) |
 | [v1.3.1](#v131--后台资源字段与客户端编辑修复) | 后台资源字段与客户端编辑修复 | 2026-10-22 | [`v1.3.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.1) |
 | [v1.3.0](#v130--mcp-客户端自动注册cimd) | MCP 客户端自动注册（CIMD） | 2026-10-22 | [`v1.3.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.0) |
 | [v1.2.0](#v120--mcp-授权支持资源指示器与-s256) | MCP 授权支持：资源指示器与 S256 | 2026-10-22 | [`v1.2.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.2.0) |
@@ -19,6 +20,25 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+---
+
+## v1.3.2 —— 分支与发布规范修正
+
+2026-10-23
+
+| 类型 | 内容 |
+|---|---|
+| docs | 明确「**发版 PR 禁止 squash**」。squash 会把 merge commit 压成单父提交：`main` 上不再有发布边界，tag 挂在以普通 feat 提交身份存在的 squash 提交上，回灌 PR 退化成「空 diff 但必须走一次」。附自检方法：`git log -1 --format=%p <tag>` 应输出**两个**父提交 |
+| docs | 发布流程改为「**先定版 → 再合并 → 最后打 tag**」。原文是「先 tag，再在 CHANGELOG 顶部补该版本」—— 按那个顺序，tag 指向的快照里根本没有本版本说明，这是定版被塞进功能分支的直接原因 |
+| docs | 打 tag 前必须 `git fetch` 并用 `rev-parse` 比对 `HEAD` 与 `origin/main`。`git merge --ff-only origin/main` 在本地 tracking ref 陈旧时会返回「已是最新」并**退出 0**，tag 会静默指向旧提交，不报任何错 |
+| docs | 分支表补 `docs/changelog-<ver>`（发版前的定版分支）；反模式清单补三条；修正合并方式表格中把竖线写进单元格导致表头错位的问题 |
+
+升级动作：无代码变更，无需改配置。
+
+**若存在 v1.3.2 之前的克隆**：`v1.3.0` 与 `v1.3.1` 的发布提交对象已重建为合并提交（文件内容逐字节不变，与旧提交 `git diff` 为空），旧克隆 `git fetch` 后会看到分叉，请 `git reset --hard origin/main`（或 `origin/develop`）后继续。
+
+测试：无代码改动，沿用 v1.3.1 的 227 单元 + 156 集成。
 
 ---
 
