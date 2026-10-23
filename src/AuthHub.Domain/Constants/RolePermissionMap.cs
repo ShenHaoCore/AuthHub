@@ -26,6 +26,7 @@ public static class RolePermissionMap
         [
             AuthHubConstants.Permissions.ClientsManage,
             AuthHubConstants.Permissions.ScopesManage,
+            AuthHubConstants.Permissions.ResourcesManage,
             AuthHubConstants.Permissions.UsersManage,
             AuthHubConstants.Permissions.RolesManage,
             AuthHubConstants.Permissions.TokensRevoke,

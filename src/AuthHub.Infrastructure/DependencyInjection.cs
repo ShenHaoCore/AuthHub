@@ -41,6 +41,8 @@ public static class DependencyInjection
         RegisterSmsSender(services, configuration, environment);
 
         // 管理服务实现（OpenIddict 驱动的部分）
+        services.AddScoped<IRegisteredResourceStore, RegisteredResourceStore>();
+        services.AddScoped<IResourceAdminService, ResourceAdminService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
         services.AddScoped<IRoleAdminService, RoleAdminService>();
         services.AddScoped<IRolePermissionAdminService, RolePermissionAdminService>();

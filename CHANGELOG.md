@@ -23,7 +23,9 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 ## 未发布
 
-_尚无累积条目。功能合入 `develop` 时在此追加描述（不写版本号）；发版冻结期把本段标题改成本版版本号，并补「升级到本版本要做什么」。_
+| 类型 | 内容 |
+|---|---|
+| feat | **资源白名单库表化**（[#23](https://github.com/ShenHaoCore/AuthHub/issues/23)）：接入 MCP Server 不再需要「改配置 + 重启」。新增 `RegisteredResources` 表与资源管理 API（`api/resources`，需新权限 `resources.manage`），资源登记/启停/删除即时生效；`AuthHub:Resources` 配置降级为启动期幂等种子（只做加法，从配置删项不会删库行）。默认拒绝红线不变：表为空或登记停用时，一切 `resource` 参数返回 `invalid_target`。**BREAKING**：仍有客户端持有 `rsrc:` 权限的资源拒绝删除（409）；持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`（出厂映射与默认配置已含） |
 
 ---
 

@@ -34,6 +34,7 @@ public static class AuthorizationPolicyExtensions
             // 细粒度权限策略
             AddPermissionPolicy(options, AuthHubConstants.Policies.ClientsManage, AuthHubConstants.Permissions.ClientsManage);
             AddPermissionPolicy(options, AuthHubConstants.Policies.ScopesManage, AuthHubConstants.Permissions.ScopesManage);
+            AddPermissionPolicy(options, AuthHubConstants.Policies.ResourcesManage, AuthHubConstants.Permissions.ResourcesManage);
             AddPermissionPolicy(options, AuthHubConstants.Policies.UsersManage, AuthHubConstants.Permissions.UsersManage);
             AddPermissionPolicy(options, AuthHubConstants.Policies.RolesManage, AuthHubConstants.Permissions.RolesManage);
             AddPermissionPolicy(options, AuthHubConstants.Policies.TokensRevoke, AuthHubConstants.Permissions.TokensRevoke);
@@ -52,6 +53,7 @@ public static class AuthorizationPolicyExtensions
 
             AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.ClientsManage, AuthHubConstants.Permissions.ClientsManage);
             AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.ScopesManage, AuthHubConstants.Permissions.ScopesManage);
+            AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.ResourcesManage, AuthHubConstants.Permissions.ResourcesManage);
             AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.UsersManage, AuthHubConstants.Permissions.UsersManage);
             AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.RolesManage, AuthHubConstants.Permissions.RolesManage);
             AddUiPermissionPolicy(options, AuthHubConstants.Policies.Ui.TokensRevoke, AuthHubConstants.Permissions.TokensRevoke);
