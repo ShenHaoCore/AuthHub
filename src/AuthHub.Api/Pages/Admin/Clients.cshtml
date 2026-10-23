@@ -8,6 +8,10 @@
     var newScopeSelection = Model.AutoOpenCreate
         ? Model.NewScopes
         : new[] { AuthHubConstants.Scopes.OpenId, AuthHubConstants.Scopes.Profile, AuthHubConstants.Scopes.ApiRead };
+
+    var newResourceSelection = Model.AutoOpenCreate
+        ? Model.NewResources
+        : Array.Empty<string>();
 }
 
 <div class="ah-page-header">
@@ -367,6 +371,37 @@
                 </div>
             </fieldset>
 
+            <fieldset class="ah-fieldset">
+                <legend class="ah-legend">允许的资源（RFC 8707）</legend>
+                @if (Model.ResourceOptions.Count == 0)
+                {
+                    <div class="ah-hint">
+                        未登记任何资源（<code>AuthHub:Resources</code> 为空）。接入 MCP Server 时才需要：
+                        在配置里加上资源标识并重启，这里就会出现可勾选项。
+                    </div>
+                }
+                else
+                {
+                    <div class="ah-check-row">
+                        @foreach (var resource in Model.ResourceOptions)
+                        {
+                            var isChecked = newResourceSelection.Contains(resource, StringComparer.Ordinal);
+                            <label class="ah-check">
+                                <input type="checkbox" name="NewResources" value="@resource" checked="@isChecked" />
+                                <span>
+                                    <code>@resource</code>
+                                    <span class="ah-check-desc">该客户端可以把令牌的受众指向它</span>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                    <div class="ah-hint">
+                        勾选后客户端才能在授权请求里带 <code>resource</code>；不勾选的资源会被
+                        <code>invalid_target</code> 拒绝。纯网页应用用不到，留空即可。
+                    </div>
+                }
+            </fieldset>
+
             <div class="ah-grid ah-grid-2">
                 <div class="ah-field">
                     <label class="ah-label" for="create-redirect-uris">重定向地址</label>
@@ -424,6 +459,7 @@
     var editPostLogoutUris = failed ? Model.EditPostLogoutRedirectUris : string.Join('\n', client.PostLogoutRedirectUris);
     var editGrants = failed ? Model.EditGrantTypes : client.GrantTypes.ToArray();
     var editScopes = failed ? Model.EditScopes : client.AllowedScopes.ToArray();
+    var editResources = failed ? Model.EditResources : client.AllowedResources.ToArray();
     var editPkce = failed ? Model.EditRequirePkce : client.Requirements.Contains("pkce", StringComparer.OrdinalIgnoreCase);
     var editConsent = failed ? Model.EditRequireConsent : string.Equals(client.ConsentType, "explicit", StringComparison.Ordinal);
 
@@ -485,6 +521,33 @@
                         否则客户端将无法签发 ID Token / 刷新令牌。
                     </div>
                 </fieldset>
+
+                @if (Model.ResourceOptionsFor(client).Count > 0)
+                {
+                    <fieldset class="ah-fieldset">
+                        <legend class="ah-legend">允许的资源（RFC 8707）</legend>
+                        <div class="ah-check-row">
+                            @foreach (var resource in Model.ResourceOptionsFor(client))
+                            {
+                                var isChecked = editResources.Contains(resource, StringComparer.Ordinal);
+                                <label class="ah-check">
+                                    <input type="checkbox" name="EditResources" value="@resource" checked="@isChecked" />
+                                    <span>
+                                        <code>@resource</code>
+                                        @if (!Model.ResourceOptions.Contains(resource, StringComparer.Ordinal))
+                                        {
+                                            <span class="ah-badge ah-badge--warning" style="margin-left:4px">已不在白名单</span>
+                                        }
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                        <div class="ah-hint">
+                            整组覆盖：未勾选的资源会从该客户端移除，之后它带 <code>resource</code>
+                            的授权请求会被 <code>invalid_target</code> 拒绝。
+                        </div>
+                    </fieldset>
+                }
 
                 <div class="ah-grid ah-grid-2">
                     <div class="ah-field">
