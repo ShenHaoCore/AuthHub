@@ -26,7 +26,7 @@ MCP 的授权是三方结构，缺一方都跑不通：
 
 ## 1. 登记资源（必须）
 
-令牌的 `aud` 白名单是**库表**（RegisteredResources），通过资源管理 API 登记，**变更即时生效，不需要重启**：
+令牌的 `aud` 白名单是**库表**（RegisteredResources），通过管理后台 `/admin/resources` 或资源管理 API 登记，**变更即时生效，不需要重启**：
 
 ```bash
 curl -X POST https://authhub.example.com/api/resources \
@@ -147,7 +147,7 @@ AuthHub 只能保证"票是发给你的"，剩下的在 RS 侧：
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `invalid_target`（ID2190） | `resource` 没登记（或登记已停用） | 经 `POST /api/resources` 登记，或把停用的登记重新启用 |
+| `invalid_target`（ID2190） | `resource` 没登记（或登记已停用） | 经后台 `/admin/resources` 或 `POST /api/resources` 登记，或把停用的登记重新启用 |
 | `invalid_request`（ID2192）"not allowed to use the specified resource(s)" | 资源已登记，但该客户端没有 `rsrc:<uri>` 权限 | 更新客户端 `resources` |
 | `invalid_request`（ID2032）"code_challenge_method is not supported" | 用了 `plain` | 改用 S256 |
 | `invalid_grant`（authorization code already redeemed） | 同一个 code 换了两次令牌 | 正常的重放防护；重新走授权 |
