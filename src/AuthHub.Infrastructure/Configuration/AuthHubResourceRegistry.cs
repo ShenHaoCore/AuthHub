@@ -5,7 +5,7 @@ namespace AuthHub.Infrastructure.Configuration;
 /// <summary>
 /// <c>AuthHub:Resources</c> 配置（RFC 8707 资源标识白名单的**种子来源**）的读取入口。
 ///
-/// <para><b>白名单已经库表化</b>（RegisteredResources 表，见 <see cref="Data.Entities.RegisteredResource"/>）：
+/// <para><b>白名单已经库表化</b>（<c>AuthHub.Domain.Entities.RegisteredResource</c> 实体）：
 /// 资源校验以数据库为准、运行时增删即生效，本类只负责「启动时把配置资源播种入库」这一件事，
 /// 以及保留启动期的 fail-fast 校验（配置里的非法 URI 让进程起不来，而不是等到第一个
 /// MCP 客户端接入时才以 <c>invalid_target</c> 的形式出现）。</para>

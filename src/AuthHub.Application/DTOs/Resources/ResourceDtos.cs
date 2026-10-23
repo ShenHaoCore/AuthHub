@@ -21,6 +21,8 @@ public sealed record ResourceDto
 }
 
 /// <param name="Resource">资源标识。接受任意写法,入库前规范化为 <c>Uri.AbsoluteUri</c>。</param>
+/// <param name="DisplayName">显示名。空/空白视为不设置。</param>
+/// <param name="Description">说明。空/空白视为不设置。</param>
 public record CreateResourceRequest(
     string Resource,
     string? DisplayName = null,
