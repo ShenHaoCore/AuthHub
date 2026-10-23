@@ -61,7 +61,7 @@ curl -X POST https://authhub.example.com/api/clients \
 `resources` 会被翻译成 `rsrc:<uri>` 权限项，`GET /api/clients/{clientId}` 的 `allowedResources` 可以核对。
 更新时 `resources` 传 `null` 表示不动（与 `scopes` / `grantTypes` 同一套语义）。
 
-> 管理后台的客户端编辑页暂时没有"资源"字段（走 API）；见文末「尚未支持」。
+> 管理后台的客户端编辑页可直接勾选「允许的资源」（v1.3.1 起，PR #14）；API 方式（`resources` 字段）继续可用。
 
 ## 3. 客户端怎么发请求
 
@@ -268,8 +268,8 @@ MCP 2026-07-28 已把 CIMD 列为首选。本仓库实现的是**懒注册**形�
 
 - **DCR（RFC 7591）**：本仓库只做了 CIMD。若某个客户端只支持 `POST /connect/register`，
   仍需手工登记（或让它改用 CIMD）。
-- **管理后台的资源字段**：目前只能走 `/api/clients`。补齐后编辑页应能勾选资源，而不是让运维改数据库。
-- **AuthHub 自身作为 MCP Server**（第 0 节的 B）：未立项。
+- **资源登记的运行时增删**：资源白名单仍是配置 + 重启（#5 T1 遗留），库表化已立项 [#23](https://github.com/ShenHaoCore/AuthHub/issues/23)。
+- **AuthHub 自身作为 MCP Server**（第 0 节的 B）：已立项 [#24](https://github.com/ShenHaoCore/AuthHub/issues/24)。
 - **CIMD 元数据的多实例共享缓存**：当前缓存就是数据库里的应用记录，多实例天然共享；
   但"到期后并发重取"没有做分布式锁，最坏情况是多拉几次。
 
