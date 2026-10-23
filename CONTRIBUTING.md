@@ -24,8 +24,6 @@ flowchart TD
 | `release/x.y.z` | `develop` | **发版冻结**。只修 bug 与 CHANGELOG 定版，不再合新功能 | — | 双合后删除 |
 | `hotfix/x.y.z` | **`main`** | 线上紧急缺陷 | — | 双合后删除 |
 
-`release/*` 取代了原先单独的 `docs/changelog-<ver>` 分支：定版本来就是「冻结期该做的事」，没有理由再拆一条分支出来，否则会出现「定版提交已在 `develop`、`release` 还没切」的中间态。
-
 开分支前先同步，否则起点是旧的、PR 会莫名冲突：
 
 ```bash
@@ -150,7 +148,7 @@ git push origin v1.4.0
 #    只保留当前版本，旧 Release 删除但保留 tag
 ```
 
-**为什么定版放在 `release` 分支而不是单开 `docs/changelog-<ver>`**：定版是「冻结期的动作」，`release` 分支的语义就是「这一版只做这些事」。拆成两条分支会制造「定版提交已经进了 `develop`、`release` 还没切」的中间态——此时 `develop` 上挂着一个尚未发布的版本号，而实际发版内容还可能变。
+**为什么定版必须在 `release` 分支上做**：定版是「冻结期的动作」，`release` 分支的语义就是「这一版只做这些事」。定版若脱离冻结期提前完成，`develop` 上就会长期挂着一个尚未发布的版本号，而实际发版内容还可能变。
 
 **为什么第 4 步要显式核对 HEAD**：`git merge --ff-only origin/main` 在本地 tracking ref 陈旧时会返回「已是最新」并退出 0，看起来一切正常，实际上 tag 打在了旧提交上——这类错误不会报错，只会让 tag 静默指向错误位置。判断「本地已是最新」不能依赖 `--ff-only` 的返回码，必须用 `rev-parse` 做字符串比对。
 
@@ -195,7 +193,7 @@ git push origin v1.4.1
 | 要求分支与目标同步（up-to-date） | ❌ | ❌ |
 | 要求人工 approve | ❌（单人项目无法自我 approve） | ❌ |
 
-**为什么 `main` 也不要求 up-to-date**：Git Flow 的两条主干天然会分叉——`release/*` 合进 `main` 产生 merge commit，而这条 merge commit 不在 `develop` 上。强制 up-to-date 会逼出一个 Git Flow 里并不存在的「回灌」步骤，每次发版后都得先 `main → develop` 合并一次才能开下一个 release PR。而这道保护本身收益有限：GitHub 的 PR CI 跑的就是「合并后」的 merge ref，合入前已经测过合并结果，不存在「没测过就合进去」。
+**为什么 `main` 也不要求 up-to-date**：Git Flow 的两条主干天然会分叉——`release/*` 合进 `main` 产生 merge commit，而这条 merge commit 不在 `develop` 上。强制 up-to-date 会逼出一个 Git Flow 里并不存在的反向同步步骤——每次发版后都得先把 `main` 合回 `develop`，才能开下一个 release PR。而这道保护本身收益有限：GitHub 的 PR CI 跑的就是「合并后」的 merge ref，合入前已经测过合并结果，不存在「没测过就合进去」。
 
 > 分支保护是**兜底**，不是替代自觉。它拦住的是「凌晨三点着急修 bug 直接 push main」这类失误。
 
