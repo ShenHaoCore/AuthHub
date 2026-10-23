@@ -42,6 +42,8 @@ public class ResourcesController : ApiControllerBase
     [EndpointSummary("登记资源")]
     [EndpointDescription("登记一个 RFC 8707 资源标识（绝对 URI，无 fragment），登记后立即生效。")]
     [HttpPost]
+    // codeql[cs/web/missing-token-validation] 本控制器整体走 Bearer JWT（策略 ResourcesManage），
+    // 不存在 Cookie 会话，CSRF 攻击面不成立；反伪造令牌只用于后台表单（CookieSession）。
     public Task<IActionResult> Create([FromBody] CreateResourceRequest request)
         => ExecuteAsync(() => _resources.CreateAsync(request, HttpContext.RequestAborted));
 
