@@ -111,7 +111,7 @@ PR 合并时 GitHub 会自动删除 head 分支（仓库已开启 `delete_branch
 
 ```mermaid
 flowchart TD
-    A["develop CI 全绿<br/>本批改动全部合入"] --> B["从 develop 切出 release/v1.4.0"]
+    A["develop CI 全绿<br/>本批改动全部合入"] --> B["从 develop 切出 release/1.4.0"]
     B --> C["冻结：只修 bug + CHANGELOG 定版<br/>不再从 develop 合新功能"]
     C --> D["PR release → main<br/>Merge commit"]
     D --> E["fetch 后 rev-parse 核对<br/>HEAD 与 origin/main 一致"]
@@ -123,14 +123,14 @@ flowchart TD
 ```bash
 # 1. develop CI 全绿，切出 release 分支，进入冻结
 git switch develop && git pull --ff-only
-git switch -c release/v1.4.0
-git push -u origin release/v1.4.0
+git switch -c release/1.4.0
+git push -u origin release/1.4.0
 
 # 2. 冻结期只做两件事：修 bug、写 CHANGELOG 定版
 #    不要再从 develop 合新功能 —— 那会让发版内容不可控、回归范围失控
 #    ……改 CHANGELOG.md、修冻结期发现的 bug……
 
-# 3. PR：release/v1.4.0 → main，合并方式 Merge commit
+# 3. PR：release/1.4.0 → main，合并方式 Merge commit
 
 # 4. 打 tag 前核对：本地 HEAD 是否真的等于远端 main
 git switch main
@@ -141,7 +141,7 @@ git rev-parse origin/main
 git tag -a v1.4.0 -m "v1.4.0: <一句话说明>"
 git push origin v1.4.0
 
-# 5. PR：release/v1.4.0 → develop，合并方式 Merge commit
+# 5. PR：release/1.4.0 → develop，合并方式 Merge commit
 #    把冻结期的修复与定版带回集成主干，然后删除 release 分支
 
 # 6. 在 GitHub Releases 里基于该 tag 写发布说明（必须写「升级到本版本要做什么」）
@@ -167,14 +167,14 @@ git push origin v1.4.0
 ```bash
 # 1. 从 main 当前状态开分支（否则修的不是线上那份代码）
 git switch main && git pull --ff-only
-git switch -c hotfix/v1.4.1
+git switch -c hotfix/1.4.1
 
 # 2. 修复、提交，PR → main（Merge commit，禁止 squash），CI 必须绿
 # 3. 核对后打 patch tag（同发布流程第 4 步：先 fetch，再 rev-parse 比对）
 git tag -a v1.4.1 -m "v1.4.1: <一句话说明>"
 git push origin v1.4.1
 
-# 4. 双合：PR hotfix/v1.4.1 → develop，Merge commit
+# 4. 双合：PR hotfix/1.4.1 → develop，Merge commit
 #    若此刻存在 release 分支，也要把它合进那条 release 分支
 ```
 
