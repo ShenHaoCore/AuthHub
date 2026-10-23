@@ -1,6 +1,7 @@
+using AuthHub.Api.OpenIddict;
 using AuthHub.Domain.Constants;
-using AuthHub.Infrastructure.Configuration;
 using AuthHub.Infrastructure.Data;
+using OpenIddict.Server;
 
 namespace AuthHub.Api.Extensions;
 
@@ -106,27 +107,31 @@ internal static class OpenIddictServerExtensions
 
                 // 资源标识（RFC 8707 Resource Indicators）。
                 //
-                // 请求里带 resource 参数时，OpenIddict 会把它写进令牌的 aud；但只会认这里登记过的值，
+                // 请求里带 resource 参数时，OpenIddict 会把它写进令牌的 aud；但只会认白名单里的值，
                 // 未登记的一律 invalid_target。这是 OAuth 2.1 里防"令牌被拿去喂给别的资源服务器"
                 // （confused deputy）的基础，MCP 的授权规范把它列为 MUST。
                 //
-                // 为什么只能在这里登记、不能运行时加：校验直接对照
-                // OpenIddictServerOptions.Resources —— 启动时快照的集合。7.7.2 没有资源实体 /
-                // 资源管理器（Scope 上的 Resources 只是"该 scope 关联哪些资源"的声明），
-                // 所以新增资源 = 改配置 + 重启，没有第二条路。
+                // 白名单已经**库表化**（RegisteredResources 表）：内置的
+                // Exchange.ValidateResources / Authentication.ValidateResources 对照的是
+                // OpenIddictServerOptions.Resources —— 启动快照，7.7.2 没有运行时增删接口。
+                // 这里把这两个内置 handler 精确移除，换成 RegisteredResourceValidationHandlers
+                // 的读库实现：每个请求现查 RegisteredResources 表（启用中的资源），
+                // 管理 API 增删/启停后下一个请求立即生效，无需重启，多实例也天然一致。
+                // 默认拒绝的红线不变 —— 表为空时，任何 resource 参数都被 invalid_target 拒绝。
                 //
-                // 注意内置的 authhub-api **不在这里登记**：RFC 8707 要求 resource 是绝对 URI，
-                // 而 RegisterResources 会逐个 new Uri()，传 "authhub-api" 直接抛 UriFormatException。
+                // 注意内置的 authhub-api **不在白名单里**：RFC 8707 要求 resource 是绝对 URI，
+                // 而白名单登记会逐个 new Uri()，传 "authhub-api" 直接抛 UriFormatException。
                 // 它作为 aud 依然正常工作 —— 那是 Scope 的 Resources 带出来的（AuthHubSeeder），
                 // 走的是另一条代码路径，与这里的登记集合无关。
                 //
-                // 读取与校验统一走 AuthHubResourceRegistry：CIMD 自动注册客户端授予 rsrc: 权限时
-                // 读的是同一份白名单，两处各读一遍配置迟早会不一致。
-                var resources = AuthHubResourceRegistry.LoadValidated(configuration);
+                // AuthHub:Resources 配置仍是启动期的种子来源与 fail-fast 校验点（见 ResourceSeeder /
+                // AuthHubResourceRegistry）：非法 URI 让进程起不来，合法项播种入库。
+                options.RemoveEventHandler(OpenIddictServerHandlers.Exchange.ValidateResources.Descriptor);
+                options.RemoveEventHandler(OpenIddictServerHandlers.Authentication.ValidateResources.Descriptor);
 
-                if (resources.Length > 0)
+                foreach (var descriptor in RegisteredResourceValidationHandlers.Descriptors)
                 {
-                    options.RegisterResources(resources);
+                    options.AddEventHandler(descriptor);
                 }
 
                 // 显式指定 issuer，保证令牌 iss 与发现文档在反向代理后依然正确

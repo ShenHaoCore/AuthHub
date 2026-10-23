@@ -23,21 +23,26 @@ MCP 的授权是三方结构，缺一方都跑不通：
 | **B** | AuthHub 自己变成 MCP Server（暴露 tool 让 AI 管理用户/权限） | 另一条产品线。**可以和 A 共存**：同一个服务既当 AS 又当 RS 是常见形态（AuthHub 的 `/api/*` 本来就是它自己签的令牌的 RS），前提是 MCP 端点要独立校验 `aud`，不能因为是"自家签的"就放行 |
 | **C** | 把 MCP 客户端当普通 OAuth client 手工登记 | 不是第三种方案，而是 A 的**子集**：不做 `aud` 绑定、只登记 client_id。只适合"自己内部 1-2 个客户端"的临时做法 |
 
-## 1. 登记资源（必须，且需要重启）
+## 1. 登记资源（必须）
 
-令牌的 `aud` 白名单来自配置：
+令牌的 `aud` 白名单是**库表**（RegisteredResources），通过资源管理 API 登记，**变更即时生效，不需要重启**：
 
-```jsonc
-// appsettings.json
-"AuthHub": {
-  "Resources": [ "https://mcp.example.com/mcp" ]
-}
+```bash
+curl -X POST https://authhub.example.com/api/resources \
+  -H "Authorization: Bearer <需要 resources.manage 权限的用户令牌>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resource": "https://mcp.example.com/mcp",
+    "displayName": "MCP Server"
+  }'
 ```
 
-- 只有登记过的**绝对 URI** 才能出现在授权请求 / 令牌请求的 `resource` 参数里；未登记 → `invalid_target`。
-- 非绝对 URI（如 `authhub-api`）会让服务**启动即失败**，并指出是哪一项 —— 这是故意的，配错不该等第一个客户端接入才暴露。
-- 内置的 `authhub-api` **不要**写进来：它作为 `aud` 是 Scope 的 `Resources` 带出来的（`AuthHubSeeder`），走的是另一条代码路径。
-- **改完必须重启**：OpenIddict 的资源校验集合是启动时快照的，没有运行时增删接口（7.7.2 没有资源实体 / 资源管理器）。
+- 只有登记过且**启用中**的**绝对 URI** 才能出现在授权请求 / 令牌请求的 `resource` 参数里；未登记 → `invalid_target`。
+- 资源标识入库前会规范化为 `Uri.AbsoluteUri` 形态（主机小写、默认端口收敛），请求原文与登记值做序数比对 —— 管理员不需要关心大小写与端口写法。
+- 内置的 `authhub-api` **不要**登记进来：它作为 `aud` 是 Scope 的 `Resources` 带出来的（`AuthHubSeeder`），走的是另一条代码路径。
+- `AuthHub:Resources` 配置**只做加法的幂等种子**：启动时把配置里的资源播种入库（已存在的跳过），并保留启动期 fail-fast（配置里的非法 URI 让进程起不来）。从配置里删掉的资源**不会**从库里移除 —— 下线资源请用管理 API 删除，或把登记置为停用（`Enabled=false`，等同未登记但保留记录）。
+- 删除登记时，若仍有客户端持有该资源的 `rsrc:` 权限，API 返回 **409**：先收回客户端授权，再删除。
+- 令牌签发后不回溯：删除/停用只影响后续签发，已发出的令牌到期前仍然有效（RS 侧的 `aud` 校验不受影响）。
 
 ## 2. 给客户端授权（资源权限）
 
@@ -141,7 +146,7 @@ AuthHub 只能保证"票是发给你的"，剩下的在 RS 侧：
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `invalid_target`（ID2190） | `resource` 没在 `AuthHub:Resources` 里登记 | 加配置 + 重启 |
+| `invalid_target`（ID2190） | `resource` 没登记（或登记已停用） | 经 `POST /api/resources` 登记，或把停用的登记重新启用 |
 | `invalid_request`（ID2192）"not allowed to use the specified resource(s)" | 资源已登记，但该客户端没有 `rsrc:<uri>` 权限 | 更新客户端 `resources` |
 | `invalid_request`（ID2032）"code_challenge_method is not supported" | 用了 `plain` | 改用 S256 |
 | `invalid_grant`（authorization code already redeemed） | 同一个 code 换了两次令牌 | 正常的重放防护；重新走授权 |
@@ -261,14 +266,14 @@ MCP 2026-07-28 已把 CIMD 列为首选。本仓库实现的是**懒注册**形�
 | `invalid_client` + "元数据缺少 client_name" | 元数据不满足 7.3 | 修客户端的元数据文档 |
 | `invalid_client` + "域名 x 解析到非公网地址" | SSRF 防护生效 | 元数据必须托管在纯公网地址上 |
 | `invalid_client` + "不在允许自动注册的名单内" | 配了 `AllowedHosts` 但没包含它 | 加白名单或清空该项 |
-| 自动注册成功但令牌 `aud` 为空 | `AuthHub:Resources` 没配 | 见第 1 节 |
+| 自动注册成功但令牌 `aud` 为空 | `AuthHub:Resources` 没配且库里没登记 | 见第 1 节 |
 | 桌面客户端回调被拒 | 元数据声明了 `application_type: web`，或库里存了带端口的 URI | 改成 `native`，并确认入库值无端口 |
 
 ## 8. 尚未支持
 
 - **DCR（RFC 7591）**：本仓库只做了 CIMD。若某个客户端只支持 `POST /connect/register`，
   仍需手工登记（或让它改用 CIMD）。
-- **资源登记的运行时增删**：资源白名单仍是配置 + 重启（#5 T1 遗留），库表化已立项 [#23](https://github.com/ShenHaoCore/AuthHub/issues/23)。
+- **资源管理后台页面**：资源的登记/启停目前只有 API（`api/resources`），后台界面未做。
 - **AuthHub 自身作为 MCP Server**（第 0 节的 B）：已立项 [#24](https://github.com/ShenHaoCore/AuthHub/issues/24)。
 - **CIMD 元数据的多实例共享缓存**：当前缓存就是数据库里的应用记录，多实例天然共享；
   但"到期后并发重取"没有做分布式锁，最坏情况是多拉几次。

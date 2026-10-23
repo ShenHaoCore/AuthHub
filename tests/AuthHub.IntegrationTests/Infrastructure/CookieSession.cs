@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.TestHost;
 
 namespace AuthHub.IntegrationTests.Infrastructure;
@@ -40,6 +41,22 @@ internal sealed class CookieSession : IDisposable
 
     public Task<HttpResponseMessage> GetAsync(string path)
         => _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
+
+    /// <summary>提交 JSON(PUT/PATCH 之外的便捷入口是 PostFormAsync,JSON 用于 /api/* 控制器)。</summary>
+    public Task<HttpResponseMessage> PostJsonAsync(string path, object payload)
+        => SendJsonAsync(HttpMethod.Post, path, payload);
+
+    public Task<HttpResponseMessage> PutJsonAsync(string path, object payload)
+        => SendJsonAsync(HttpMethod.Put, path, payload);
+
+    public Task<HttpResponseMessage> DeleteAsync(string path)
+        => _client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, path));
+
+    private Task<HttpResponseMessage> SendJsonAsync(HttpMethod method, string path, object payload)
+        => _client.SendAsync(new HttpRequestMessage(method, path)
+        {
+            Content = JsonContent.Create(payload)
+        });
 
     /// <summary>
     /// 提交表单。参数类型是 <see cref="IEnumerable{T}"/> 而不是字典 —— 复选框组

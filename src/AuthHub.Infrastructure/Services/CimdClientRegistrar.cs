@@ -7,9 +7,7 @@ using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
 using AuthHub.Domain.Enums;
 using AuthHub.Domain.Interfaces;
-using AuthHub.Infrastructure.Configuration;
 using AuthHub.Infrastructure.Security;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
@@ -34,38 +32,28 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 {
     private readonly IOpenIddictApplicationManager _applications;
     private readonly ICimdMetadataFetcher _fetcher;
+    private readonly IRegisteredResourceStore _resourceStore;
     private readonly IAuditLogService _audit;
     private readonly IClock _clock;
     private readonly CimdOptions _options;
-    private readonly string[] _resources;
     private readonly ILogger<CimdClientRegistrar> _logger;
 
     public CimdClientRegistrar(
         IOpenIddictApplicationManager applications,
         ICimdMetadataFetcher fetcher,
+        IRegisteredResourceStore resourceStore,
         IAuditLogService audit,
         IClock clock,
         IOptions<CimdOptions> options,
-        IConfiguration configuration,
         ILogger<CimdClientRegistrar> logger)
     {
         _applications = applications;
         _fetcher = fetcher;
+        _resourceStore = resourceStore;
         _audit = audit;
         _clock = clock;
         _options = options.Value;
         _logger = logger;
-
-        // 资源权限：显式配了就用配置，否则沿用服务端认定的资源全集。
-        // 资源本身已经是白名单（AuthHub:Resources），客户端请求其中任何一项都合理 ——
-        // 真正的受众收窄发生在令牌的 aud 上，不在这里。
-        _resources = _options.AllowedResources.Count > 0
-            ? _options.AllowedResources
-                .Where(resource => !string.IsNullOrWhiteSpace(resource))
-                .Select(resource => resource.Trim())
-                .Distinct(StringComparer.Ordinal)
-                .ToArray()
-            : AuthHubResourceRegistry.Load(configuration);
     }
 
     public async Task<CimdResolution> ResolveAsync(string clientId, CancellationToken cancellationToken = default)
@@ -129,7 +117,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 
     private async Task CreateAsync(CimdClientMetadata metadata, string digest, CancellationToken cancellationToken)
     {
-        var descriptor = BuildDescriptor(metadata, digest);
+        var descriptor = await BuildDescriptorAsync(metadata, digest, cancellationToken);
         descriptor.Properties[CimdProperties.FetchedAt] =
             JsonSerializer.SerializeToElement(_clock.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         descriptor.Properties[CimdProperties.Disabled] = JsonSerializer.SerializeToElement(false);
@@ -175,7 +163,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         string digest,
         CancellationToken cancellationToken)
     {
-        var descriptor = BuildDescriptor(metadata, digest);
+        var descriptor = await BuildDescriptorAsync(metadata, digest, cancellationToken);
 
         // 保留管理员设置的禁用标记与原始首次拉取时间：刷新元数据不该顺带"解禁"
         var properties = await _applications.GetPropertiesAsync(application, cancellationToken);
@@ -204,11 +192,29 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     }
 
     /// <summary>
-    /// 构建 OpenIddict 的应用描述。CIMD 客户端一律是 **public + 授权码 + PKCE**：
-    /// 没有登记密钥的环节，所以不可能是 confidential；不强制 PKCE 则授权码在
-    /// 公共客户端手里等于明文口令。
+    /// 构建资源权限的授予清单。
+    ///
+    /// 显式配了 <c>AuthHub:Cimd:AllowedResources</c> 就用配置（语义不变）；
+    /// 否则沿用**当前的**资源白名单（RegisteredResources 表启用中的全集）。
+    /// 刻意每次现查而不是注册时快照：白名单已库表化、运行时可增删，
+    /// 自动注册的客户端授予的 <c>rsrc:</c> 权限应该始终与白名单一致 ——
+    /// 真正的受众收窄发生在令牌的 aud 上，不在这里。
     /// </summary>
-    private OpenIddictApplicationDescriptor BuildDescriptor(CimdClientMetadata metadata, string digest)
+    private async Task<string[]> ResolveAllowedResourcesAsync(CancellationToken cancellationToken)
+    {
+        if (_options.AllowedResources.Count > 0)
+        {
+            return _options.AllowedResources
+                .Where(resource => !string.IsNullOrWhiteSpace(resource))
+                .Select(resource => resource.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        return (string[])await _resourceStore.GetEnabledResourcesAsync(cancellationToken);
+    }
+
+    private async Task<OpenIddictApplicationDescriptor> BuildDescriptorAsync(CimdClientMetadata metadata, string digest, CancellationToken cancellationToken)
     {
         var descriptor = new OpenIddictApplicationDescriptor
         {
@@ -238,7 +244,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             descriptor.Permissions.Add(Oidc.Permissions.Prefixes.Scope + scope);
         }
 
-        foreach (var resource in _resources)
+        foreach (var resource in await ResolveAllowedResourcesAsync(cancellationToken))
         {
             descriptor.Permissions.Add(Oidc.Permissions.Prefixes.Resource + resource);
         }

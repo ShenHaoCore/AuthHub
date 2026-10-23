@@ -49,13 +49,18 @@ public static class AuditActionType
     public const string ConsentDenied = "consent.denied";
     public const string ConsentRevoked = "consent.revoked";
 
-    // 客户端 / Scope
+    // 客户端 / Scope / 资源
     public const string ClientCreated = "client.created";
     public const string ClientUpdated = "client.updated";
     public const string ClientDeleted = "client.deleted";
     public const string ScopeCreated = "scope.created";
     public const string ScopeUpdated = "scope.updated";
     public const string ScopeDeleted = "scope.deleted";
+
+    /// <summary>RFC 8707 资源标识的登记/启停/删除（资源白名单库表化后走管理 API）。</summary>
+    public const string ResourceCreated = "resource.created";
+    public const string ResourceUpdated = "resource.updated";
+    public const string ResourceDeleted = "resource.deleted";
 
     // 用户 / 角色管理
     public const string UserCreatedByAdmin = "admin.user.created";
