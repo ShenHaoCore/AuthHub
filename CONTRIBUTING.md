@@ -23,6 +23,7 @@ flowchart TD
 | `feature/*` `fix/*` `chore/*` `refactor/*` `test/*` `docs/*` | `develop` | 新功能 / 修缺陷 / 依赖与 CI / 重构 / 补测试 / 文档 | — | 合并即删 |
 | `release/x.y.z` | `develop` | **发版冻结**。只修 bug 与 CHANGELOG 定版，不再合新功能 | — | 双合后删除 |
 | `hotfix/x.y.z` | **`main`** | 线上紧急缺陷 | — | 双合后删除 |
+| `dependabot/*` | 平台自动（每周一，基于 `develop`） | 依赖升级，按 `chore` 语义对待 | — | 合并即删 |
 
 开分支前先同步，否则起点是旧的、PR 会莫名冲突：
 
@@ -155,10 +156,16 @@ git push origin v1.4.0
 **Release 与 CHANGELOG 的分工**：Releases 上只挂当前版本，历史版本一律以
 [`CHANGELOG.md`](CHANGELOG.md) 为准——发布页不适合当版本档案，翻历史要一路滚。
 
+**CHANGELOG 条目随功能走**：功能 PR 合入 `develop` 时就顺手在 [`CHANGELOG.md`](CHANGELOG.md)
+的「未发布」段写条目，只描述做了什么、不写版本号。冻结期只做两件事：把「未发布」改名成
+本版版本号、补「升级到本版本要做什么」。发版时靠回忆整版改了什么，必然遗漏。
+
 **版本号**（语义化）：破坏性变更 → major；向后兼容的新能力 → minor；仅修复 → patch。
 数据库迁移属于破坏性变更的强信号，走 major。
 
 **冻结期有多长**：只有一个版本要发、CI 全绿的前提下，通常就是「写完 CHANGELOG 到合入 `main`」这几十分钟。它不需要是一个真实的时间窗口，它的作用是**在流程上隔开「还在变」和「不再变」两种状态**。
+
+**发版后不需要「回灌 `main` → `develop`」**：旧流程（`develop` → `main` 直发）曾靠回灌 PR 把 main 的发布 merge 带回 develop。新流程里 `release → develop` 这一步已经带回全部内容；`main` 上的 merge commit 永远不会出现在 `develop` 的祖先里，`git rev-list develop..main` 永远非空、GitHub 会一直显示「main 领先 develop」——这是 Git Flow 的正常形态，不是遗漏，不要再开回灌 PR。
 
 ## 紧急修复（hotfix）
 
@@ -195,6 +202,8 @@ git push origin v1.4.1
 
 **为什么 `main` 也不要求 up-to-date**：Git Flow 的两条主干天然会分叉——`release/*` 合进 `main` 产生 merge commit，而这条 merge commit 不在 `develop` 上。强制 up-to-date 会逼出一个 Git Flow 里并不存在的反向同步步骤——每次发版后都得先把 `main` 合回 `develop`，才能开下一个 release PR。而这道保护本身收益有限：GitHub 的 PR CI 跑的就是「合并后」的 merge ref，合入前已经测过合并结果，不存在「没测过就合进去」。
 
+**tag 也在保护范围内**：针对 `v*` 配置 tag ruleset，禁止删除与更新。「tag 一旦推送不可逆」这句话靠的不是自觉而是平台强制——没有 tag ruleset，误删或覆盖 tag 都不会报错，只有发版后才会发现。
+
 > 分支保护是**兜底**，不是替代自觉。它拦住的是「凌晨三点着急修 bug 直接 push main」这类失误。
 
 ## 日常命令
@@ -225,3 +234,4 @@ git branch --merged develop | grep -v -E '^\*|main|develop' | xargs -r git branc
 | 在功能分支里写 CHANGELOG 版本号 | 版本号是冻结时才确定的事实；写在功能分支会让 `develop` 长期挂着「未发布」的版本说明 |
 | 打 tag 前不核对 `origin/main` | `--ff-only` 在 tracking ref 陈旧时会假装成功，tag 落在旧提交上；tag 一旦推送就不能改 |
 | `release` 分支上顺手加个小功能 | 「只是小改动」是冻结失效最常见的入口；要么进下个 release，要么承认这次发版范围变了 |
+| 发版后再开「回灌 `main` → `develop`」的 PR | `release` → `develop` 已带回全部内容；`main` 的 merge commit 不进 `develop` 历史是 Git Flow 正常形态，回灌只会制造空噪音 PR |
