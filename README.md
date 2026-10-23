@@ -283,7 +283,9 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 - [ ] **DCR（RFC 7591）动态注册**：CIMD 已在 v1.3.0 落地（见
       [`docs/mcp-integration.md`](docs/mcp-integration.md) 第 7 节），但只支持
       `POST /connect/register` 的客户端仍需手工登记。做 DCR 需要速率限制与客户端清理策略。
-- [ ] **管理后台补"资源"字段**：客户端编辑页目前只有 Scope / 授权类型，资源权限得走 `/api/clients`。
+- [x] **管理后台补"资源"字段**：客户端新建 / 编辑弹窗已有「允许的资源」勾选项，
+      勾选即落成 `rsrc:` 权限。白名单里撤掉的资源不会从已持有的客户端上消失 ——
+      它们仍以「已不在白名单」标记出现在弹窗里，避免改个显示名就静默清掉权限。
 - [ ] **Redis 令牌缓存**：`EnableTokenEntryValidation()` 目前每次校验都查库，
       高并发下会成为瓶颈；可把令牌状态缓存到 Redis 并订阅撤销事件。
 - [ ] **分布式 JWKS 校验**：下游目前可离线验签；进一步可加公钥轮换与缓存控制头。
