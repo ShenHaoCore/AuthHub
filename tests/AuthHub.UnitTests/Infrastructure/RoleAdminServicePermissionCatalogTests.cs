@@ -10,7 +10,7 @@ namespace AuthHub.UnitTests.Infrastructure;
 ///
 /// <para>漏配的后果是界面上该权限只能裸显代码名 —— <c>resources.manage</c> 曾漏配，
 /// 管理后台的权限矩阵与编辑弹窗里它成了唯一没有中文名的权限点。
-/// 代码名本身不能省（<c>AuthHub:RolePermissions</code> 配置、授权策略与审计都按它引用），
+/// 代码名本身不能省（<c>AuthHub:RolePermissions</c> 配置、授权策略与审计都按它引用），
 /// 但显示名是目录的一部分，与 <see cref="AuthHubConstants.Permissions.All"/> 一一对应。</para>
 /// </summary>
 public class RoleAdminServicePermissionCatalogTests
