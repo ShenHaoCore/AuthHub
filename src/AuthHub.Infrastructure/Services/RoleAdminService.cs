@@ -29,6 +29,7 @@ public sealed class RoleAdminService : IRoleAdminService
     {
         [AuthHubConstants.Permissions.ClientsManage] = "管理 OAuth 客户端（注册 / 修改 / 轮换密钥 / 删除）",
         [AuthHubConstants.Permissions.ScopesManage] = "管理 Scope 与 API 资源",
+        [AuthHubConstants.Permissions.ResourcesManage] = "管理资源白名单（登记 / 启停 / 下线）",
         [AuthHubConstants.Permissions.UsersManage] = "管理用户（创建 / 修改 / 停用 / 分配角色）",
         [AuthHubConstants.Permissions.RolesManage] = "管理角色",
         [AuthHubConstants.Permissions.TokensRevoke] = "撤销令牌 / 强制用户下线",
