@@ -6,7 +6,8 @@
         <h1 class="ah-page-title">资源</h1>
         <p class="ah-page-sub">
             资源标识白名单（RFC 8707）：客户端请求里带的 <code>resource</code> 必须在这里登记过，
-            否则一律返回 <code>invalid_target</code>。登记与启停<b>立即生效，不需要重启</b>。
+            否则一律返回 <code>invalid_target</code>。登记与启停<b>立即生效，不需要重启</b>。<code>AuthHub:Resources</code> 配置只是启动期种子（只加不删），
+            下线资源请在本页操作。
         </p>
     </div>
     <div class="ah-page-header-actions">
@@ -28,18 +29,6 @@
             </div>
         </div>
     }
-
-    <div class="ah-alert ah-alert--info">
-        <ah-icon path="@AdminNav.Icons.Info" size="16" />
-        <div class="ah-alert-body">
-            <strong>这里是校验的唯一事实来源</strong>
-            <span>
-                令牌与授权请求的 <code>resource</code> 参数每请求现查本表，所以改动即时生效。
-                <code>AuthHub:Resources</code> 配置只是启动期的幂等种子（只做加法），
-                在配置里删一项<b>不会</b>删掉这里的登记 —— 下线资源请在本页操作。
-            </span>
-        </div>
-    </div>
 
     <div class="ah-card">
         <div class="ah-card-header">
