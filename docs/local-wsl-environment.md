@@ -11,7 +11,9 @@
 | Redis | 7.0.15 | 6379 | 系统服务 `redis-server` |
 | PostgreSQL | 16.15 | 5432 | 系统服务 `postgresql` |
 
-- 代码位置:`~/AuthHub`(WSL 内克隆;origin=GitHub,mirror=G 盘仓库),分支 `feature/postgres-support`
+- 代码位置:`~/AuthHub`(WSL 内克隆;origin=GitHub,mirror=G 盘仓库),分支 `develop`
+  (PostgreSQL 支持、Redis 令牌缓存均已合入;Redis 缓存默认关闭,要开就在服务单元加
+  `Environment=AuthHub__Redis__Enabled=true` 后 daemon-reload + restart)
 - 数据库:PostgreSQL 模式(`Database:Provider=Postgres`,启动时 EnsureCreated + 种子数据,不走 EF 迁移;
   见 [deployment.md · PostgreSQL](deployment.md#postgresql))。
   旧 SQLite 库已于 2026-10-24 确认废弃并删除
