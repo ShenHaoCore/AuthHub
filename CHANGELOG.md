@@ -26,6 +26,8 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | 类型 | 内容 |
 |---|---|
 | feat | **Redis 令牌条目缓存**（可选，`AuthHub:Redis:Enabled`，默认关闭）：`EnableTokenEntryValidation()` 的"每个带令牌的请求查一次库"变为查 Redis（未命中才回库回填），多实例部署共享缓存。撤销仍立刻生效 —— 令牌级撤销精确删键，批量撤销（`RevokeBySubjectAsync` / `PruneAsync`）递增全局版本号；条目快照带并发令牌，刷新令牌重用检测的乐观并发语义不变；缓存命中的实体重建桩导航并恢复影子外键（`ApplicationId` / `AuthorizationId` 是影子属性，直接 JSON 往返会在后续更新时置空外键）。Redis 故障自动降级直查库（警告 30 秒节流），故障窗口内的撤销由 `EntryTtlMinutes` 兜底。集成测试连真实 Redis 验证两条撤销链路，CI 加 redis:7 服务容器 |
+| fix | **CIMD 并发等待读不到已提交的注册**：等待方轮询用的是 `IOpenIddictApplicationManager`，其 Find* 先过 OpenIddict 的 scoped 实体缓存装饰器，而该装饰器把未命中的 null 也缓存且不挂失效令牌 —— 请求开头那次"查无此客户端"会让自己在本次请求里永远看不到并发方后来提交的记录，等待必然超时。注册器的存在性/新鲜度探测改走无缓存的原生存储接口；写路径（Create/Update）仍走管理器。同时修掉同源的潜在 500：并发创建撞唯一索引后的兜底检查也会读到毒化的 null 而误判失败 |
+| feat | **CIMD 元数据并发重取的跨实例租约**：缓存到期的那一刻多个实例会同时发现过期、同时向同一个第三方站点出站。新增 `CimdRefreshLeases` 表提供带过期时间的短租约（`client_id` 为键、持有者令牌匹配释放），同一时刻只有一个实例出站；其余在缓存仍可用时直接沿用，首次注册撞上并发时短轮询等对方写完再放行（上限 5 秒）。租约时长 = 拉取超时 + 15 秒，持有者崩溃后自然过期。单实例部署无需任何配置 |
 | feat | **资源管理后台页面**：`/admin/resources` 提供资源白名单的登记 / 编辑 / 启停 / 删除，与 `api/resources` 共用同一套服务与权限（`resources.manage`）。列表显示客户端引用计数，删除仍被 `rsrc:` 权限持有时给出 409 的明确指引；停用与删除的差别在页面上写明 |
 | feat | **资源白名单库表化**（[#23](https://github.com/ShenHaoCore/AuthHub/issues/23)）：接入 MCP Server 不再需要「改配置 + 重启」。新增 `RegisteredResources` 表与资源管理 API（`api/resources`，需新权限 `resources.manage`），资源登记/启停/删除即时生效；`AuthHub:Resources` 配置降级为启动期幂等种子（只做加法，从配置删项不会删库行）。默认拒绝红线不变：表为空或登记停用时，一切 `resource` 参数返回 `invalid_target`。**BREAKING**：仍有客户端持有 `rsrc:` 权限的资源拒绝删除（409）；持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`（出厂映射与默认配置已含） |
 

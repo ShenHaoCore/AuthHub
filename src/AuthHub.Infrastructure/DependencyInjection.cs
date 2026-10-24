@@ -65,6 +65,7 @@ public static class DependencyInjection
         // 每个请求新建一个等于关掉连接复用，也让"同一域名连续拉取"变成反复 DNS + TLS 握手。
         services.Configure<CimdOptions>(configuration.GetSection(CimdOptions.SectionName));
         services.AddSingleton<ICimdMetadataFetcher, CimdMetadataFetcher>();
+        services.AddScoped<ICimdRefreshLock, CimdRefreshLock>();
         services.AddScoped<ICimdClientRegistrar, CimdClientRegistrar>();
 
         // Redis 令牌条目缓存（AuthHub:Redis，默认关闭）。

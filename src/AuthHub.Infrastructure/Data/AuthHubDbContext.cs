@@ -35,6 +35,9 @@ public class AuthHubDbContext : IdentityDbContext<ApplicationUser, ApplicationRo
     /// <summary>已登记的 RFC 8707 资源标识（资源白名单）。见 <see cref="RegisteredResource"/>。</summary>
     public DbSet<RegisteredResource> RegisteredResources => Set<RegisteredResource>();
 
+    /// <summary>CIMD 元数据到期重取的跨实例租约。见 <see cref="CimdRefreshLease"/>。</summary>
+    public DbSet<CimdRefreshLease> CimdRefreshLeases => Set<CimdRefreshLease>();
+
     // OpenIddict 的实体（Application / Authorization / Scope / Token / Device）
     // 无需手动声明 DbSet：ModelBuilder.UseOpenIddict() 会把它们加入模型。
 
@@ -92,7 +95,7 @@ public class AuthHubDbContext : IdentityDbContext<ApplicationUser, ApplicationRo
         foreach (var clrType in new[]
                  {
                      typeof(ApplicationUser), typeof(ApplicationRole), typeof(AuditLog), typeof(RolePermissionOverride),
-                     typeof(RegisteredResource)
+                     typeof(RegisteredResource), typeof(CimdRefreshLease)
                  })
         {
             foreach (var property in builder.Entity(clrType).Metadata.GetProperties())
