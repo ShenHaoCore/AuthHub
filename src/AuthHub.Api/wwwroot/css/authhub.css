@@ -691,17 +691,26 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 /*
  * 操作列钉在右侧：窄屏下表格横向滚动时（.ah-table-wrap 的设计行为），
  * 编辑 / 删除这类高频动作不再被卷进滚动区深处，始终悬在可视右缘。
- * 左缘内阴影提示"左边还有内容"；未发生滚动时 sticky 不产生任何视觉差异。
+ *
+ * 左缘的 1px 分隔线用 background 渐变画而不是 border-left ——
+ * border-collapse: collapse 的边框画在表格层上，不跟随 sticky 单元格滚动。
+ * 这条线常驻：表格溢出时它提示"左边还有内容"，不溢出时它是普通的列分隔线；
+ * 早期版本这里用内阴影，在表格不溢出的页面上会渲染成一道悬空渐变（已废）。
  * 背景必须实底 —— sticky 单元格是透明的，滚过去的文字会从它底下透出来。
  */
 .ah-table .ah-col-actions {
     position: sticky;
     right: 0;
-    background: var(--ah-surface);
-    box-shadow: inset 12px 0 8px -10px rgba(16, 24, 40, .30);
+    background:
+        linear-gradient(var(--ah-border), var(--ah-border)) left center / 1px 100% no-repeat,
+        var(--ah-surface);
 }
-.ah-table thead .ah-col-actions { background: var(--ah-surface); z-index: 1; }
-.ah-table tbody tr:hover .ah-col-actions { background: #f9fafc; }
+.ah-table thead .ah-col-actions { z-index: 1; }
+.ah-table tbody tr:hover .ah-col-actions {
+    background:
+        linear-gradient(var(--ah-border), var(--ah-border)) left center / 1px 100% no-repeat,
+        #f9fafc;
+}
 
 /* 首列（通常是名称 / 主标识）给一个下限：表格被挤压时它最先被压成逐字竖排 */
 .ah-table td:first-child { min-width: 96px; }
