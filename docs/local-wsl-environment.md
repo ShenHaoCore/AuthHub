@@ -11,9 +11,11 @@
 | Redis | 7.0.15 | 6379 | 系统服务 `redis-server` |
 | PostgreSQL | 16.15 | 5432 | 系统服务 `postgresql` |
 
-- 代码位置:`~/AuthHub`(WSL 内克隆;origin=GitHub,mirror=G 盘仓库)
-- 数据库:SQLite 模式,文件 `src/AuthHub.Api/authhub.db`(启动时 EnsureCreated + 种子数据,不走 EF 迁移)
-- 种子账号:`admin / Admin@12345`(Administrator)、`alice / Alice@12345`
+- 代码位置:`~/AuthHub`(WSL 内克隆;origin=GitHub,mirror=G 盘仓库),分支 `feature/postgres-support`
+- 数据库:PostgreSQL 模式(`Database:Provider=Postgres`,启动时 EnsureCreated + 种子数据,不走 EF 迁移;
+  见 [deployment.md · PostgreSQL](deployment.md#postgresql))。
+  旧 SQLite 库保留为 `src/AuthHub.Api/authhub.db.retired-20261024`(切 PG 前的原始数据,确认不再需要后可删)
+- 种子账号:`admin / Admin@12345`(Administrator)、`alice / Alice@12345`(已于 2026-10-24 在 PG 里重新种出)
 - OpenAPI:`https://localhost:5001/openapi/v1.json`
 
 ## 2. AuthHub 服务运维
@@ -28,11 +30,13 @@ journalctl --user -u authhub -f      # 跟日志
 
 ```ini
 Environment=ASPNETCORE_ENVIRONMENT=Development
-Environment=Database__Provider=Sqlite
-Environment="ConnectionStrings__DefaultConnection=Data Source=authhub.db"
+Environment=Database__Provider=Postgres
+Environment="ConnectionStrings__DefaultConnection=Host=localhost;Database=authhub;Username=authhub;Password=123"
+Environment=AuthHub__Seeding__MigrateOnStartup=true
+Environment=AuthHub__Seeding__Enabled=true
 ```
 
-- 切回 SQL Server:改单元里的 `Database__Provider` 与连接串(指向宿主机 SQL 实例,需 SQL 身份验证账号 + WSL→宿主机连通),然后 `systemctl --user daemon-reload && systemctl --user restart authhub`;SQL Server 模式建库用 `dotnet ef database update -p src/AuthHub.Infrastructure -s src/AuthHub.Api`
+- 切回 SQLite(回退):改回 `Database__Provider=Sqlite` + `Data Source=authhub.db` 并去掉上面两行 Seeding 变量即可(旧库已改名 `.retired-20261024`,想还原把名字改回来)
 - **systemd 的 `Environment=` 值含空格必须加引号**,否则被按空格拆分(踩过:连接串被截断为 `Data`,SQLite 解析崩溃)
 
 ## 3. WSL 保活(重要)
@@ -69,9 +73,8 @@ WSL2 虚拟机默认空闲约 60 秒自动关机,所有服务随之失联,表现
 > `CREATE DATABASE cannot run inside a transaction block` 一报错,
 > 前面已打印 `CREATE ROLE` 的语句也会被连带回滚 —— 多语句要分成多次 `-c` 跑。
 >
-> 服务单元切到 PG 的三行(`Database__Provider=Postgres`、PG 连接串、
-> `AuthHub__Seeding__MigrateOnStartup=true`)与启动语义见
-> [deployment.md · PostgreSQL](deployment.md#postgresql);当前单元仍是 Sqlite。
+> 服务单元已于 2026-10-24 切到 Postgres(三行关键变量见上文第 2 节,启动语义见
+> [deployment.md · PostgreSQL](deployment.md#postgresql))。
 
 Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转发自动生效)。
 
