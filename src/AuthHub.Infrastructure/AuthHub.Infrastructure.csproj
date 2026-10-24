@@ -44,6 +44,13 @@
       无需走 introspection 回环请求。
     -->
     <PackageReference Include="OpenIddict.Validation.ServerIntegration" Version="7.7.2" />
+
+    <!--
+      Redis 令牌条目缓存（AuthHub:Redis，默认关闭）用 StackExchange.Redis 直连而不是
+      IDistributedCache：失效设计需要原子的 INCR（全局版本号）与多键并行 GET（管线化），
+      IDistributedCache 的抽象面不提供这两样。关闭时本包不产生任何连接。
+    -->
+    <PackageReference Include="StackExchange.Redis" Version="3.4.20" />
   </ItemGroup>
 
   <ItemGroup>

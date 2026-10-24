@@ -50,6 +50,8 @@ public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
             // CIMD 默认关闭。不显式写的话，某个用例打开过它之后会残留在进程环境里，
             // 让后续所有工厂都变成"动态注册已启用"。
             ["AuthHub__Cimd__Enabled"] = "false",
+            // Redis 令牌缓存同理：默认关闭，防止用例间泄漏（打开它的用例自己显式覆盖）。
+            ["AuthHub__Redis__Enabled"] = "false",
             ["AuthHub__Seed__AdminPassword"] = "Admin@12345",
             ["AuthHub__Seed__DemoPassword"] = "Alice@12345",
             ["AuthHub__Seed__WebClientSecret"] = "web-secret",
