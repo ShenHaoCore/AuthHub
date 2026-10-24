@@ -117,6 +117,9 @@ POST /connect/token
    实现见 `AuthorizationController.AttachScopesAndDestinationsAsync`：请求里声明了 `resource` 就**不再叠加** Scope 资源。
 2. **不带 `resource` 的老客户端行为不变**：`aud` 仍是 `authhub-api`（按 Scope 的 `Resources` 算）。
 3. **刷新令牌保持原受众**：`refresh_token` 换出来的新访问令牌 `aud` 与初次一致。
+   受众在授权那一刻定死（RFC 8707）：授权码兑换时，令牌请求若带 `resource`，必须与授权请求的集合
+   **完全一致**（§4）；刷新时只允许**收窄**（请求原受众的子集），变宽或切换都会被
+   `invalid_grant` 拒绝（§5）—— 客户端在两处都发同一个 `resource` 是最稳的写法。
 
 `iss` 参数也已具备：授权响应里会带 `iss`（RFC 9207），发现文档的
 `authorization_response_iss_parameter_supported` 为 `true`，这是 OpenIddict 的默认行为，无需配置。
@@ -151,6 +154,7 @@ AuthHub 只能保证"票是发给你的"，剩下的在 RS 侧：
 | `invalid_request`（ID2192）"not allowed to use the specified resource(s)" | 资源已登记，但该客户端没有 `rsrc:<uri>` 权限 | 更新客户端 `resources` |
 | `invalid_request`（ID2032）"code_challenge_method is not supported" | 用了 `plain` | 改用 S256 |
 | `invalid_grant`（authorization code already redeemed） | 同一个 code 换了两次令牌 | 正常的重放防护；重新走授权 |
+| `invalid_grant` + "受众与原授权不一致" | 兑换/刷新时 `resource` 与原授权不同（变宽或切换） | RFC 8707 的受众一致性：刷新只允许收窄；客户端应始终发同一个 `resource` |
 | 拿到令牌但 MCP Server 401 | RS 没校验 `aud`，或校验了但比对的是别家 URI | 检查 RS 的受众判断与 metadata 里的 `resource` |
 | 令牌 `aud` 是 `authhub-api` | 客户端没发 `resource` | 按第 3 节补参数 |
 
