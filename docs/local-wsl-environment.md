@@ -107,8 +107,9 @@ Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转�
 5. **GitHub 直连被墙**:HTTPS 靠 Watt 加速;SSH 走 `ssh.github.com:443` 稳定可达
 6. **Git Bash 内置 curl 的 TLS 对 Watt 本地代理有兼容问题**(`HTTP 000`),git 本体与浏览器不受影响,排障时别被误导
 7. **Windows 侧 dotnet run / F5 报 AddressInUse**:WSL 部署的 localhost 转发会在
-   Windows 侧占住 5000/5001(wslrelay 进程),而 appsettings.Development.json 若硬编码
-   Kestrel:Endpoints 端点,launchSettings 改端口也无效(配置端点优先级最高)。
-   并行开发的正确姿势:用 `dotnet run --launch-profile local-sqlite`(5003/5002,
-   零配置 SQLite + 种子,admin / Admin@12345);已移除 Development.json 里的
-   Kestrel 端点硬编码,端口一律由 launchSettings 档案决定
+   Windows 侧占住 5000/5001(wslrelay 进程),而 Kestrel:Endpoints 配置端点的优先级
+   高于 launchSettings/环境变量,默认档案必然撞端口。并行开发的正确姿势:用
+   `dotnet run --launch-profile local-sqlite`(5003/5002,零配置 SQLite + 种子,
+   admin / Admin@12345)—— 该档案用 `Kestrel__Endpoints__*__Url` 环境变量覆盖端口
+   (环境变量 > 配置文件,两条优先级规则叠加后恰好都成立);部署实例的 5001/5000
+   仍由 appsettings.Development.json 的 Kestrel:Endpoints 提供,不受影响
