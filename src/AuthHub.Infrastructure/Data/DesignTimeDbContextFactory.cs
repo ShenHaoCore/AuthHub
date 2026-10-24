@@ -24,6 +24,12 @@ namespace AuthHub.Infrastructure.Data;
 ///
 /// # SQLite
 /// AUTHHUB_PROVIDER=Sqlite AUTHHUB_CONNECTION="Data Source=authhub.design.db" dotnet ef migrations list ...
+///
+/// # PostgreSQL（Provider=Postgres / PostgreSQL 均可）
+/// AUTHHUB_PROVIDER=Postgres AUTHHUB_CONNECTION="Host=...;Database=...;" dotnet ef migrations add ...
+/// —— migrations add 会按 Npgsql 生成 PG 形状的新迁移；但**既有的迁移集是 SQL Server 形状**，
+/// 对 PG 跑 database update 是错的。PG 建库走运行时 EnsureCreated（AuthHub:Seeding:MigrateOnStartup），
+/// PG 专用迁移集立项后再统一生成。
 /// </code>
 /// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AuthHubDbContext>
@@ -66,6 +72,10 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Aut
         if (DatabaseProviders.IsSqlite(provider))
         {
             builder.UseSqlite(connectionString);
+        }
+        else if (DatabaseProviders.IsPostgres(provider))
+        {
+            builder.UseNpgsql(connectionString);
         }
         else
         {

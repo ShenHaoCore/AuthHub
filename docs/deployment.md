@@ -114,6 +114,31 @@ AuthHub__Security__GuardMode=Warn   # 全部降级成启动日志；Off 则完�
   而两者授权范围相差 1600 万个地址。
 - 解析失败**不降级**成"空信任范围继续跑"：那会退化成"转发头全被忽略"这个最难排查的症状。
 
+## PostgreSQL
+
+`Database:Provider=Postgres`（写 `PostgreSQL` 也可以）时走 Npgsql，
+带与 SQL Server 相同的 3 次重试策略：
+
+```bash
+Database__Provider=Postgres
+ConnectionStrings__DefaultConnection="Host=localhost;Database=authhub;Username=authhub;Password=..."
+# 建库走 EnsureCreated（PG 专用迁移集尚未生成，见下）
+AuthHub__Seeding__MigrateOnStartup=true
+```
+
+**建表方式是 EnsureCreated，不是迁移**：既有迁移集是按 SQL Server 生成的
+（`SqlServer:Identity` 注解、nvarchar 列类型），对 PG 跑 `dotnet ef database update`
+必然失败。因此 PG 与 SQLite 一样按模型建表；等 PG 专用迁移集立项后，
+本节与 `DatabaseProviders.UsesEnsureCreated` 一并收敛。
+
+**兼容性边界由集成测试钉住**（连真实 PostgreSQL，覆盖 EnsureCreated → 种子 → 签发 →
+令牌条目校验回查整条链路；CI 的 `postgres:16` 服务容器即为此用）。两处值得知道的映射规则：
+
+- 自定义实体的 `DateTimeOffset` 属性映射到 `timestamptz`，Npgsql 只接受 **offset = 0** 的值
+  —— 本服务统一写 UTC（`IClock.UtcNow`），正好满足；别在业务代码里塞本地时区的 DateTimeOffset。
+- Npgsql 默认给标识符加引号（大小写敏感）。全部查询都经 EF 生成，不受影响；
+  但用 psql 手写 SQL 时注意表名/列名与模型快照里的形状一致。
+
 ## Redis 令牌条目缓存（可选）
 
 `AuthHub:Redis:Enabled=true` 时，`EnableTokenEntryValidation()` 的"每个带令牌的 API 请求查一次库"

@@ -100,6 +100,9 @@ CI 不解析配置、`docker build` 只是复制文件、`dotnet ef` 走的是�
 | 密码流程被打开 | `Features:EnablePasswordFlow=true` | Warn |
 | 用 SQLite | `Database:Provider=Sqlite` | Warn |
 
+（PostgreSQL 是部署级提供程序，与 SQL Server 同列，不触发上面任何一项；
+PG 连接串的 `Host=localhost` 同样命中「连接串指向 loopback」的 Warn。）
+
 Fail 与 Warn 的分界是**「在部署环境里是否必然不成立」**：`(local)` 走共享内存、`(localdb)`
 是 LocalDB 实例，离开本机进程就不可达，没有任何凑合能跑的可能；而 `localhost` 在单机部署、
 `RequireHttps=false` 在网关卸载 TLS 时都是**正当形态** —— 把它们判成 Fail 只会把正常部署
