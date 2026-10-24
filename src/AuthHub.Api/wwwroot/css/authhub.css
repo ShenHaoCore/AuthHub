@@ -176,6 +176,10 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     align-items: center;
     gap: 8px;
     min-width: 0;
+    /* 窄屏（≤480px）时面包屑文字会换行断字、把 60px 定高的顶栏撑破 ——
+       一律不换行，超出部分整体裁切（两端的关键项：菜单按钮与用户菜单不受影响） */
+    overflow: hidden;
+    white-space: nowrap;
     color: var(--ah-muted);
     font-size: 13px;
 }
@@ -678,6 +682,24 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-table .ah-col-actions { width: 1%; white-space: nowrap; text-align: right; }
 .ah-table .ah-col-num { width: 1%; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 
+/*
+ * 操作列钉在右侧：窄屏下表格横向滚动时（.ah-table-wrap 的设计行为），
+ * 编辑 / 删除这类高频动作不再被卷进滚动区深处，始终悬在可视右缘。
+ * 左缘内阴影提示"左边还有内容"；未发生滚动时 sticky 不产生任何视觉差异。
+ * 背景必须实底 —— sticky 单元格是透明的，滚过去的文字会从它底下透出来。
+ */
+.ah-table .ah-col-actions {
+    position: sticky;
+    right: 0;
+    background: var(--ah-surface);
+    box-shadow: inset 12px 0 8px -10px rgba(15, 23, 42, .35);
+}
+.ah-table thead .ah-col-actions { background: #fafbfc; z-index: 1; }
+.ah-table tbody tr:hover .ah-col-actions { background: #fafbfc; }
+
+/* 首列（通常是名称 / 主标识）给一个下限：表格被挤压时它最先被压成逐字竖排 */
+.ah-table td:first-child { min-width: 96px; }
+
 .ah-cell-main { font-weight: 600; }
 .ah-cell-sub { color: var(--ah-muted); font-size: 12px; }
 .ah-cell-mono { font-family: var(--ah-mono); font-size: 12.5px; }
@@ -996,4 +1018,10 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     .ah-dl dd { margin-bottom: 10px; }
     .ah-secret-list { grid-template-columns: minmax(0, 1fr); }
     dialog.ah-modal, dialog.ah-modal.ah-modal-lg { width: calc(100vw - 20px); }
+
+    /* 窄屏表格减密：列间距 14px 会把可读内容挤成竖排 */
+    .ah-table th, .ah-table td { padding: 9px 10px; }
+    /* 勾选组两列网格同样收成单列，避免长描述被压成窄条 */
+    .ah-check-row { grid-template-columns: minmax(0, 1fr); }
+    .ah-modal-foot { flex-wrap: wrap; }
 }
