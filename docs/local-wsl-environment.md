@@ -14,7 +14,7 @@
 - 代码位置:`~/AuthHub`(WSL 内克隆;origin=GitHub,mirror=G 盘仓库),分支 `feature/postgres-support`
 - 数据库:PostgreSQL 模式(`Database:Provider=Postgres`,启动时 EnsureCreated + 种子数据,不走 EF 迁移;
   见 [deployment.md · PostgreSQL](deployment.md#postgresql))。
-  旧 SQLite 库保留为 `src/AuthHub.Api/authhub.db.retired-20261024`(切 PG 前的原始数据,确认不再需要后可删)
+  旧 SQLite 库已于 2026-10-24 确认废弃并删除
 - 种子账号:`admin / Admin@12345`(Administrator)、`alice / Alice@12345`(已于 2026-10-24 在 PG 里重新种出)
 - OpenAPI:`https://localhost:5001/openapi/v1.json`
 
@@ -36,7 +36,7 @@ Environment=AuthHub__Seeding__MigrateOnStartup=true
 Environment=AuthHub__Seeding__Enabled=true
 ```
 
-- 切回 SQLite(回退):改回 `Database__Provider=Sqlite` + `Data Source=authhub.db` 并去掉上面两行 Seeding 变量即可(旧库已改名 `.retired-20261024`,想还原把名字改回来)
+- 切回 SQLite(回退):改回 `Database__Provider=Sqlite` + `Data Source=authhub.db` 并去掉上面两行 Seeding 变量即可(旧库已删除,回退后从空库重新 EnsureCreated + 种子)
 - **systemd 的 `Environment=` 值含空格必须加引号**,否则被按空格拆分(踩过:连接串被截断为 `Data`,SQLite 解析崩溃)
 
 ## 3. WSL 保活(重要)
