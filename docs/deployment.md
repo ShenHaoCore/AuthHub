@@ -114,6 +114,40 @@ AuthHub__Security__GuardMode=Warn   # 全部降级成启动日志；Off 则完�
   而两者授权范围相差 1600 万个地址。
 - 解析失败**不降级**成"空信任范围继续跑"：那会退化成"转发头全被忽略"这个最难排查的症状。
 
+## Redis 令牌条目缓存（可选）
+
+`AuthHub:Redis:Enabled=true` 时，`EnableTokenEntryValidation()` 的"每个带令牌的 API 请求查一次库"
+变为查 Redis（未命中才回库并回填）。**默认关闭**：单实例部署不需要它，开启前先把 Redis 备好。
+
+```bash
+AuthHub__Redis__Enabled=true
+AuthHub__Redis__ConnectionString="localhost:6379,abortConnect=false"
+AuthHub__Redis__EntryTtlMinutes=60          # 兜底 TTL，见下
+AuthHub__Redis__KeyPrefix="authhub:tokens:" # 多套环境共用一个 Redis 时用来隔离键空间
+```
+
+**撤销仍然立刻生效**，这是设计红线：
+
+| 变更类型 | 失效方式 |
+|---|---|
+| 令牌级撤销 / 兑换（管理后台、api/tokens、刷新令牌轮换） | 精确删除该令牌的缓存键，下一次校验立刻回库 |
+| 批量撤销（`RevokeBySubjectAsync` 等全部 `Revoke*`）与清理（`PruneAsync`） | 递增全局版本号 —— 所有旧条目立刻判为过期，由 TTL 回收 |
+
+条目快照里带并发令牌，刷新令牌重用检测依赖的乐观并发（`ConcurrencyException`）语义不变。
+
+**故障降级**：Redis 连不上 / 超时 / 协议错 → 只记一条节流警告（30 秒一条），直查数据库。
+认证不受影响；唯一代价是**故障窗口内发生的撤销**要等 TTL 过期才对缓存可见 ——
+这就是 `EntryTtlMinutes` 的真正含义（故障恢复一致性的上界），不是缓存命中率旋钮。
+连接串刻意带 `abortConnect=false`：Redis 暂时缺席时后台重连，而不是让首次缓存操作抛死。
+
+**多实例部署注意**：
+
+- 所有实例必须指向**同一个 Redis、同一个 KeyPrefix**，否则等于每套实例各一份缓存，
+  "批量撤销立刻生效"只在递增了版本号的那份里成立。
+- 缓存不改变"单实例也能跑"的前提：关掉开关，行为与引入之前完全一致。
+- 键形如 `authhub:tokens:id:{令牌Id}` / `authhub:tokens:ref:{混淆后的引用Id}`，
+  值内含写入时的版本号 —— 运维用 `SCAN MATCH "authhub:tokens:*"` 能一眼认出本服务的键。
+
 ## 迁移
 
 ```bash

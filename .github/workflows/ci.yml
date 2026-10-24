@@ -30,6 +30,21 @@ jobs:
     # 不设的话失败的任务会挂满默认 6 小时；本仓库全量构建 + 测试实测约 4 分钟
     timeout-minutes: 15
 
+    # Redis 令牌条目缓存的集成测试需要真实实例（版本号比对、键失效这些语义
+    # 假实现测不出来）。服务容器映射到 localhost:6379，与本机部署形态一致；
+    # 没有缓存的用例不依赖它，多出来的容器对它们无感。
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        # 健康检查：容器就绪后再跑测试，避免偶发的连接拒绝
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: 拉取代码
         uses: actions/checkout@v7
