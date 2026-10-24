@@ -31,10 +31,19 @@ jobs:
     timeout-minutes: 15
 
     # 需要真实基础设施的集成测试在此领取服务容器（都映射到 localhost，与本机部署形态一致）：
-    # - redis：令牌条目缓存用例（在 feature/redis-token-cache 引入，合并后生效）
+    # - redis：令牌条目缓存用例（版本号比对、键失效这些语义假实现测不出来）
     # - postgres：PostgreSQL 提供程序用例。postgres/postgres 与测试默认连接串一致，
     #   超级用户自带 CREATEDB，满足用例"建 GUID 临时库、跑完 EnsureDeleted"的隔离方式。
     services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
       postgres:
         image: postgres:16
         env:

@@ -261,6 +261,31 @@ public class CimdRegistrationTests
         fetcher.CallCount.Should().Be(2, "过期后确实重新拉取过，只是失败了");
     }
 
+    // ------------------------------------------------------------------ ⑦ 并发重取
+
+    [Fact]
+    public async Task Concurrent_first_requests_should_fetch_metadata_only_once()
+    {
+        using var factory = CreateFactory();
+        var fetcher = new GatedCimdFetcher(WebMetadata());
+        using var host = CreateHost(factory, fetcher);
+        using var client = CreateClient(host);
+
+        // 第一个请求会阻塞在拉取器里；此时再发第二个，模拟"两个实例同时发现未注册"
+        var first = client.GetAsync(AuthorizeUrl(ClientMetadataUrl, RedirectUri));
+        await fetcher.WaitUntilFetchingAsync();
+
+        var second = client.GetAsync(AuthorizeUrl(ClientMetadataUrl, RedirectUri));
+        fetcher.Release();
+
+        var responses = await Task.WhenAll(first, second);
+
+        fetcher.CallCount.Should().Be(1,
+            "跨实例租约保证同一时刻只有一个请求向第三方站点出站");
+        responses.Should().OnlyContain(response => response.StatusCode == HttpStatusCode.Redirect,
+            "排队的那一个要等对方写完再放行，不能因为并发而失败");
+    }
+
     // ------------------------------------------------------------------ 工具方法
 
     private static AuthHubWebApplicationFactory CreateFactory(bool enabled = true) =>
@@ -360,6 +385,40 @@ public class CimdRegistrationTests
             ["grant_types"] = new[] { "authorization_code", "refresh_token" },
             ["scope"] = "openid profile"
         }));
+
+    /// <summary>
+    /// 可阻塞的假拉取器：用来把"第一次出站"卡住，制造两个请求真正重叠的窗口。
+    /// 直接返回已完成的 Task 会让两个请求在时间上完全错开，测不到并发路径。
+    /// </summary>
+    private sealed class GatedCimdFetcher : ICimdMetadataFetcher
+    {
+        private readonly CimdFetchResult _result;
+        private readonly TaskCompletionSource _started =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _callCount;
+
+        public GatedCimdFetcher(CimdFetchResult result) => _result = result;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        /// <summary>等到第一次拉取已经开始（此时它正卡在闸门上）。</summary>
+        public Task WaitUntilFetchingAsync() => _started.Task;
+
+        /// <summary>放行，让卡住的拉取返回元数据。</summary>
+        public void Release() => _release.TrySetResult();
+
+        public async Task<CimdFetchResult> FetchAsync(Uri metadataUri, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _callCount);
+            _started.TrySetResult();
+
+            await _release.Task.WaitAsync(cancellationToken);
+
+            return _result;
+        }
+    }
 
     /// <summary>可编程的假拉取器：记录调用次数，行为可在用例中途替换。</summary>
     private sealed class StubCimdFetcher : ICimdMetadataFetcher

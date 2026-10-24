@@ -198,6 +198,25 @@ namespace AuthHub.Infrastructure.Data.Migrations
                     b.ToTable("AuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("AuthHub.Domain.Entities.CimdRefreshLease", b =>
+                {
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("HolderToken")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("ClientId");
+
+                    b.ToTable("CimdRefreshLeases", (string)null);
+                });
+
             modelBuilder.Entity("AuthHub.Domain.Entities.RegisteredResource", b =>
                 {
                     b.Property<long>("Id")

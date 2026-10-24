@@ -300,8 +300,11 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 - [x] **管理后台补"资源"字段**：客户端新建 / 编辑弹窗已有「允许的资源」勾选项，
       勾选即落成 `rsrc:` 权限。白名单里撤掉的资源不会从已持有的客户端上消失 ——
       它们仍以「已不在白名单」标记出现在弹窗里，避免改个显示名就静默清掉权限。
-- [ ] **Redis 令牌缓存**：`EnableTokenEntryValidation()` 目前每次校验都查库，
-      高并发下会成为瓶颈；可把令牌状态缓存到 Redis 并订阅撤销事件。
+- [x] **Redis 令牌缓存**：已完成。`EnableTokenEntryValidation()` 的"每个带令牌的请求查一次库"
+      变为可选的 Redis 缓存（`AuthHub:Redis:Enabled`，默认关闭）。撤销仍立刻生效：
+      令牌级撤销精确删键，批量撤销（RevokeBySubjectAsync / PruneAsync）递增全局版本号；
+      Redis 故障自动降级直查库。多实例部署共享缓存，单实例部署零影响。
+      后续可扩：分布式限流、分布式会话。配置与语义见 [部署](docs/deployment.md)。
 - [ ] **分布式 JWKS 校验**：下游目前可离线验签；进一步可加公钥轮换与缓存控制头。
 - [ ] **OpenTelemetry**：分布式追踪（导出到 OTLP）。
 - [ ] **CI 安全扫描**：`dotnet list package --vulnerable` 与 OWASP Dependency Check
