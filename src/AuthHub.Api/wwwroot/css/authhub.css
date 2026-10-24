@@ -718,8 +718,8 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
  * 展开后用 display:contents 把 <details> 与内层 .ah-tag-list 都溶解进外层
  * 徽章连排 —— 多出的徽章与前面的同行连排，summary 变成行尾的「收起」钮。
  */
-.ah-perm-more { display: inline-flex; }
-.ah-perm-more > summary {
+.ah-chip-more { display: inline-flex; }
+.ah-chip-more > summary {
     list-style: none;
     display: inline-flex;
     align-items: center;
@@ -734,10 +734,10 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     cursor: pointer;
     user-select: none;
 }
-.ah-perm-more > summary::-webkit-details-marker { display: none; }
-.ah-perm-more[open],
-.ah-perm-more[open] > .ah-tag-list { display: contents; }
-.ah-perm-more[open] > summary {
+.ah-chip-more > summary::-webkit-details-marker { display: none; }
+.ah-chip-more[open],
+.ah-chip-more[open] > .ah-tag-list { display: contents; }
+.ah-chip-more[open] > summary {
     order: 99;
     border-color: var(--ah-border);
     background: var(--ah-surface);

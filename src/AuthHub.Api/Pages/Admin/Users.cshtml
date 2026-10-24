@@ -131,10 +131,25 @@
                                         }
                                         else
                                         {
+                                            // 角色目录会增长：只平铺前两个，其余收进「+N」（全量见编辑弹窗）
+                                            var head = user.Roles.Take(2).ToList();
+                                            var tail = user.Roles.Skip(2).ToList();
                                             <div class="ah-tag-list">
-                                                @foreach (var role in user.Roles)
+                                                @foreach (var role in head)
                                                 {
                                                     <span class="ah-badge ah-badge--primary">@role</span>
+                                                }
+                                                @if (tail.Count > 0)
+                                                {
+                                                    <details class="ah-chip-more">
+                                                        <summary>+@tail.Count</summary>
+                                                        <div class="ah-tag-list">
+                                                            @foreach (var role in tail)
+                                                            {
+                                                                <span class="ah-badge ah-badge--primary">@role</span>
+                                                            }
+                                                        </div>
+                                                    </details>
                                                 }
                                             </div>
                                         }
