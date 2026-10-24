@@ -106,3 +106,9 @@ Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转�
 4. **360 安全卫士**:拦截 hosts 修改与部分提权操作;Watt Toolkit 写 hosts 需管理员身份
 5. **GitHub 直连被墙**:HTTPS 靠 Watt 加速;SSH 走 `ssh.github.com:443` 稳定可达
 6. **Git Bash 内置 curl 的 TLS 对 Watt 本地代理有兼容问题**(`HTTP 000`),git 本体与浏览器不受影响,排障时别被误导
+7. **Windows 侧 dotnet run / F5 报 AddressInUse**:WSL 部署的 localhost 转发会在
+   Windows 侧占住 5000/5001(wslrelay 进程),而 appsettings.Development.json 若硬编码
+   Kestrel:Endpoints 端点,launchSettings 改端口也无效(配置端点优先级最高)。
+   并行开发的正确姿势:用 `dotnet run --launch-profile local-sqlite`(5003/5002,
+   零配置 SQLite + 种子,admin / Admin@12345);已移除 Development.json 里的
+   Kestrel 端点硬编码,端口一律由 launchSettings 档案决定
