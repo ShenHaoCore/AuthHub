@@ -1,6 +1,10 @@
 @page "/admin/clients"
 @model AuthHub.Api.Pages.Admin.ClientsModel
 @{
+    // 局部刷新请求（X-AH-Partial 头，见 authhub.js 的 data-ajax 层）只返回
+    // #ah-content 内容片段：Layout 置空后 Page() 的产物就是片段本身。
+    Layout = Model.IsPartial ? null : Layout;
+
     var newGrantSelection = Model.AutoOpenCreate
         ? Model.NewGrantTypes
         : new[] { "authorization_code", "refresh_token" };
@@ -29,6 +33,8 @@
     </div>
 </div>
 
+@* #ah-content：局部刷新的替换单元。表单/分页带 data-ajax* 标记，authhub.js 据此走 fetch。 *@
+<div id="ah-content">
 <div class="ah-stack">
     @if (!string.IsNullOrEmpty(Model.FormError))
     {
@@ -64,14 +70,14 @@
 
     <div class="ah-card">
         <div class="ah-card-header">
-            <form method="get" action="/admin/clients" class="ah-toolbar" role="search">
+            <form method="get" action="/admin/clients" class="ah-toolbar" role="search" data-ajax="#ah-content">
                 <div class="ah-search">
                     <ah-icon path="@AdminNav.Icons.Search" size="15" />
                     <input class="ah-input" type="search" name="q" value="@Model.Search"
                            placeholder="搜索 ClientId / 显示名" aria-label="搜索客户端" />
                 </div>
-                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
-                <a class="ah-btn" href="/admin/clients">重置</a>
+                <button type="submit" class="ah-btn">筛选</button>
+                <a class="ah-btn" href="/admin/clients" data-ajax-link="#ah-content">重置</a>
                 <div class="ah-toolbar-end">
                     <span class="ah-pagination-info">共 @Model.Clients.Total 个客户端</span>
                 </div>
@@ -223,6 +229,7 @@
                                             else
                                             {
                                                 <form method="post" asp-page-handler="rotateSecret"
+                                                      data-ajax="#ah-content"
                                                       data-confirm="将重新生成 @client.ClientId 的客户端密钥，旧密钥立即失效，依赖旧密钥的调用方会立刻失败。继续？">
                                                     <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                     <input type="hidden" name="TargetClientId" value="@client.ClientId" />
@@ -236,6 +243,7 @@
                                             @if (client.IsAutoRegistered)
                                             {
                                                 <form method="post" asp-page-handler="toggleAutoRegistered"
+                                                      data-ajax="#ah-content"
                                                       data-confirm="@(client.IsDisabled
                                                                           ? $"恢复自动注册的客户端 {client.ClientId}？它下次授权请求会重新拉取元数据。"
                                                                           : $"禁用自动注册的客户端 {client.ClientId}？它的授权请求会被直接拒绝，但记录保留（删除会让它下次请求时立刻被重新注册）。")">
@@ -252,6 +260,7 @@
                                             }
 
                                             <form method="post" asp-page-handler="delete"
+                                                  data-ajax="#ah-content"
                                                   data-confirm="将删除客户端 @client.ClientId。使用它的应用会立即无法登录，已签发的令牌也会在下次校验时被拒绝。继续？">
                                                 <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                 <input type="hidden" name="TargetClientId" value="@client.ClientId" />
@@ -280,7 +289,7 @@
 @* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
    "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
 <ah-dialog id="dlg-create-client" title="注册客户端" auto-open="@(Model.AutoOpenCreate ? "true" : "false")" size="lg">
-    <form method="post" asp-page-handler="create">
+    <form method="post" asp-page-handler="create" data-ajax="#ah-content">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
         <ah-dialog-body>
@@ -399,8 +408,8 @@
                 @if (Model.ResourceOptions.Count == 0)
                 {
                     <div class="ah-hint">
-                        未登记任何资源（<code>AuthHub:Resources</code> 为空）。接入 MCP Server 时才需要：
-                        在配置里加上资源标识并重启，这里就会出现可勾选项。
+                        未登记任何资源。接入 MCP Server 时才需要：
+                        到 <a href="/admin/resources">资源</a> 页登记资源标识（立即生效，无需重启），这里就会出现可勾选项。
                     </div>
                 }
                 else
@@ -487,7 +496,7 @@
     var editConsent = failed ? Model.EditRequireConsent : string.Equals(client.ConsentType, "explicit", StringComparison.Ordinal);
 
     <ah-dialog id="dlg-edit-client-@client.ClientId" title="编辑客户端 · @client.ClientId" auto-open="@(failed ? "true" : "false")" size="lg">
-        <form method="post" asp-page-handler="save">
+        <form method="post" asp-page-handler="save" data-ajax="#ah-content">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditClientId" value="@client.ClientId" />
 
@@ -614,3 +623,4 @@
         </form>
     </ah-dialog>
 }
+</div>

@@ -84,6 +84,14 @@
     --ah-sidebar-hover: #f4f6fb;
     --ah-sidebar-width: 258px;
 
+    /* ---- 派生交互色（角色命名，供后台与协议页共用） ---- */
+    --ah-hover: #f1f3f5;           /* 中性控件 hover 底色（图标钮 / 菜单 / 分页 / 行内操作） */
+    --ah-surface-subtle: #fafbfc;  /* 卡片脚 / 表格行 hover / 权限组头这类"比白深半档"的底 */
+    --ah-surface-muted: #f6f7f9;   /* 只读输入 / 中性徽章这类非交互灰底 */
+    --ah-border-input: #d0d5dd;    /* 输入框描边：比 hairline 深一档，焦点切换才可感知 */
+    --ah-primary-press: #3730a3;   /* 主按钮按下态（比 hover 再深一档） */
+    --ah-danger-hover: #912018;    /* 危险钮 hover（--ah-danger 的深档） */
+
     /* ---- 形状与阴影 ---- */
     --ah-radius-lg: 12px;
     --ah-radius: 10px;

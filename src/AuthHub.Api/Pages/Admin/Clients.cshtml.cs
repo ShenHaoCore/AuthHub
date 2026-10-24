@@ -3,7 +3,6 @@ using AuthHub.Application.DTOs.Clients;
 using AuthHub.Application.DTOs.Scopes;
 using AuthHub.Application.Interfaces;
 using AuthHub.Domain.Constants;
-using AuthHub.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -43,13 +42,13 @@ public class ClientsModel : AdminPageModel
 
     private readonly IClientAdminService _clients;
     private readonly IScopeAdminService _scopes;
-    private readonly IConfiguration _configuration;
+    private readonly IResourceAdminService _resources;
 
-    public ClientsModel(IClientAdminService clients, IScopeAdminService scopes, IConfiguration configuration)
+    public ClientsModel(IClientAdminService clients, IScopeAdminService scopes, IResourceAdminService resources)
     {
         _clients = clients;
         _scopes = scopes;
-        _configuration = configuration;
+        _resources = resources;
     }
 
     // ------------------------------------------------------------------ 查询条件（GET）
@@ -119,7 +118,13 @@ public class ClientsModel : AdminPageModel
     public IReadOnlyList<ScopeOption> ScopeOptions { get; private set; } = Array.Empty<ScopeOption>();
 
     /// <summary>
-    /// 可勾选的资源标识（<c>AuthHub:Resources</c> 白名单，即 RFC 8707 的 resource）。
+    /// 可勾选的资源标识（RFC 8707 的 resource），与资源页同一事实源：
+    /// <c>RegisteredResources</c> 表中**启用中**的登记。白名单已库表化（v1.4.0），
+    /// <c>AuthHub:Resources</c> 配置只是启动期的幂等种子 —— 资源页登记 / 启停后这里即时可见。
+    ///
+    /// <para>停用的登记不出现在这里（<c>Enabled=false</c> 等同未登记，勾了也会被
+    /// <c>invalid_target</c> 拒绝）；客户端已持有的停用 / 已删资源由
+    /// <see cref="ResourceOptionsFor"/> 补回，保证编辑往返不丢。</para>
     ///
     /// <para>为空数组是**正常状态**：没有接入 MCP Server 的部署不需要登记任何资源，
     /// 此时表单里只有一句提示，不会出现一个空的多选框。</para>
@@ -168,7 +173,7 @@ public class ClientsModel : AdminPageModel
     /// <summary>
     /// 某个客户端的资源选项：白名单 + 该客户端独有的资源。
     ///
-    /// <para>第二半是必须的：资源从 <c>AuthHub:Resources</c> 里删掉之后，已经持有该资源权限的
+    /// <para>第二半是必须的：资源在资源页被**停用或删除**之后，已经持有该资源权限的
     /// 客户端仍带着旧值。若编辑弹窗只列白名单，管理员改一次显示名就会把它悄悄清掉 ——
     /// 那正是「改了个无关字段，MCP 突然 401」的成因。</para>
     /// </summary>
@@ -235,10 +240,11 @@ public class ClientsModel : AdminPageModel
             return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        return RedirectWithSecret(
+        return await RedirectWithSecretAsync(
             result.Value.Client.ClientId,
             result.Value.PlainTextSecret,
-            $"已创建客户端 {result.Value.Client.ClientId}。");
+            $"已创建客户端 {result.Value.Client.ClientId}。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：保存编辑
@@ -269,7 +275,7 @@ public class ClientsModel : AdminPageModel
             return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已保存客户端 {EditClientId} 的配置。");
+        return await RedirectBackWithSuccessAsync($"已保存客户端 {EditClientId} 的配置。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：轮换密钥
@@ -287,10 +293,11 @@ public class ClientsModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectWithSecret(
+        return await RedirectWithSecretAsync(
             result.Value.ClientId,
             result.Value.PlainTextSecret,
-            $"已轮换客户端 {result.Value.ClientId} 的密钥，旧密钥立即失效。");
+            $"已轮换客户端 {result.Value.ClientId} 的密钥，旧密钥立即失效。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：禁用 / 恢复自动注册的客户端
@@ -314,9 +321,9 @@ public class ClientsModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(SetDisabled
+        return await RedirectBackWithSuccessAsync(SetDisabled
             ? $"已禁用自动注册的客户端 {TargetClientId}。它的授权请求会被直接拒绝。"
-            : $"已恢复自动注册的客户端 {TargetClientId}。");
+            : $"已恢复自动注册的客户端 {TargetClientId}。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：删除
@@ -334,7 +341,9 @@ public class ClientsModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已删除客户端 {TargetClientId}。该客户端已签发的令牌会在下次校验时被拒绝。");
+        return await RedirectBackWithSuccessAsync(
+            $"已删除客户端 {TargetClientId}。该客户端已签发的令牌会在下次校验时被拒绝。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ 内部辅助
@@ -358,19 +367,41 @@ public class ClientsModel : AdminPageModel
 
         ScopeOptions = options;
 
-        // 与启动期同一份读取逻辑（AuthHubResourceRegistry），避免后台显示的资源
-        // 与 OpenIddict 实际登记的资源出现偏差
-        ResourceOptions = AuthHubResourceRegistry.Load(_configuration);
+        // 与资源页同一事实源（RegisteredResources 表）：登记 / 启停即时反映到这里。
+        // 只列启用中的登记 —— 停用等同未登记，勾上也只会换来 invalid_target
+        ResourceOptions = (await _resources.GetAllAsync(cancellationToken))
+            .Where(resource => resource.Enabled)
+            .Select(resource => resource.Resource)
+            .ToArray();
 
         Clients = await _clients.QueryAsync(CurrentPage, DefaultPageSize, Search, cancellationToken);
     }
 
     /// <summary>带着一次性明文密钥回到列表页做展示。</summary>
-    private IActionResult RedirectWithSecret(string clientId, string? secret, string message)
+    private async Task<IActionResult> RedirectWithSecretAsync(
+        string clientId, string? secret, string message, CancellationToken cancellationToken)
     {
-        SetSuccessMessage(string.IsNullOrWhiteSpace(secret)
+        var toast = string.IsNullOrWhiteSpace(secret)
             ? message
-            : $"{message} 明文密钥只在下方显示这一次，请立即转交调用方。");
+            : $"{message} 明文密钥只在下方显示这一次，请立即转交调用方。";
+
+        if (IsPartial)
+        {
+            // 局部请求没有「302 之后的 GET」可读 TempData：明文直接挂到模型上，
+            // 由内容片段里的警示条渲染。与 TempData 版同样只此一次 ——
+            // 片段渲染完属性即弃，任何后续请求都拿不回来。
+            if (!string.IsNullOrWhiteSpace(secret))
+            {
+                RevealedSecret = secret;
+                RevealedSecretClientId = clientId;
+            }
+
+            SetPartialToast("success", toast);
+            await LoadDataAsync(cancellationToken);
+            return Page();
+        }
+
+        SetSuccessMessage(toast);
 
         if (!string.IsNullOrWhiteSpace(secret))
         {

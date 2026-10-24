@@ -139,7 +139,9 @@ public class UsersModel : AdminPageModel
             return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已创建用户 {result.Value.UserName}（角色：{DescribeRoles(result.Value.Roles)}）。");
+        return await RedirectBackWithSuccessAsync(
+            $"已创建用户 {result.Value.UserName}（角色：{DescribeRoles(result.Value.Roles)}）。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：保存编辑
@@ -213,12 +215,13 @@ public class UsersModel : AdminPageModel
                 return await FailAsync(EditDialog, assign.Error, cancellationToken);
             }
 
-            return RedirectBackWithSuccess(
+            return await RedirectBackWithSuccessAsync(
                 $"已保存 {existing.UserName} 的资料并更新角色（{DescribeRoles(desired)}）。" +
-                "角色变更会刷新安全戳，该用户的旧会话与令牌已失效。");
+                "角色变更会刷新安全戳，该用户的旧会话与令牌已失效。",
+                cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已保存 {existing.UserName} 的资料。");
+        return await RedirectBackWithSuccessAsync($"已保存 {existing.UserName} 的资料。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：锁定 / 解锁
@@ -236,9 +239,9 @@ public class UsersModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(Locked
+        return await RedirectBackWithSuccessAsync(Locked
             ? $"已锁定 {result.Value.UserName}，其现有会话已失效。"
-            : $"已解除 {result.Value.UserName} 的锁定。");
+            : $"已解除 {result.Value.UserName} 的锁定。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：强制下线
@@ -256,8 +259,9 @@ public class UsersModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(
-            $"已撤销 {result.Value.Tokens} 个令牌与 {result.Value.Authorizations} 条授权。未过期的访问令牌也会立即失效。");
+        return await RedirectBackWithSuccessAsync(
+            $"已撤销 {result.Value.Tokens} 个令牌与 {result.Value.Authorizations} 条授权。未过期的访问令牌也会立即失效。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：删除
@@ -275,7 +279,7 @@ public class UsersModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess("用户已删除。");
+        return await RedirectBackWithSuccessAsync("用户已删除。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ 内部辅助
