@@ -152,12 +152,35 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="ah-tag-list">
-                                            @foreach (var scope in client.AllowedScopes)
-                                            {
-                                                <span class="ah-badge ah-badge--success">@scope</span>
-                                            }
-                                        </div>
+                                        @if (client.AllowedScopes.Count == 0)
+                                        {
+                                            <span class="ah-cell-sub">未指定</span>
+                                        }
+                                        else
+                                        {
+                                            // Scope 目录会增长：只平铺前两个，其余收进「+N」。
+                                            // 授权类型列不折叠 —— 那是封闭小目录（≤5），折叠反而藏信息。
+                                            var head = client.AllowedScopes.Take(2).ToList();
+                                            var tail = client.AllowedScopes.Skip(2).ToList();
+                                            <div class="ah-tag-list">
+                                                @foreach (var scope in head)
+                                                {
+                                                    <span class="ah-badge ah-badge--success">@scope</span>
+                                                }
+                                                @if (tail.Count > 0)
+                                                {
+                                                    <details class="ah-chip-more">
+                                                        <summary>+@tail.Count</summary>
+                                                        <div class="ah-tag-list">
+                                                            @foreach (var scope in tail)
+                                                            {
+                                                                <span class="ah-badge ah-badge--success">@scope</span>
+                                                            }
+                                                        </div>
+                                                    </details>
+                                                }
+                                            </div>
+                                        }
                                     </td>
                                     <td>
                                         @if (client.RedirectUris.Count == 0)

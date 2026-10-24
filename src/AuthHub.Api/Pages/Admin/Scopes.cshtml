@@ -127,10 +127,25 @@
                                         }
                                         else
                                         {
+                                            // 资源目录会增长：只平铺前两个，其余收进「+N」
+                                            var head = scope.Resources.Take(2).ToList();
+                                            var tail = scope.Resources.Skip(2).ToList();
                                             <div class="ah-tag-list">
-                                                @foreach (var resource in scope.Resources)
+                                                @foreach (var resource in head)
                                                 {
                                                     <span class="ah-badge">@resource</span>
+                                                }
+                                                @if (tail.Count > 0)
+                                                {
+                                                    <details class="ah-chip-more">
+                                                        <summary>+@tail.Count</summary>
+                                                        <div class="ah-tag-list">
+                                                            @foreach (var resource in tail)
+                                                            {
+                                                                <span class="ah-badge">@resource</span>
+                                                            }
+                                                        </div>
+                                                    </details>
                                                 }
                                             </div>
                                         }
