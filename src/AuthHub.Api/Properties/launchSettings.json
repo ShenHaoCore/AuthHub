@@ -29,7 +29,9 @@
         "Database__Provider": "Sqlite",
         "ConnectionStrings__DefaultConnection": "Data Source=authhub-local.db",
         "AuthHub__Seeding__MigrateOnStartup": "true",
-        "AuthHub__Seeding__Enabled": "true"
+        "AuthHub__Seeding__Enabled": "true",
+        "Kestrel__Endpoints__Https__Url": "https://localhost:5003",
+        "Kestrel__Endpoints__Http__Url": "http://localhost:5002"
       }
     }
   }
