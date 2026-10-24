@@ -713,6 +713,38 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 
 .ah-tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
 
+/*
+ * 「+N」折叠徽章：角色列表的权限列只平铺前几个权限点，其余收进这里。
+ * 展开后用 display:contents 把 <details> 与内层 .ah-tag-list 都溶解进外层
+ * 徽章连排 —— 多出的徽章与前面的同行连排，summary 变成行尾的「收起」钮。
+ */
+.ah-perm-more { display: inline-flex; }
+.ah-perm-more > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border: 1px dashed var(--ah-primary-border);
+    border-radius: 999px;
+    background: var(--ah-primary-soft);
+    color: var(--ah-primary);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+.ah-perm-more > summary::-webkit-details-marker { display: none; }
+.ah-perm-more[open],
+.ah-perm-more[open] > .ah-tag-list { display: contents; }
+.ah-perm-more[open] > summary {
+    order: 99;
+    border-color: var(--ah-border);
+    background: var(--ah-surface);
+    color: var(--ah-muted);
+    font-weight: 500;
+}
+
 /* ============================================================== 徽章 */
 
 .ah-badge {
