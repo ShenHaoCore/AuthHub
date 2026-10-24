@@ -414,7 +414,7 @@ public class AdminUiTests
         var tokens = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub-tokens.css"));
         tokens.Should().Contain("IBM Plex Sans");
         tokens.Should().Contain("/fonts/IBMPlexSans-Regular.woff2");
-        tokens.Should().Contain("--ah-primary: #0f766e", because: "共用令牌主色为青绿");
+        tokens.Should().Contain("--ah-primary: #4f46e5", because: "共用令牌主色为靛蓝（2026-10-24 视觉改版，对齐现代鉴权控制台）");
     }
 
     // ==================================================================== 页内锚点
