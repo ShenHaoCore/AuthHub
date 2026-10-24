@@ -144,9 +144,29 @@ public class RolesModel : AdminPageModel
             return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(result.Value.IsSystemRole
-            ? $"已创建角色 {result.Value.Name}；它与内置角色同名，会沿用出厂默认的权限归属。"
-            : $"已创建角色 {result.Value.Name}。自定义角色默认不绑定任何权限，用该行的「权限」按钮勾选后即可生效。");
+        var created = result.Value;
+
+        // 创建时一并绑定初始权限：全部不勾 = 创建无权限角色（最少权限默认，与原行为一致）。
+        // 权限保存失败时角色已存在 —— 带着错误重新打开该角色的权限弹窗，管理员重选即可。
+        if (SelectedPermissions is { Count: > 0 })
+        {
+            var permissionResult = await _permissionAdmin.SaveAsync(
+                created.Name!, SelectedPermissions, cancellationToken);
+
+            if (permissionResult.IsFailure)
+            {
+                PermissionRoleName = created.Name;
+                return await FailAsync(PermissionsDialog, permissionResult.Error, cancellationToken);
+            }
+
+            return RedirectBackWithSuccess(
+                $"已创建角色 {created.Name} 并绑定 {SelectedPermissions.Count} 项权限；" +
+                "已在线用户最迟 5 分钟刷新（重新登录立即生效）。");
+        }
+
+        return RedirectBackWithSuccess(created.IsSystemRole
+            ? $"已创建角色 {created.Name}；它与内置角色同名，会沿用出厂默认的权限归属。"
+            : $"已创建角色 {created.Name}。未绑定权限（最少权限默认），用该行的「权限」按钮勾选后即可生效。");
     }
 
     // ------------------------------------------------------------------ POST：修改说明

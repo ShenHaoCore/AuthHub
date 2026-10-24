@@ -228,7 +228,6 @@
                        autocomplete="off" value="@Model.NewRoleName" />
                 <div class="ah-hint">
                     建议使用英文名（会作为令牌里的 <code>role</code> 声明）。
-                    自定义角色创建后不绑定任何权限，用列表里的「权限」按钮勾选即可生效。
                 </div>
             </div>
 
@@ -236,6 +235,31 @@
                 <label class="ah-label" for="create-role-desc">说明</label>
                 <input class="ah-input" id="create-role-desc" name="NewRoleDescription" type="text"
                        autocomplete="off" value="@Model.NewRoleDescription" placeholder="这个角色负责什么" />
+            </div>
+
+            <div class="ah-fieldset">
+                <legend class="ah-legend">初始权限（全部不勾 = 创建无权限角色，之后随时可调）</legend>
+                @foreach (var group in Model.PermissionGroups)
+                {
+                    <div class="ah-perm-group">
+                        <div class="ah-perm-group-head">
+                            <span>@group.Title</span>
+                            <span class="ah-perm-count ah-badge">@group.Permissions.Count 项</span>
+                        </div>
+                        <div class="ah-perm-items">
+                            @foreach (var permission in group.Permissions)
+                            {
+                                <label class="ah-perm-item">
+                                    <input type="checkbox" name="SelectedPermissions" value="@permission.Name" />
+                                    <span>
+                                        @(string.IsNullOrWhiteSpace(permission.Description) ? permission.Name : permission.Description)
+                                        <code>@permission.Name</code>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </ah-dialog-body>
         <ah-dialog-foot submit="创建角色" />
