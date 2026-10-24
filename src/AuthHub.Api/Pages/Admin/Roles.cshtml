@@ -2,6 +2,12 @@
 @model AuthHub.Api.Pages.Admin.RolesModel
 @using AuthHub.Domain.Constants
 
+@{
+    // 局部刷新请求（X-AH-Partial 头，见 authhub.js 的 data-ajax 层）只返回
+    // #ah-content 内容片段：Layout 置空后 Page() 的产物就是片段本身。
+    Layout = Model.IsPartial ? null : Layout;
+}
+
 <div class="ah-page-header">
     <div>
         <h1 class="ah-page-title">角色与权限</h1>
@@ -18,6 +24,8 @@
     </div>
 </div>
 
+@* #ah-content：局部刷新的替换单元。表单带 data-ajax 标记，authhub.js 据此走 fetch。 *@
+<div id="ah-content">
 <div class="ah-stack">
     @if (!string.IsNullOrEmpty(Model.FormError))
     {
@@ -136,6 +144,7 @@
                                         else
                                         {
                                             <form method="post" asp-page-handler="delete"
+                                                  data-ajax="#ah-content"
                                                   data-confirm="将删除角色 @name。若仍有用户属于该角色，删除后这些用户会失去对应权限。继续？">
                                                 <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                 <input type="hidden" name="TargetRoleName" value="@name" />
@@ -211,7 +220,7 @@
 @* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
    "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
 <ah-dialog id="dlg-create-role" title="新建角色" auto-open="@(Model.AutoOpenCreate ? "true" : "false")">
-    <form method="post" asp-page-handler="create">
+    <form method="post" asp-page-handler="create" data-ajax="#ah-content">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
         <ah-dialog-body>
@@ -275,7 +284,7 @@
 
     <ah-dialog id="dlg-perm-@roleName" title="@roleName 的权限"
                auto-open="@(permFailed ? "true" : "false")" size="lg">
-        <form method="post" asp-page-handler="permissions">
+        <form method="post" asp-page-handler="permissions" data-ajax="#ah-content">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="PermissionRoleName" value="@roleName" />
 
@@ -355,7 +364,7 @@
     </ah-dialog>
 
     <ah-dialog id="dlg-edit-role-@roleName" title="编辑角色 · @roleName" auto-open="@(editFailed ? "true" : "false")">
-        <form method="post" asp-page-handler="save">
+        <form method="post" asp-page-handler="save" data-ajax="#ah-content">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditRoleName" value="@roleName" />
 
@@ -387,3 +396,4 @@
         </form>
     </ah-dialog>
 }
+</div>

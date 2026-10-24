@@ -14,7 +14,7 @@
         {
             <nav class="ah-pagination-pages" aria-label="分页导航">
                 <a class="@Model.PreviousCss" href="@(Model.HasPrevious ? Model.UrlFor(Model.Page - 1) : null)"
-                   aria-label="上一页">上一页</a>
+                   data-ajax-link="#ah-content" aria-label="上一页">上一页</a>
 
                 @foreach (var number in Model.PageNumbers)
                 {
@@ -25,16 +25,16 @@
                     else if (number == Model.Page)
                     {
                         <a class="ah-page-link is-active" href="@Model.UrlFor(number.Value)"
-                           aria-current="page">@number</a>
+                           data-ajax-link="#ah-content" aria-current="page">@number</a>
                     }
                     else
                     {
-                        <a class="ah-page-link" href="@Model.UrlFor(number.Value)">@number</a>
+                        <a class="ah-page-link" href="@Model.UrlFor(number.Value)" data-ajax-link="#ah-content">@number</a>
                     }
                 }
 
                 <a class="@Model.NextCss" href="@(Model.HasNext ? Model.UrlFor(Model.Page + 1) : null)"
-                   aria-label="下一页">下一页</a>
+                   data-ajax-link="#ah-content" aria-label="下一页">下一页</a>
             </nav>
         }
     </div>

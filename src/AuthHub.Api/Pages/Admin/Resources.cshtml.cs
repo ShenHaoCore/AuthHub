@@ -130,8 +130,9 @@ public class ResourcesModel : AdminPageModel
             return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(
-            $"已登记资源 {result.Value.Resource}，立即生效 —— 不需要重启。还记得给需要它的客户端加上 rsrc: 权限。");
+        return await RedirectBackWithSuccessAsync(
+            $"已登记资源 {result.Value.Resource}，立即生效 —— 不需要重启。还记得给需要它的客户端加上 rsrc: 权限。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：保存编辑
@@ -159,8 +160,9 @@ public class ResourcesModel : AdminPageModel
             return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(
-            $"已保存资源 {result.Value.Resource}，变更立即生效（已签发的令牌不受影响，下一次校验起按新状态执行）。");
+        return await RedirectBackWithSuccessAsync(
+            $"已保存资源 {result.Value.Resource}，变更立即生效（已签发的令牌不受影响，下一次校验起按新状态执行）。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：删除
@@ -179,7 +181,7 @@ public class ResourcesModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess("已删除资源登记，立即生效。");
+        return await RedirectBackWithSuccessAsync("已删除资源登记，立即生效。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ 内部辅助

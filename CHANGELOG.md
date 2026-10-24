@@ -8,6 +8,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.5.0](#v150--管理后台局部刷新交互升级与视觉打磨) | 管理后台局部刷新交互升级与视觉打磨 | 2026-10-25 | [`v1.5.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.5.0) |
 | [v1.4.0](#v140--postgresqlredis-令牌缓存与控制台视觉改版) | PostgreSQL、Redis 令牌缓存与控制台视觉改版 | 2026-10-24 | [`v1.4.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.4.0) |
 | [v1.3.2](#v132--分支与发布规范修正) | 分支与发布规范修正 | 2026-10-23 | [`v1.3.2`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.2) |
 | [v1.3.1](#v131--后台资源字段与客户端编辑修复) | 后台资源字段与客户端编辑修复 | 2026-10-22 | [`v1.3.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.1) |
@@ -21,6 +22,20 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+## v1.5.0 —— 管理后台局部刷新交互升级与视觉打磨
+
+2026-10-25
+
+| 类型 | 内容 |
+|---|---|
+| feat | **管理后台局部刷新交互升级**：六个列表页（用户 / 角色 / 客户端 / Scope / 资源 / 审计日志）的全部写操作、筛选与翻页，从「表单提交 → 302 → 整页重载」改为 fetch 局部替换 `#ah-content` —— 不再白屏闪烁、滚动位置保留、侧边栏状态不丢；筛选与翻页同步地址栏（pushState），刷新与分享回到同一视图。服务端按 `X-AH-Partial` 请求头分流：页面把 `Layout` 置空后 `Page()` 直接产出内容片段，分支收口在 `AdminPageModel` 基类（成功路径 `RedirectBackWithSuccessAsync`），**零 partial 文件**；不带该头的请求（无 JS 环境、集成测试）走原有整页流程，行为不变（173 项集成测试全绿）。前端 authhub.js 全部交互改为事件委托 —— 内容替换后免重绑；成功提示改由 `X-AH-Toast` 响应头（URI 编码 JSON）驱动客户端渲染 toast；客户端一次性明文密钥在局部模式下直接挂模型渲染进警示条，与 TempData 版同样只显示一次 |
+| feat | **二次确认弹窗设计系统化**：9 处原生 `window.confirm()` 全部替换为自绘确认弹窗（令牌同源、危险色图标、焦点默认落在「取消」——危险操作的安全默认）；确认与局部刷新共用同一条提交管线，避免两个独立监听器对同一次 submit 各自 preventDefault 打架 |
+| fix | **登录页青绿残留**：协议页背景右下角光晕仍是 v1.4.0 换靛蓝前的 `rgba(20,184,166,.08)`，与「后台与登录页同一套设计语言」的约束直接矛盾，已改为靛蓝系；同类过时注释一并修正 |
+| fix | **表格悬停接缝**：行悬停底色 `#fafbfc` 与右侧钉住的操作列 `#f9fafc` 不一致，鼠标划过行时操作列交界处可见色差 |
+| fix | **键盘聚焦形变**：`:focus-visible` 里的 `border-radius:4px` 会把 8px 圆角的按钮 / 输入框在 Tab 聚焦瞬间掰成直角 —— outline 本身会跟随元素圆角，该属性改写移除 |
+| feat | **视觉打磨（以 Stripe 设计规范为审计基准，强化既有靛蓝体系而非改版）**：新增 `--ah-hover / --ah-surface-subtle / --ah-surface-muted / --ah-border-input / --ah-primary-press / --ah-danger-hover` 派生令牌，散落硬编码灰收口（按钮 hover 的两个灰值统一为一处）；危险钮 hover 回归令牌色阶（原 `#b21e28` 偏离 `--ah-danger`）；仪表盘大数字启用等宽数字（tabular-nums）、页面标题负字距；原生 checkbox / radio / 日历 `accent-color` 对齐主色；后台按钮补按下态（与协议页同款 1px 位移）与 `prefers-reduced-motion` 支持；列表页「筛选」降为次级样式，每页只保留页头一个实底主按钮 |
+| test | **客户端页资源选项契约补全**：「资源页登记 → 客户端弹窗即时出现可勾选项」「停用的登记不作为新选项」两条回归用例（钉住 v1.4.0 白名单库表化在客户端侧的表现）；空名单用例修正前置 —— 测试工厂的演示种子会往 `RegisteredResources` 种一条，先清掉才是真正的空名单 |
 
 ## v1.4.0 —— PostgreSQL、Redis 令牌缓存与控制台视觉改版
 

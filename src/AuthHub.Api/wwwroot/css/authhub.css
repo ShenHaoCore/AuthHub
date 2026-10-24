@@ -39,11 +39,15 @@ a:hover { text-decoration: underline; }
 
 code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 
+/* 不改写元素的 border-radius：键盘焦点时把 8px 圆角按钮掰成 4px 会有可见形变，
+   outline 本身会跟随元素圆角 */
 :focus-visible {
     outline: 2px solid rgba(var(--ah-primary-rgb), .45);
     outline-offset: 1px;
-    border-radius: 4px;
 }
+
+/* 原生 checkbox / radio / 日历选用主色，替代浏览器默认蓝 */
+input, select, textarea { accent-color: var(--ah-primary); }
 
 .ah-sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -207,7 +211,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     cursor: pointer;
     text-decoration: none;
 }
-.ah-icon-btn:hover { background: #f1f3f5; color: var(--ah-text); text-decoration: none; }
+.ah-icon-btn:hover { background: var(--ah-hover); color: var(--ah-text); text-decoration: none; }
 
 #ah-sidebar-toggle { display: none; }
 
@@ -228,7 +232,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     font: inherit;
     cursor: pointer;
 }
-.ah-user-btn:hover { background: #f1f3f5; }
+.ah-user-btn:hover { background: var(--ah-hover); }
 
 .ah-avatar {
     display: inline-flex;
@@ -280,7 +284,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     cursor: pointer;
     text-decoration: none;
 }
-.ah-menu-item:hover { background: #f1f3f5; text-decoration: none; }
+.ah-menu-item:hover { background: var(--ah-hover); text-decoration: none; }
 .ah-menu-item.ah-menu-item-danger { color: var(--ah-danger); }
 .ah-menu-item.ah-menu-item-danger:hover { background: var(--ah-danger-soft); }
 .ah-menu form { margin: 0; }
@@ -298,7 +302,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 }
 /* 内层分组 div 不参与布局，标题/副标题成为头部直接 flex 项，副标题才能独占整行 */
 .ah-page-header > div:not(.ah-page-header-actions) { display: contents; }
-.ah-page-title { font-size: 21px; }
+.ah-page-title { font-size: 21px; letter-spacing: -.2px; }
 .ah-page-sub { margin-top: 4px; color: var(--ah-muted); font-size: 13.5px; }
 .ah-page-header .ah-page-sub { order: 2; flex-basis: 100%; margin-top: 0; }
 .ah-page-header-actions { order: 1; margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -344,7 +348,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-card-footer {
     padding: 13px 18px;
     border-top: 1px solid var(--ah-border);
-    background: #fafbfc;
+    background: var(--ah-surface-subtle);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -422,7 +426,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-stat-icon.ah-tone-info { background: var(--ah-info-soft); color: var(--ah-info); }
 
 .ah-stat-label { color: var(--ah-muted); font-size: 12.5px; }
-.ah-stat-value { font-size: 25px; font-weight: 700; line-height: 1.25; letter-spacing: -.4px; }
+.ah-stat-value { font-size: 25px; font-weight: 700; line-height: 1.25; letter-spacing: -.4px; font-variant-numeric: tabular-nums; }
 .ah-stat-foot { color: var(--ah-muted); font-size: 12px; }
 
 /* ============================================================== 按钮 */
@@ -446,8 +450,10 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     text-decoration: none;
     transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
-.ah-btn:hover { background: #f4f5f7; text-decoration: none; }
+.ah-btn:hover { background: var(--ah-hover); text-decoration: none; }
 .ah-btn:disabled, .ah-btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+/* 按下态：与协议页按钮的 1px 位移反馈同频 */
+.ah-btn:active:not(:disabled):not([aria-disabled="true"]) { background: #e9ebee; transform: translateY(1px); }
 
 .ah-btn--primary {
     background: var(--ah-primary);
@@ -456,12 +462,14 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     box-shadow: 0 1px 2px rgba(var(--ah-primary-rgb), .28);
 }
 .ah-btn--primary:hover { background: var(--ah-primary-hover); border-color: var(--ah-primary-hover); }
+.ah-btn--primary:active:not(:disabled) { background: var(--ah-primary-press); border-color: var(--ah-primary-press); }
 
 .ah-btn--danger { background: var(--ah-danger); border-color: var(--ah-danger); color: #fff; }
-.ah-btn--danger:hover { background: #b21e28; border-color: #b21e28; }
+.ah-btn--danger:hover { background: var(--ah-danger-hover); border-color: var(--ah-danger-hover); }
+.ah-btn--danger:active:not(:disabled) { background: #841811; border-color: #841811; }
 
 .ah-btn--ghost { background: transparent; border-color: transparent; color: var(--ah-muted); }
-.ah-btn--ghost:hover { background: #f1f3f5; color: var(--ah-text); }
+.ah-btn--ghost:hover { background: var(--ah-hover); color: var(--ah-text); }
 
 .ah-btn--sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; }
 .ah-btn--block { width: 100%; }
@@ -482,7 +490,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     cursor: pointer;
     text-decoration: none;
 }
-.ah-act-btn:hover { background: #f1f3f5; color: var(--ah-primary); border-color: var(--ah-primary-border); text-decoration: none; }
+.ah-act-btn:hover { background: var(--ah-hover); color: var(--ah-primary); border-color: var(--ah-primary-border); text-decoration: none; }
 .ah-act-btn.ah-act-danger:hover { color: var(--ah-danger); border-color: var(--ah-danger-border); background: var(--ah-danger-soft); }
 .ah-act-btn[disabled] { opacity: .45; cursor: not-allowed; }
 
@@ -503,7 +511,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     width: 100%;
     min-height: 36px;
     padding: 7px 11px;
-    border: 1px solid #d0d5dd;
+    border: 1px solid var(--ah-border-input);
     border-radius: var(--ah-radius-sm);
     background: var(--ah-surface);
     color: var(--ah-text);
@@ -521,7 +529,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     box-shadow: 0 0 0 3px rgba(var(--ah-primary-rgb), .14);
 }
 .ah-input::placeholder, .ah-textarea::placeholder { color: #9aa3ad; }
-.ah-input[readonly] { background: #f6f7f9; color: var(--ah-muted); }
+.ah-input[readonly] { background: var(--ah-surface-muted); color: var(--ah-muted); }
 
 /* 自绘日期弹层（见 authhub.js 的 initDatePickers）：原生日历是浏览器画的独立图层，
    页面 CSS 够不着，只能跟随 color-scheme 在明/暗两档里二选一 —— 白弹层盖白表格
@@ -558,7 +566,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     line-height: 1;
     cursor: pointer;
 }
-.ah-datepicker-nav:hover { background: #f1f3f5; color: var(--ah-text); }
+.ah-datepicker-nav:hover { background: var(--ah-hover); color: var(--ah-text); }
 
 .ah-datepicker-grid {
     display: grid;
@@ -606,7 +614,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     cursor: pointer;
 }
 .ah-datepicker-clear { color: var(--ah-muted); }
-.ah-datepicker-clear:hover { background: #f1f3f5; color: var(--ah-text); }
+.ah-datepicker-clear:hover { background: var(--ah-hover); color: var(--ah-text); }
 .ah-datepicker-today { color: var(--ah-primary); font-weight: 600; }
 .ah-datepicker-today:hover { background: var(--ah-primary-soft); }
 
@@ -684,7 +692,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     vertical-align: middle;
 }
 .ah-table tbody tr:last-child td { border-bottom: 0; }
-.ah-table tbody tr:hover { background: #fafbfc; }
+.ah-table tbody tr:hover { background: var(--ah-surface-subtle); }
 .ah-table .ah-col-actions { width: 1%; white-space: nowrap; text-align: right; }
 .ah-table .ah-col-num { width: 1%; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -709,7 +717,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-table tbody tr:hover .ah-col-actions {
     background:
         linear-gradient(var(--ah-border), var(--ah-border)) left center / 1px 100% no-repeat,
-        #f9fafc;
+        var(--ah-surface-subtle);
 }
 
 /* 首列（通常是名称 / 主标识）给一个下限：表格被挤压时它最先被压成逐字竖排 */
@@ -763,7 +771,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     padding: 2px 8px;
     border: 1px solid var(--ah-border);
     border-radius: 999px;
-    background: #f6f7f9;
+    background: var(--ah-surface-muted);
     color: var(--ah-muted);
     font-size: 11.5px;
     font-weight: 600;
@@ -857,7 +865,7 @@ dialog.ah-modal {
     background: var(--ah-surface);
 }
 dialog.ah-modal.ah-modal-lg { width: min(820px, calc(100vw - 32px)); }
-dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
+dialog.ah-modal::backdrop { background: rgba(16, 24, 40, .45); }
 
 .ah-modal-head {
     display: flex;
@@ -881,9 +889,30 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     gap: 10px;
     padding: 13px 18px;
     border-top: 1px solid var(--ah-border);
-    background: #fafbfc;
+    background: var(--ah-surface-subtle);
 }
 .ah-modal-foot-end { margin-left: auto; display: flex; gap: 8px; }
+
+/* 二次确认弹窗（authhub.js 的 confirmDialog 动态生成）：比表单弹窗更窄，
+   语义是"一个问题 + 两个答案"，宽了反而显得犹豫 */
+.ah-modal-confirm { width: min(440px, calc(100vw - 32px)); }
+.ah-confirm-body { display: flex; align-items: flex-start; gap: 13px; padding: 18px; }
+.ah-confirm-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--ah-danger-soft);
+    color: var(--ah-danger);
+}
+.ah-confirm-text { margin: 2px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--ah-text); white-space: pre-line; word-break: break-word; }
+
+/* 轻提示进场（离场淡出由 authhub.js 内联 transition 处理） */
+@keyframes ah-toast-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: none; }
+}
+.ah-toast { animation: ah-toast-in .22s ease; }
 
 /* ============================================================== 权限树 */
 
@@ -899,7 +928,7 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     align-items: center;
     gap: 9px;
     padding: 9px 13px;
-    background: #fafbfc;
+    background: var(--ah-surface-subtle);
     border-bottom: 1px solid var(--ah-border);
     font-size: 13px;
     font-weight: 600;
@@ -949,7 +978,7 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     font-size: 13px;
     text-decoration: none;
 }
-.ah-page-link:hover { background: #f1f3f5; text-decoration: none; }
+.ah-page-link:hover { background: var(--ah-hover); text-decoration: none; }
 .ah-page-link.is-active { background: var(--ah-primary); border-color: var(--ah-primary); color: #fff; font-weight: 600; }
 .ah-page-link.is-disabled { opacity: .45; pointer-events: none; }
 .ah-page-ellipsis { padding: 0 3px; color: var(--ah-muted); }
@@ -1040,7 +1069,7 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     position: fixed;
     inset: 0;
     z-index: 55;
-    background: rgba(16, 22, 34, .42);
+    background: rgba(16, 24, 40, .45);
 }
 
 @media (max-width: 1200px) {
@@ -1071,4 +1100,11 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     /* 勾选组两列网格同样收成单列，避免长描述被压成窄条 */
     .ah-check-row { grid-template-columns: minmax(0, 1fr); }
     .ah-modal-foot { flex-wrap: wrap; }
+}
+
+/* 协议页 authhub-auth.css 已有同款声明；后台动效集中在侧边栏与按钮上 */
+@media (prefers-reduced-motion: reduce) {
+    .ah-sidebar, .ah-btn, .ah-nav-item, .ah-act-btn, .ah-input, .ah-select, .ah-textarea { transition: none; }
+    .ah-btn:active:not(:disabled):not([aria-disabled="true"]) { transform: none; }
+    .ah-toast { animation: none; }
 }

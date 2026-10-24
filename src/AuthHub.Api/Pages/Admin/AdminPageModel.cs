@@ -8,12 +8,19 @@ namespace AuthHub.Api.Pages.Admin;
 /// 后台管理页面的公共基类：把用户 / 角色 / 客户端 / Scope 四个 CRUD 页面逐字重复的
 /// 「PRG + 弹窗重开 + 回跳」样板收在一处。
 ///
-/// 交互契约（与 <c>wwwroot/js/authhub.js</c> 的 initDialogs 配合）：
+/// 交互契约（与 <c>wwwroot/js/authhub.js</c> 配合）：
 ///   - POST 成功 → <see cref="RedirectBackWithSuccess"/> 写一条一次性提示后 302 回列表，
 ///     刷新页面不会重复提交；
 ///   - POST 失败 → <see cref="FailAsync"/> 原地重渲染，并把 **哪个弹窗出的错** 记进
 ///     <see cref="OpenDialog"/>，视图据此把 <c>data-dialog-autoopen</c> 渲染成显式的小写
 ///     "true"，用户填过的值不会丢。
+///
+/// 局部刷新分支（<see cref="IsPartial"/>）：前端 authhub.js 对带 <c>data-ajax</c> 的表单
+/// 改走 fetch，请求头带 <c>X-AH-Partial: 1</c>。此时页面视图把 <c>Layout</c> 置空，
+/// <c>Page()</c> 渲染出的就是 #ah-content 内容片段本身 —— 因此 <see cref="FailAsync"/>
+/// 无需分支；成功路径用 <see cref="RedirectBackWithSuccessAsync"/> 替代 302：
+/// 重载列表数据 + 把提示写进 <c>X-AH-Toast</c> 响应头后原地返回片段。
+/// 不带该头的请求（无 JS、集成测试、CSRF 重放）走原有整页流程，行为不变。
 ///
 /// 两条硬约束（都有契约测试守着，见 <c>AdminUiTests</c>）：
 ///   1. 视图里**不要**把 <see cref="AutoOpenCreate"/> 直接插值进属性 ——
@@ -33,6 +40,14 @@ public abstract class AdminPageModel : PageModel
 
     /// <summary>成功提示的 TempData 键，由 <c>Pages/Shared/_AdminLayout.cshtml</c> 读取并展示。</summary>
     private const string SuccessTempDataKey = "Success";
+
+    /// <summary>
+    /// 本次请求是否来自前端局部刷新层（authhub.js 的 data-ajax 表单 / data-ajax-link 链接）。
+    /// 页面视图据此把 Layout 置空，<see cref="Page()"/> 即产出 #ah-content 内容片段。
+    /// </summary>
+    public bool IsPartial =>
+        Request.Headers.TryGetValue("X-AH-Partial", out var values)
+        && values.Count > 0;
 
     /// <summary>列表地址（含筛选条件），随表单往返，POST 后跳回原位置。</summary>
     [BindProperty]
@@ -93,6 +108,21 @@ public abstract class AdminPageModel : PageModel
     protected IActionResult RedirectBack()
         => Redirect(!string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl : ListPath);
 
+    /// <summary>
+    /// <see cref="RedirectBack"/> 的局部刷新版：局部请求时不做 302 ——
+    /// 重载列表数据后原地返回内容片段（片段里没有 302 可跟，前端也不会跟着跳）。
+    /// </summary>
+    protected async Task<IActionResult> RedirectBackAsync(CancellationToken cancellationToken)
+    {
+        if (!IsPartial)
+        {
+            return RedirectBack();
+        }
+
+        await LoadDataAsync(cancellationToken);
+        return Page();
+    }
+
     /// <summary>写一条一次性成功提示（布局页读取后即删除）。</summary>
     protected void SetSuccessMessage(string message) => TempData[SuccessTempDataKey] = message;
 
@@ -101,6 +131,33 @@ public abstract class AdminPageModel : PageModel
     {
         SetSuccessMessage(message);
         return RedirectBack();
+    }
+
+    /// <summary>
+    /// <see cref="RedirectBackWithSuccess"/> 的局部刷新版：提示不再走
+    /// 「TempData + 整页渲染」，而是写进 <c>X-AH-Toast</c> 响应头
+    /// （<see cref="SetPartialToast"/>），由 authhub.js 渲染成轻提示。
+    /// </summary>
+    protected async Task<IActionResult> RedirectBackWithSuccessAsync(string message, CancellationToken cancellationToken)
+    {
+        if (!IsPartial)
+        {
+            return RedirectBackWithSuccess(message);
+        }
+
+        SetPartialToast("success", message);
+        await LoadDataAsync(cancellationToken);
+        return Page();
+    }
+
+    /// <summary>
+    /// 局部刷新动作的反馈提示：URI 编码后的 {"t":类型,"m":文案} JSON。
+    /// HTTP 头只允许 ASCII（中文文案必须整体转义），前端 decodeURIComponent 还原。
+    /// </summary>
+    protected void SetPartialToast(string type, string message)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new { t = type, m = message });
+        Response.Headers["X-AH-Toast"] = Uri.EscapeDataString(payload);
     }
 
     /// <summary>
