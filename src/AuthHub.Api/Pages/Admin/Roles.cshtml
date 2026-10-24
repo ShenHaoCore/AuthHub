@@ -88,10 +88,27 @@
                                     }
                                     else
                                     {
+                                        // 权限点目录会持续增长，全部平铺会让行高随目录膨胀 ——
+                                        // 只露前两个，其余收进「+N」折叠块；全量视图在下方
+                                        // 权限矩阵与每行的「权限」编辑弹窗里。
+                                        var head = role.Permissions.Take(2).ToList();
+                                        var tail = role.Permissions.Skip(2).ToList();
                                         <div class="ah-tag-list">
-                                            @foreach (var permission in role.Permissions)
+                                            @foreach (var permission in head)
                                             {
                                                 <span class="ah-badge ah-badge--success">@permission</span>
+                                            }
+                                            @if (tail.Count > 0)
+                                            {
+                                                <details class="ah-perm-more">
+                                                    <summary>+@tail.Count</summary>
+                                                    <div class="ah-tag-list">
+                                                        @foreach (var permission in tail)
+                                                        {
+                                                            <span class="ah-badge ah-badge--success">@permission</span>
+                                                        }
+                                                    </div>
+                                                </details>
                                             }
                                         </div>
                                     }
