@@ -302,11 +302,44 @@ public class AuthorizationController : Controller
 
         // 用最新的用户资料重建主体，使角色 / 权限变更立即反映到新令牌里。
         //
-        // 资源要一并从旧主体带过来：authorization_code / refresh_token 请求本身通常不带 resource，
-        // 受众是在授权那一刻定下的。丢了它，兑换出来的令牌就没有 aud（MCP Server 会直接拒收）。
-        var resources = request.GetResources()
-            .Concat(result.Principal.GetResources())
-            .ToArray();
+        // 受众一致性（RFC 8707）：受众在授权那一刻定死，兑换与刷新都不能改口径 ——
+        //   · 授权码兑换（§4）：令牌请求若带 resource，必须与授权请求的集合完全一致；
+        //   · 刷新（§5）：只允许收窄（请求值是原受众的子集），禁止变宽或切换。
+        // 没有这道检查的话，一个同时持有两个资源权限的客户端，可以用为 A 签发的
+        // 刷新令牌换出 aud={A,B} 的访问令牌 —— 受众绑定这条 MCP 防线就出现回退。
+        var requestedResources = request.GetResources()
+            .Where(resource => !string.IsNullOrWhiteSpace(resource))
+            .ToHashSet(StringComparer.Ordinal);
+        var originalResources = result.Principal.GetResources()
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (requestedResources.Count > 0)
+        {
+            var acceptable = request.IsRefreshTokenGrantType()
+                ? requestedResources.IsSubsetOf(originalResources)
+                : requestedResources.SetEquals(originalResources);
+
+            if (!acceptable)
+            {
+                await _audit.LogAsync(
+                    new AuditEntry(
+                        AuditActionType.TokenRefreshed,
+                        false,
+                        user.Id,
+                        user.UserName,
+                        request.ClientId,
+                        $"请求的受众与原授权不一致，已拒绝（RFC 8707）：请求 [{string.Join(", ", requestedResources)}]，原授权 [{string.Join(", ", originalResources)}]"),
+                    cancellationToken);
+
+                return ForbidWithError(
+                    Errors.InvalidGrant,
+                    "请求的受众与原授权不一致：兑换须与授权请求一致，刷新只允许收窄（RFC 8707）。");
+            }
+        }
+
+        // 常规路径（请求不带 resource）沿用原受众：authorization_code / refresh_token
+        // 请求本身通常不带 resource，丢了它，兑换出来的令牌就没有 aud（MCP Server 会直接拒收）。
+        var resources = requestedResources.Count > 0 ? requestedResources : originalResources;
 
         return await SignInWithUserAsync(user, scopes, resources, cancellationToken);
     }
