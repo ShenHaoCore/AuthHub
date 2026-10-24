@@ -32,6 +32,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 {
     private readonly IOpenIddictApplicationManager _applications;
     private readonly ICimdMetadataFetcher _fetcher;
+    private readonly ICimdRefreshLock _refreshLock;
     private readonly IRegisteredResourceStore _resourceStore;
     private readonly IAuditLogService _audit;
     private readonly IClock _clock;
@@ -41,6 +42,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     public CimdClientRegistrar(
         IOpenIddictApplicationManager applications,
         ICimdMetadataFetcher fetcher,
+        ICimdRefreshLock refreshLock,
         IRegisteredResourceStore resourceStore,
         IAuditLogService audit,
         IClock clock,
@@ -49,6 +51,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     {
         _applications = applications;
         _fetcher = fetcher;
+        _refreshLock = refreshLock;
         _resourceStore = resourceStore;
         _audit = audit;
         _clock = clock;
@@ -87,6 +90,16 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             return CimdResolution.Allowed;
         }
 
+        // 到期重取前先取得跨实例租约：缓存到期的同一时刻，所有实例都会走到这里，
+        // 没有这把锁就会一起向同一个第三方站点出站。拿不到锁代表别人正在拉，
+        // 这里既不出站也不报错 —— 见 WaitForConcurrentRefreshAsync。
+        await using var lease = await _refreshLock.TryAcquireAsync(clientId, cancellationToken);
+
+        if (lease is null)
+        {
+            return await WaitForConcurrentRefreshAsync(application, clientId, cancellationToken);
+        }
+
         var fetched = await _fetcher.FetchAsync(metadataUri, cancellationToken);
 
         if (!fetched.IsSuccess)
@@ -114,6 +127,67 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     }
 
     // ------------------------------------------------------------------ 注册与刷新
+
+    /// <summary>
+    /// 另一个实例正在刷新元数据时的处理。
+    ///
+    /// <para><b>有缓存</b>：直接继续用（与"拉取失败降级"同义）—— 对方拉完会写库，
+    /// 这次请求不必等，也不该因为别人在刷新而失败。</para>
+    ///
+    /// <para><b>没有缓存</b>（首次注册撞上并发）：没有可降级的旧值，但对方通常几秒内就写完。
+    /// 这里做**有上限**的轮询：等到记录出现就放行；等到超时仍没有，才拒绝并说明原因。
+    /// 直接拒绝会让"两个并发的首个授权请求"里慢的那个莫名失败，用户看到的是需要重试一次的登录页。</para>
+    /// </summary>
+    private async Task<CimdResolution> WaitForConcurrentRefreshAsync(
+        object? application,
+        string clientId,
+        CancellationToken cancellationToken)
+    {
+        if (application is not null)
+        {
+            _logger.LogDebug(
+                "CIMD 元数据由其他实例刷新中，本次继续使用缓存 | ClientId={ClientId}",
+                clientId);
+
+            return CimdResolution.Allowed;
+        }
+
+        // 轮询次数按拉取超时折算，最多 60 次（6 秒）：等待上限略大于一次拉取的耗时。
+        // 刻意用固定延时而不是读时钟 —— 测试里可以注入假时钟，若用假时钟作截止条件，
+        // 循环会永远不结束。
+        var attempts = Math.Clamp((int)(_options.FetchTimeout.TotalMilliseconds / PollIntervalMs), 1, 60);
+
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            await Task.Delay(PollIntervalMs, cancellationToken);
+
+            if (await _applications.FindByClientIdAsync(clientId, cancellationToken) is not null)
+            {
+                _logger.LogDebug(
+                    "等待期间 CIMD 客户端已由其他实例注册完成 | ClientId={ClientId}",
+                    clientId);
+
+                return CimdResolution.Allowed;
+            }
+        }
+
+        await _audit.LogAsync(
+            new AuditEntry(
+                AuditActionType.ClientCreated,
+                false,
+                ClientId: clientId,
+                Details: "CIMD 自动注册被拒：等待并发注册超时。"),
+            cancellationToken);
+
+        _logger.LogWarning(
+            "CIMD 客户端等待并发注册超时 | ClientId={ClientId}",
+            clientId);
+
+        return CimdResolution.Rejected("该客户端的元数据正在注册中，请稍后重试。");
+    }
+
+    /// <summary>等待并发注册的轮询间隔（毫秒）。</summary>
+    private const int PollIntervalMs = 100;
 
     private async Task CreateAsync(CimdClientMetadata metadata, string digest, CancellationToken cancellationToken)
     {
