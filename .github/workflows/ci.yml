@@ -30,6 +30,23 @@ jobs:
     # 不设的话失败的任务会挂满默认 6 小时；本仓库全量构建 + 测试实测约 4 分钟
     timeout-minutes: 15
 
+    # 需要真实基础设施的集成测试在此领取服务容器（都映射到 localhost，与本机部署形态一致）：
+    # - redis：令牌条目缓存用例（在 feature/redis-token-cache 引入，合并后生效）
+    # - postgres：PostgreSQL 提供程序用例。postgres/postgres 与测试默认连接串一致，
+    #   超级用户自带 CREATEDB，满足用例"建 GUID 临时库、跑完 EnsureDeleted"的隔离方式。
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: 拉取代码
         uses: actions/checkout@v7

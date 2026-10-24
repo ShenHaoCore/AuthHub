@@ -27,6 +27,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!--
+      PostgreSQL 与 SQL Server 平级：Database:Provider=Postgres 时启用（见 PersistenceExtensions）。
+      OpenIddict 官方支持 Npgsql；建库走 EnsureCreated（AuthHub:Seeding:MigrateOnStartup=true），
+      PostgreSQL 专用迁移集暂未生成，跑 Migrate 会拿到 SQL Server 形状的 DDL。
+    -->
 
     <!--
       OpenIddict（加密/签名相关路径）会把 System.Security.Cryptography.Pkcs 作为传递依赖带进来，

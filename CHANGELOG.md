@@ -25,6 +25,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 | 类型 | 内容 |
 |---|---|
+| feat | **PostgreSQL 提供程序**（`Database:Provider=Postgres`，写 `PostgreSQL` 亦可）：走 Npgsql，带与 SQL Server 相同的 3 次重试策略；OpenIddict 官方支持 Npgsql，模型无 SQL Server 硬编码（SQLite 的 DateTimeOffset 变通按 ProviderName 生效，不受影响）。建库走 EnsureCreated —— 既有迁移集是 SQL Server 形状，对 PG 跑 `database update` 必然失败，PG 专用迁移集立项前由 `DatabaseProviders.UsesEnsureCreated` 分流并已在文档写明。兼容性边界由连真实 PostgreSQL 的集成测试钉住（EnsureCreated → 种子 → 签发 → 令牌条目校验回查），CI 加 `postgres:16` 服务容器。注意 Npgsql 对 `timestamptz` 只接受 offset=0 的 `DateTimeOffset`，本服务统一写 UTC 正好满足 |
 | feat | **资源管理后台页面**：`/admin/resources` 提供资源白名单的登记 / 编辑 / 启停 / 删除，与 `api/resources` 共用同一套服务与权限（`resources.manage`）。列表显示客户端引用计数，删除仍被 `rsrc:` 权限持有时给出 409 的明确指引；停用与删除的差别在页面上写明 |
 | feat | **资源白名单库表化**（[#23](https://github.com/ShenHaoCore/AuthHub/issues/23)）：接入 MCP Server 不再需要「改配置 + 重启」。新增 `RegisteredResources` 表与资源管理 API（`api/resources`，需新权限 `resources.manage`），资源登记/启停/删除即时生效；`AuthHub:Resources` 配置降级为启动期幂等种子（只做加法，从配置删项不会删库行）。默认拒绝红线不变：表为空或登记停用时，一切 `resource` 参数返回 `invalid_target`。**BREAKING**：仍有客户端持有 `rsrc:` 权限的资源拒绝删除（409）；持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`（出厂映射与默认配置已含） |
 

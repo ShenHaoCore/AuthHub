@@ -138,9 +138,11 @@ internal static class WebApplicationExtensions
             var dbContext = services.GetRequiredService<AuthHubDbContext>();
             var provider = app.Configuration["Database:Provider"] ?? DatabaseProviders.SqlServer;
 
-            if (DatabaseProviders.IsSqlite(provider))
+            if (DatabaseProviders.UsesEnsureCreated(provider))
             {
-                // SQLite 用于开发 / 集成测试：直接按模型建表，避免维护两套迁移
+                // 没有专用迁移集的提供程序（SQLite / PostgreSQL）：直接按模型建表。
+                // SQLite 是为省掉两套迁移；PostgreSQL 的迁移集尚未生成 ——
+                // 对它跑 Migrate 会把 SQL Server 形状的 DDL 发给 PG，必然失败，故一并走 EnsureCreated。
                 await dbContext.Database.EnsureCreatedAsync();
             }
             else
