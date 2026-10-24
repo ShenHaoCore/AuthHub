@@ -7,6 +7,7 @@
         <p class="ah-page-sub">
             Scope 是"这个令牌能做什么"的声明单位：客户端请求它、用户在同意页看到它、
             资源服务器靠 <code>scp</code> 声明做授权判断，而它关联的资源会成为令牌的 <code>aud</code>。
+            标准 Scope（<code>openid</code>、<code>offline_access</code>）由 OpenIddict 内部处理，不在本表，也不应在这里补建。
         </p>
     </div>
     <div class="ah-page-header-actions">
@@ -28,18 +29,6 @@
             </div>
         </div>
     }
-
-    <div class="ah-alert ah-alert--info">
-        <ah-icon path="@AdminNav.Icons.Info" size="16" />
-        <div class="ah-alert-body">
-            <strong>标准 Scope 不在这张表里</strong>
-            <span>
-                <code>openid</code> 与 <code>offline_access</code> 由 OpenIddict 内部处理，不落
-                <code>OpenIddictScope</code> 表，因此不会出现在下表中 —— 但它们在客户端的授权范围里确实存在，
-                不需要（也不应该）在这里补建同名的记录。
-            </span>
-        </div>
-    </div>
 
     <div class="ah-card">
         <div class="ah-card-header">
