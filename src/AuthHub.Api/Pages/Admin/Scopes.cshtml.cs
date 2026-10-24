@@ -148,7 +148,9 @@ public class ScopesModel : AdminPageModel
             return await FailAsync(CreateDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已创建 Scope {result.Value.Name}。还记得把它加进需要它的客户端，否则授权请求会因 scope 未授权而失败。");
+        return await RedirectBackWithSuccessAsync(
+            $"已创建 Scope {result.Value.Name}。还记得把它加进需要它的客户端，否则授权请求会因 scope 未授权而失败。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：保存编辑
@@ -176,7 +178,9 @@ public class ScopesModel : AdminPageModel
             return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已保存 Scope {EditName}。资源变更会在下一次签发令牌时生效（已签发令牌的 aud 不变）。");
+        return await RedirectBackWithSuccessAsync(
+            $"已保存 Scope {EditName}。资源变更会在下一次签发令牌时生效（已签发令牌的 aud 不变）。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：删除
@@ -194,7 +198,9 @@ public class ScopesModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已删除 Scope {TargetName}。仍引用它的客户端需要同步调整，否则授权请求会失败。");
+        return await RedirectBackWithSuccessAsync(
+            $"已删除 Scope {TargetName}。仍引用它的客户端需要同步调整，否则授权请求会失败。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ 内部辅助

@@ -2,6 +2,10 @@
 @model AuthHub.Api.Pages.Admin.UsersModel
 @using AuthHub.Domain.Constants
 @{
+    // 局部刷新请求（X-AH-Partial 头，见 authhub.js 的 data-ajax 层）只返回
+    // #ah-content 内容片段：Layout 置空后 Page() 的产物就是片段本身。
+    Layout = Model.IsPartial ? null : Layout;
+
     // 新建弹窗的默认角色：首次进入默认勾选 User，提交失败时保留用户刚才的选择
     var newRoleSelection = Model.AutoOpenCreate
         ? Model.NewRoles
@@ -28,6 +32,8 @@
     </div>
 </div>
 
+@* #ah-content：局部刷新的替换单元。表单/分页带 data-ajax* 标记，authhub.js 据此走 fetch。 *@
+<div id="ah-content">
 <div class="ah-stack">
     @if (!string.IsNullOrEmpty(Model.FormError))
     {
@@ -42,7 +48,7 @@
 
     <div class="ah-card">
         <div class="ah-card-header">
-            <form method="get" action="/admin/users" class="ah-toolbar" role="search">
+            <form method="get" action="/admin/users" class="ah-toolbar" role="search" data-ajax="#ah-content">
                 <div class="ah-search">
                     <ah-icon path="@AdminNav.Icons.Search" size="15" />
                     <input class="ah-input" type="search" name="q" value="@Model.Search"
@@ -63,8 +69,8 @@
                     <option value="false" selected="@(Model.ActiveFilter == "false")">仅已停用</option>
                 </select>
 
-                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
-                <a class="ah-btn" href="/admin/users">重置</a>
+                <button type="submit" class="ah-btn">筛选</button>
+                <a class="ah-btn" href="/admin/users" data-ajax-link="#ah-content">重置</a>
             </form>
         </div>
 
@@ -189,7 +195,7 @@
                                                 <ah-icon path="@AdminNav.Icons.Edit" size="15" />
                                             </button>
 
-                                            <form method="post" asp-page-handler="lock">
+                                            <form method="post" asp-page-handler="lock" data-ajax="#ah-content">
                                                 <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                 <input type="hidden" name="TargetId" value="@user.Id" />
                                                 <input type="hidden" name="Locked" value="@(!user.LockedOut)" />
@@ -201,6 +207,7 @@
                                             </form>
 
                                             <form method="post" asp-page-handler="revokeTokens"
+                                                  data-ajax="#ah-content"
                                                   data-confirm="将撤销 @user.UserName 的全部令牌与授权，该用户需要重新登录。继续？">
                                                 <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                 <input type="hidden" name="TargetId" value="@user.Id" />
@@ -211,6 +218,7 @@
                                             </form>
 
                                             <form method="post" asp-page-handler="delete"
+                                                  data-ajax="#ah-content"
                                                   data-confirm="将永久删除用户 @user.UserName，此操作不可撤销。继续？">
                                                 <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                 <input type="hidden" name="TargetId" value="@user.Id" />
@@ -241,7 +249,7 @@
    "True"/"False"，属性照样存在，前端按值判断随即失效（曾出现的故障：点菜单进入任一页面，
    所有弹窗一起弹出来）。前端契约见 wwwroot/js/authhub.js 的 initDialogs。 *@
 <ah-dialog id="dlg-create" title="新建用户" auto-open="@(Model.AutoOpenCreate ? "true" : "false")">
-    <form method="post" asp-page-handler="create">
+    <form method="post" asp-page-handler="create" data-ajax="#ah-content">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
         <ah-dialog-body>
@@ -316,7 +324,7 @@
     var editRoles = failed ? Model.EditRoles : user.Roles.ToArray();
 
     <ah-dialog id="dlg-edit-@user.Id" title="编辑用户 · @user.UserName" auto-open="@(failed ? "true" : "false")" size="lg">
-        <form method="post" asp-page-handler="save">
+        <form method="post" asp-page-handler="save" data-ajax="#ah-content">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditId" value="@user.Id" />
 
@@ -411,3 +419,4 @@
         </form>
     </ah-dialog>
 }
+</div>

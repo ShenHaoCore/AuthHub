@@ -1,6 +1,12 @@
 @page "/admin/scopes"
 @model AuthHub.Api.Pages.Admin.ScopesModel
 
+@{
+    // 局部刷新请求（X-AH-Partial 头，见 authhub.js 的 data-ajax 层）只返回
+    // #ah-content 内容片段：Layout 置空后 Page() 的产物就是片段本身。
+    Layout = Model.IsPartial ? null : Layout;
+}
+
 <div class="ah-page-header">
     <div>
         <h1 class="ah-page-title">Scope</h1>
@@ -18,6 +24,8 @@
     </div>
 </div>
 
+@* #ah-content：局部刷新的替换单元。表单带 data-ajax 标记，authhub.js 据此走 fetch。 *@
+<div id="ah-content">
 <div class="ah-stack">
     @if (!string.IsNullOrEmpty(Model.FormError))
     {
@@ -32,16 +40,16 @@
 
     <div class="ah-card">
         <div class="ah-card-header">
-            <form method="get" action="/admin/scopes" class="ah-toolbar" role="search">
+            <form method="get" action="/admin/scopes" class="ah-toolbar" role="search" data-ajax="#ah-content">
                 <div class="ah-search">
                     <ah-icon path="@AdminNav.Icons.Search" size="15" />
                     <input class="ah-input" type="search" name="q" value="@Model.Search"
                            placeholder="搜索名称 / 显示名 / 说明" aria-label="搜索 Scope" />
                 </div>
-                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
+                <button type="submit" class="ah-btn">筛选</button>
                 @if (Model.HasFilter)
                 {
-                    <a class="ah-btn" href="/admin/scopes">重置</a>
+                    <a class="ah-btn" href="/admin/scopes" data-ajax-link="#ah-content">重置</a>
                 }
             </form>
         </div>
@@ -157,6 +165,7 @@
                                             </button>
 
                                             <form method="post" asp-page-handler="delete"
+                                                  data-ajax="#ah-content"
                                                   data-confirm="将删除 Scope @scope.Name。@(referenced == 0 ? "当前没有客户端引用它。" : $"它仍被 {Model.ReferenceText(scope.Name)} 引用，删除后这些客户端的授权请求会失败。")此操作不可撤销，继续？">
                                                 <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
                                                 <input type="hidden" name="TargetName" value="@scope.Name" />
@@ -191,7 +200,7 @@
 @* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
    "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
 <ah-dialog id="dlg-create" title="新建 Scope" auto-open="@(Model.AutoOpenCreate ? "true" : "false")">
-    <form method="post" asp-page-handler="create">
+    <form method="post" asp-page-handler="create" data-ajax="#ah-content">
         <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
 
         <ah-dialog-body>
@@ -236,7 +245,7 @@
 {
     var resources = string.Join('\n', scope.Resources);
     <ah-dialog id="dlg-edit-@scope.Name" title="编辑 Scope" auto-open="@(Model.IsEditFailure(scope.Name) ? "true" : "false")">
-        <form method="post" asp-page-handler="save">
+        <form method="post" asp-page-handler="save" data-ajax="#ah-content">
             <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
             <input type="hidden" name="EditName" value="@scope.Name" />
 
@@ -290,3 +299,4 @@
         </form>
     </ah-dialog>
 }
+</div>

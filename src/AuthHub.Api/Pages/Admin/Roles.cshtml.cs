@@ -159,14 +159,16 @@ public class RolesModel : AdminPageModel
                 return await FailAsync(PermissionsDialog, permissionResult.Error, cancellationToken);
             }
 
-            return RedirectBackWithSuccess(
+            return await RedirectBackWithSuccessAsync(
                 $"已创建角色 {created.Name} 并绑定 {SelectedPermissions.Count} 项权限；" +
-                "已在线用户最迟 5 分钟刷新（重新登录立即生效）。");
+                "已在线用户最迟 5 分钟刷新（重新登录立即生效）。",
+                cancellationToken);
         }
 
-        return RedirectBackWithSuccess(created.IsSystemRole
+        return await RedirectBackWithSuccessAsync(created.IsSystemRole
             ? $"已创建角色 {created.Name}；它与内置角色同名，会沿用出厂默认的权限归属。"
-            : $"已创建角色 {created.Name}。未绑定权限（最少权限默认），用该行的「权限」按钮勾选后即可生效。");
+            : $"已创建角色 {created.Name}。未绑定权限（最少权限默认），用该行的「权限」按钮勾选后即可生效。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：修改说明
@@ -188,7 +190,7 @@ public class RolesModel : AdminPageModel
             return await FailAsync(EditDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已更新角色 {result.Value.Name} 的说明。");
+        return await RedirectBackWithSuccessAsync($"已更新角色 {result.Value.Name} 的说明。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：删除角色
@@ -206,7 +208,7 @@ public class RolesModel : AdminPageModel
             return await FailAsync(null, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess($"已删除角色 {TargetRoleName}。");
+        return await RedirectBackWithSuccessAsync($"已删除角色 {TargetRoleName}。", cancellationToken);
     }
 
     // ------------------------------------------------------------------ POST：权限归属
@@ -231,9 +233,10 @@ public class RolesModel : AdminPageModel
             return await FailAsync(PermissionsDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(
+        return await RedirectBackWithSuccessAsync(
             $"已更新角色 {PermissionRoleName} 的权限归属，立即对新登录生效；" +
-            "已在线的用户最迟 5 分钟内刷新（重新登录可立即生效）。");
+            "已在线的用户最迟 5 分钟内刷新（重新登录可立即生效）。",
+            cancellationToken);
     }
 
     public async Task<IActionResult> OnPostResetPermissionsAsync(CancellationToken cancellationToken)
@@ -249,8 +252,9 @@ public class RolesModel : AdminPageModel
             return await FailAsync(PermissionsDialog, result.Error, cancellationToken);
         }
 
-        return RedirectBackWithSuccess(
-            $"已清除角色 {PermissionRoleName} 的自定义权限，回落到配置 / 出厂默认。");
+        return await RedirectBackWithSuccessAsync(
+            $"已清除角色 {PermissionRoleName} 的自定义权限，回落到配置 / 出厂默认。",
+            cancellationToken);
     }
 
     // ------------------------------------------------------------------ 内部辅助

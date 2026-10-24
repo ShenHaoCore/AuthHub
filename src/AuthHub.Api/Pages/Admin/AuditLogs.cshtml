@@ -1,6 +1,13 @@
 @page "/admin/audit-logs"
 @model AuthHub.Api.Pages.Admin.AuditLogsModel
 
+@{
+    // 局部刷新请求（X-AH-Partial 头，见 authhub.js 的 data-ajax 层）只返回
+    // #ah-content 内容片段：Layout 置空后 Page() 的产物就是片段本身。
+    // 本页模型不继承 AdminPageModel，直接查请求头。
+    Layout = HttpContext.Request.Headers.ContainsKey("X-AH-Partial") ? null : Layout;
+}
+
 <div class="ah-page-header">
     <div>
         <h1 class="ah-page-title">审计日志</h1>
@@ -10,10 +17,12 @@
         </p>
     </div>
     <div class="ah-page-header-actions">
-        <a class="ah-btn ah-btn--sm" href="@AuditLogsModel.ResetUrl()">清空筛选</a>
+        <a class="ah-btn ah-btn--sm" href="@AuditLogsModel.ResetUrl()" data-ajax-link="#ah-content">清空筛选</a>
     </div>
 </div>
 
+@* #ah-content：局部刷新的替换单元。表单/分页带 data-ajax* 标记，authhub.js 据此走 fetch。 *@
+<div id="ah-content">
 <div class="ah-stack">
     @if (!string.IsNullOrEmpty(Model.FilterWarning))
     {
@@ -49,7 +58,7 @@
 
     <div class="ah-card">
         <div class="ah-card-header">
-            <form method="get" action="/admin/audit-logs" class="ah-toolbar" role="search">
+            <form method="get" action="/admin/audit-logs" class="ah-toolbar" role="search" data-ajax="#ah-content">
                 <select class="ah-select" name="action" aria-label="按动作筛选" style="width:auto;min-width:190px">
                     <option value="">全部动作</option>
                     @foreach (var group in AuditLogsModel.ActionGroups)
@@ -87,18 +96,18 @@
                            placeholder="yyyy-MM-dd" data-date-picker aria-label="结束日期" autocomplete="off" />
                 </label>
 
-                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
-                <a class="ah-btn" href="@AuditLogsModel.ResetUrl()">重置</a>
+                <button type="submit" class="ah-btn">筛选</button>
+                <a class="ah-btn" href="@AuditLogsModel.ResetUrl()" data-ajax-link="#ah-content">重置</a>
             </form>
         </div>
 
         <div class="ah-card-body ah-card-body-tight">
             <div class="ah-quick-ranges">
                 <span class="ah-quick-ranges-label">快捷范围</span>
-                <a class="ah-chip" href="@Model.RangeUrl(1)">今天</a>
-                <a class="ah-chip" href="@Model.RangeUrl(7)">最近 7 天</a>
-                <a class="ah-chip" href="@Model.RangeUrl(30)">最近 30 天</a>
-                <a class="ah-chip" href="@Model.AllTimeUrl()">全部时间</a>
+                <a class="ah-chip" href="@Model.RangeUrl(1)" data-ajax-link="#ah-content">今天</a>
+                <a class="ah-chip" href="@Model.RangeUrl(7)" data-ajax-link="#ah-content">最近 7 天</a>
+                <a class="ah-chip" href="@Model.RangeUrl(30)" data-ajax-link="#ah-content">最近 30 天</a>
+                <a class="ah-chip" href="@Model.AllTimeUrl()" data-ajax-link="#ah-content">全部时间</a>
                 <span class="ah-hint" style="margin:0 0 0 6px">日期按 UTC 计算</span>
             </div>
         </div>
@@ -212,4 +221,5 @@
             </div>
         }
     </div>
+</div>
 </div>

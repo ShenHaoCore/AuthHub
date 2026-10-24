@@ -189,11 +189,15 @@ public class AdminClientResourceTests
             because: "改显示名不该让客户端失去密钥；这里失败说明口令哈希被重建或清掉了");
     }
 
-    // ------------------------------------------------------------------ ⑤ 没配资源时不摆空多选框
+    // ------------------------------------------------------------------ ⑤ 白名单真的为空时不摆空多选框
     [Fact]
-    public async Task Without_any_configured_resource_the_dialog_should_explain_instead_of_showing_an_empty_group()
+    public async Task Without_any_registered_resource_the_dialog_should_explain_instead_of_showing_an_empty_group()
     {
+        // 配置为空只是必要条件：白名单的事实源是 RegisteredResources 表，
+        // 测试工厂的演示种子会往表里种一个资源，先清掉才是真正的空名单
         using var factory = CreateFactory(string.Empty);
+        await DeleteAllRegisteredResourcesAsync(factory);
+
         using var session = NewSession(factory);
         await LoginAsync(session);
 
@@ -201,6 +205,70 @@ public class AdminClientResourceTests
 
         html.Should().Contain("未登记任何资源");
         html.Should().NotContain("name=\"NewResources\"");
+    }
+
+    // ------------------------------------------------------------------ ⑥ 库里登记的资源即时出现在弹窗里
+
+    /// <summary>
+    /// 回归：客户端页的勾选项曾读 <c>AuthHub:Resources</c> 配置（种子，通常为空），
+    /// 而白名单事实源 v1.4.0 起已库表化 —— 结果资源页明明有登记，客户端弹窗却说
+    /// 「未登记任何资源」，与「登记即时生效」直接矛盾。
+    /// </summary>
+    [Fact]
+    public async Task A_resource_registered_in_the_database_should_be_offered_even_when_config_is_empty()
+    {
+        using var factory = CreateFactory(string.Empty);
+
+        // 走管理服务登记 —— 与管理员在资源页的操作同一条路径，且无需重启
+        using (var scope = factory.Services.CreateScope())
+        {
+            var resources = scope.ServiceProvider.GetRequiredService<IResourceAdminService>();
+            var created = await resources.CreateAsync(new AuthHub.Application.DTOs.Resources.CreateResourceRequest(
+                Resource: McpResource,
+                DisplayName: "库表化后的登记"));
+            created.IsSuccess.Should().BeTrue(because: "前置条件：资源应能登记入库");
+        }
+
+        using var session = NewSession(factory);
+        await LoginAsync(session);
+
+        var html = await ReadHtmlAsync(await session.GetAsync("/admin/clients"));
+
+        html.Should().Contain($"name=\"NewResources\" value=\"{McpResource}\"",
+            because: "资源页登记后，客户端弹窗必须即时出现可勾选项 —— 否则「登记即时生效」在客户端侧断了");
+        html.Should().NotContain("未登记任何资源",
+            because: "库里已有启用中的登记，不该再显示空态提示");
+    }
+
+    // ------------------------------------------------------------------ ⑦ 停用的登记不作为新选项提供
+
+    [Fact]
+    public async Task A_disabled_resource_should_not_be_offered_as_a_new_option()
+    {
+        // Enabled=false 等同未登记：勾上它换来的只会是 invalid_target，
+        // 因此新建弹窗不该把它列为可勾选项（已持有的旧值仍由 ② 的机制兜底往返）
+        using var factory = CreateFactory(string.Empty);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var resources = scope.ServiceProvider.GetRequiredService<IResourceAdminService>();
+            var created = await resources.CreateAsync(new AuthHub.Application.DTOs.Resources.CreateResourceRequest(
+                Resource: McpResource));
+            created.IsSuccess.Should().BeTrue();
+
+            var disabled = await resources.UpdateAsync(
+                created.Value.Id,
+                new AuthHub.Application.DTOs.Resources.UpdateResourceRequest(Enabled: false));
+            disabled.IsSuccess.Should().BeTrue();
+        }
+
+        using var session = NewSession(factory);
+        await LoginAsync(session);
+
+        var html = await ReadHtmlAsync(await session.GetAsync("/admin/clients"));
+
+        html.Should().NotContain($"name=\"NewResources\" value=\"{McpResource}\"",
+            because: "停用的资源等同未登记，不该作为新选项出现");
     }
 
     // ==================================================================== 辅助
@@ -211,6 +279,20 @@ public class AdminClientResourceTests
     private static CookieSession NewSession(AuthHubWebApplicationFactory factory) => new(factory.Server);
 
     private static string NewClientId() => $"ui-rsrc-{Guid.NewGuid():N}"[..16];
+
+    /// <summary>清空 RegisteredResources 表（含演示种子），构造真正的空白名单。</summary>
+    private static async Task DeleteAllRegisteredResourcesAsync(AuthHubWebApplicationFactory factory)
+    {
+        using var scope = factory.Services.CreateScope();
+        var resources = scope.ServiceProvider.GetRequiredService<IResourceAdminService>();
+
+        foreach (var registration in await resources.GetAllAsync())
+        {
+            var deleted = await resources.DeleteAsync(registration.Id);
+            deleted.IsSuccess.Should().BeTrue(
+                because: "前置条件失败：种子登记被客户端引用（409）时无法清空白名单，空态用例就无从谈起");
+        }
+    }
 
     private static async Task LoginAsync(CookieSession session)
     {

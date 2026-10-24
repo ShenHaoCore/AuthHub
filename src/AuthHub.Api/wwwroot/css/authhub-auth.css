@@ -7,7 +7,7 @@
    直接断言，且不该引入视图引擎的间接层。
 
    调色板来自 authhub-tokens.css，与后台 authhub.css 同源，
-   因此登录页与后台在视觉上是同一套设计语言（冷灰石板 + 青绿主色）。
+   因此登录页与后台在视觉上是同一套设计语言（冷灰石板 + 靛蓝主色）。
 
    类名沿用 HtmlPages.cs 里既有的选择器（.card / .brand / .field / .alert …），
    这样当年把 <style> 抽成外链时，页面标记一字未改，集成测试的断言也无需调整。
@@ -27,10 +27,10 @@ body {
     align-items: center;
     justify-content: center;
     padding: 28px 0;
-    /* 氛围：冷石板底 + 青绿径向光晕，非整页仪表盘 */
+    /* 氛围：冷石板底 + 靛蓝径向光晕，非整页仪表盘 */
     background:
         radial-gradient(ellipse 80% 55% at 50% -10%, rgba(var(--ah-primary-rgb), .16), transparent 55%),
-        radial-gradient(ellipse 50% 40% at 100% 100%, rgba(20, 184, 166, .08), transparent 50%),
+        radial-gradient(ellipse 50% 40% at 100% 100%, rgba(var(--ah-primary-rgb), .06), transparent 50%),
         linear-gradient(165deg, #e8eef5 0%, var(--ah-bg) 42%, #eef2f6 100%);
     color: var(--ah-text);
     font-family: var(--ah-font);
