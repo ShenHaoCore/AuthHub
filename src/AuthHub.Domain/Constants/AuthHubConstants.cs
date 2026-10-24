@@ -58,6 +58,7 @@ public static class AuthHubConstants
     {
         public const string ClientsManage = "clients.manage";
         public const string ScopesManage = "scopes.manage";
+        public const string ResourcesManage = "resources.manage";
         public const string UsersManage = "users.manage";
         public const string RolesManage = "roles.manage";
         public const string TokensRevoke = "tokens.revoke";
@@ -65,7 +66,7 @@ public static class AuthHubConstants
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            ClientsManage, ScopesManage, UsersManage, RolesManage, TokensRevoke, AuditRead
+            ClientsManage, ScopesManage, ResourcesManage, UsersManage, RolesManage, TokensRevoke, AuditRead
         };
     }
 
@@ -80,6 +81,7 @@ public static class AuthHubConstants
 
         public const string ClientsManage = "AuthHub.Permission." + Permissions.ClientsManage;
         public const string ScopesManage = "AuthHub.Permission." + Permissions.ScopesManage;
+        public const string ResourcesManage = "AuthHub.Permission." + Permissions.ResourcesManage;
         public const string UsersManage = "AuthHub.Permission." + Permissions.UsersManage;
         public const string RolesManage = "AuthHub.Permission." + Permissions.RolesManage;
         public const string TokensRevoke = "AuthHub.Permission." + Permissions.TokensRevoke;
@@ -106,6 +108,7 @@ public static class AuthHubConstants
 
             public const string ClientsManage = "AuthHub.Ui.Permission." + Permissions.ClientsManage;
             public const string ScopesManage = "AuthHub.Ui.Permission." + Permissions.ScopesManage;
+            public const string ResourcesManage = "AuthHub.Ui.Permission." + Permissions.ResourcesManage;
             public const string UsersManage = "AuthHub.Ui.Permission." + Permissions.UsersManage;
             public const string RolesManage = "AuthHub.Ui.Permission." + Permissions.RolesManage;
             public const string TokensRevoke = "AuthHub.Ui.Permission." + Permissions.TokensRevoke;

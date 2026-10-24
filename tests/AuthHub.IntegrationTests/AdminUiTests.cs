@@ -22,7 +22,7 @@ namespace AuthHub.IntegrationTests;
 [Collection(AuthHubFixture.CollectionName)]
 public class AdminUiTests
 {
-    /// <summary>后台的 7 个页面 + 每页上一段只在正确渲染时才会出现的文字。</summary>
+    /// <summary>后台的 8 个页面 + 每页上一段只在正确渲染时才会出现的文字。</summary>
     private static readonly (string Path, string Marker)[] AdminPages =
     {
         ("/admin", "仪表盘"),
@@ -30,6 +30,7 @@ public class AdminUiTests
         ("/admin/roles", "权限矩阵"),
         ("/admin/clients", "注册客户端"),
         ("/admin/scopes", "新建 Scope"),
+        ("/admin/resources", "资源标识白名单"),
         ("/admin/audit-logs", "快捷范围"),
         ("/admin/profile", "我的账户")
     };
@@ -58,6 +59,7 @@ public class AdminUiTests
     [InlineData("/admin/roles")]
     [InlineData("/admin/clients")]
     [InlineData("/admin/scopes")]
+    [InlineData("/admin/resources")]
     [InlineData("/admin/audit-logs")]
     [InlineData("/admin/profile")]
     public async Task Anonymous_request_to_admin_page_should_redirect_to_login(string path)
@@ -128,6 +130,7 @@ public class AdminUiTests
         // 普通用户的侧边栏只剩「我的账户」；管理入口既不可见，也不该被误判为可访问
         html.Should().Contain("href=\"/admin/profile\"");
         html.Should().NotContain("href=\"/admin/users\"");
+        html.Should().NotContain("href=\"/admin/resources\"");
         html.Should().NotContain("href=\"/admin/audit-logs\"");
     }
 
@@ -183,6 +186,7 @@ public class AdminUiTests
     [InlineData("/admin/roles")]
     [InlineData("/admin/clients")]
     [InlineData("/admin/scopes")]
+    [InlineData("/admin/resources")]
     public async Task Admin_pages_should_not_auto_open_any_dialog_by_default(string path)
     {
         using var session = NewSession();
@@ -253,6 +257,7 @@ public class AdminUiTests
     [InlineData("/admin/roles")]
     [InlineData("/admin/clients")]
     [InlineData("/admin/scopes")]
+    [InlineData("/admin/resources")]
     public async Task Every_dialog_should_be_labelled_by_its_own_heading(string path)
     {
         using var session = NewSession();
@@ -306,6 +311,7 @@ public class AdminUiTests
     [InlineData("/admin/roles")]
     [InlineData("/admin/clients")]
     [InlineData("/admin/scopes")]
+    [InlineData("/admin/resources")]
     [InlineData("/admin/audit-logs")]
     [InlineData("/admin/profile")]
     public async Task Every_icon_should_follow_the_same_svg_contract(string path)
@@ -408,7 +414,7 @@ public class AdminUiTests
         var tokens = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub-tokens.css"));
         tokens.Should().Contain("IBM Plex Sans");
         tokens.Should().Contain("/fonts/IBMPlexSans-Regular.woff2");
-        tokens.Should().Contain("--ah-primary: #0f766e", because: "共用令牌主色为青绿");
+        tokens.Should().Contain("--ah-primary: #4f46e5", because: "共用令牌主色为靛蓝（2026-10-24 视觉改版，对齐现代鉴权控制台）");
     }
 
     // ==================================================================== 页内锚点
@@ -558,6 +564,72 @@ public class AdminUiTests
             });
 
             deleted.StatusCode.Should().Be(HttpStatusCode.Found);
+        }
+    }
+
+    [Fact]
+    public async Task Resource_page_should_round_trip_a_registration()
+    {
+        // 与 Scope 页那条冒烟同一目的：确认表单字段名与 PageModel 真的对上了。
+        // 只覆盖 GET 渲染的断言看不出「表单提交后静默什么都没发生」这类问题。
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var resource = $"https://ui-smoke-{Guid.NewGuid():N}.example.com/mcp";
+
+        try
+        {
+            var created = await session.PostFormAsync("/admin/resources?handler=create", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = await AntiforgeryTokenAsync(session, "/admin/resources"),
+                ["NewResource"] = resource,
+                ["NewDisplayName"] = "后台冒烟",
+                ["NewDescription"] = "由 AdminUiTests 创建"
+            });
+
+            created.StatusCode.Should().Be(HttpStatusCode.Found, because: "校验通过应当 PRG 回列表");
+
+            var afterCreate = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/resources"));
+            afterCreate.Should().Contain(resource);
+
+            // 从所在行里取出隐藏的 TargetId（每行恰好一个）
+            var row = Regex.Match(afterCreate,
+                $@"<tr>(?:(?!</tr>).)*?{Regex.Escape(resource)}(?:(?!</tr>).)*?</tr>",
+                RegexOptions.Singleline);
+            row.Success.Should().BeTrue(because: "新建的资源应当出现在列表里");
+            var id = Regex.Match(row.Value, "name=\"TargetId\" value=\"(?<id>\\d+)\"").Groups["id"].Value;
+            id.Should().NotBeEmpty(because: "删除表单必须带上登记 Id");
+
+            var deleted = await session.PostFormAsync("/admin/resources?handler=delete", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = await AntiforgeryTokenAsync(session, "/admin/resources"),
+                ["TargetId"] = id
+            });
+
+            deleted.StatusCode.Should().Be(HttpStatusCode.Found);
+
+            var afterDelete = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/resources"));
+            afterDelete.Should().NotContain(resource);
+        }
+        finally
+        {
+            // 清理：失败路径也不给其它用例留脏数据（删除不存在的 Id 会原地重渲染，无副作用）
+            var afterCreate = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/resources"));
+            var row = Regex.Match(afterCreate,
+                $@"<tr>(?:(?!</tr>).)*?{Regex.Escape(resource)}(?:(?!</tr>).)*?</tr>",
+                RegexOptions.Singleline);
+            if (row.Success)
+            {
+                var id = Regex.Match(row.Value, "name=\"TargetId\" value=\"(?<id>\\d+)").Groups["id"].Value;
+                if (!string.IsNullOrEmpty(id))
+                {
+                    await session.PostFormAsync("/admin/resources?handler=delete", new Dictionary<string, string>
+                    {
+                        ["__RequestVerificationToken"] = await AntiforgeryTokenAsync(session, "/admin/resources"),
+                        ["TargetId"] = id
+                    });
+                }
+            }
         }
     }
 

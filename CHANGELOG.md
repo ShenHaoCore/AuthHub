@@ -8,6 +8,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.4.0](#v140--postgresqlredis-令牌缓存与控制台视觉改版) | PostgreSQL、Redis 令牌缓存与控制台视觉改版 | 2026-10-24 | [`v1.4.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.4.0) |
 | [v1.3.2](#v132--分支与发布规范修正) | 分支与发布规范修正 | 2026-10-23 | [`v1.3.2`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.2) |
 | [v1.3.1](#v131--后台资源字段与客户端编辑修复) | 后台资源字段与客户端编辑修复 | 2026-10-22 | [`v1.3.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.1) |
 | [v1.3.0](#v130--mcp-客户端自动注册cimd) | MCP 客户端自动注册（CIMD） | 2026-10-22 | [`v1.3.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.3.0) |
@@ -20,6 +21,42 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+## v1.4.0 —— PostgreSQL、Redis 令牌缓存与控制台视觉改版
+
+2026-10-24
+
+| 类型 | 内容 |
+|---|---|
+| feat | **PostgreSQL 提供程序**（`Database:Provider=Postgres`，写 `PostgreSQL` 亦可）：走 Npgsql，带与 SQL Server 相同的 3 次重试策略；OpenIddict 官方支持 Npgsql，模型无 SQL Server 硬编码（SQLite 的 DateTimeOffset 变通按 ProviderName 生效，不受影响）。建库走 EnsureCreated —— 既有迁移集是 SQL Server 形状，对 PG 跑 `database update` 必然失败，PG 专用迁移集立项前由 `DatabaseProviders.UsesEnsureCreated` 分流并已在文档写明。兼容性边界由连真实 PostgreSQL 的集成测试钉住（EnsureCreated → 种子 → 签发 → 令牌条目校验回查），CI 加 `postgres:16` 服务容器。注意 Npgsql 对 `timestamptz` 只接受 offset=0 的 `DateTimeOffset`，本服务统一写 UTC 正好满足 |
+| feat | **Redis 令牌条目缓存**（可选，`AuthHub:Redis:Enabled`，默认关闭）：`EnableTokenEntryValidation()` 的"每个带令牌的请求查一次库"变为查 Redis（未命中才回库回填），多实例部署共享缓存。撤销仍立刻生效 —— 令牌级撤销精确删键，批量撤销（`RevokeBySubjectAsync` / `PruneAsync`）递增全局版本号；条目快照带并发令牌，刷新令牌重用检测的乐观并发语义不变；缓存命中的实体重建桩导航并恢复影子外键（`ApplicationId` / `AuthorizationId` 是影子属性，直接 JSON 往返会在后续更新时置空外键）。Redis 故障自动降级直查库（警告 30 秒节流），故障窗口内的撤销由 `EntryTtlMinutes` 兜底。集成测试连真实 Redis 验证两条撤销链路，CI 加 redis:7 服务容器 |
+| feat | **CIMD 元数据并发重取的跨实例租约**：缓存到期的那一刻多个实例会同时发现过期、同时向同一个第三方站点出站。新增 `CimdRefreshLeases` 表提供带过期时间的短租约（`client_id` 为键、持有者令牌匹配释放），同一时刻只有一个实例出站；其余在缓存仍可用时直接沿用，首次注册撞上并发时短轮询等对方写完再放行（上限 5 秒）。租约时长 = 拉取超时 + 15 秒，持有者崩溃后自然过期。单实例部署无需任何配置 |
+| fix | **CIMD 并发等待读不到已提交的注册**：等待方轮询用的是 `IOpenIddictApplicationManager`，其 Find* 先过 OpenIddict 的 scoped 实体缓存装饰器，而该装饰器把未命中的 null 也缓存且不挂失效令牌 —— 请求开头那次"查无此客户端"会让自己在本次请求里永远看不到并发方后来提交的记录，等待必然超时。注册器的存在性/新鲜度探测改走无缓存的原生存储接口；写路径（Create/Update）仍走管理器。同时修掉同源的潜在 500：并发创建撞唯一索引后的兜底检查也会读到毒化的 null 而误判失败 |
+| feat | **资源白名单库表化**（[#23](https://github.com/ShenHaoCore/AuthHub/issues/23)）：接入 MCP Server 不再需要「改配置 + 重启」。新增 `RegisteredResources` 表与资源管理 API（`api/resources`，需新权限 `resources.manage`），资源登记/启停/删除即时生效；`AuthHub:Resources` 配置降级为启动期幂等种子（只做加法，从配置删项不会删库行）。默认拒绝红线不变：表为空或登记停用时，一切 `resource` 参数返回 `invalid_target`。**BREAKING**：仍有客户端持有 `rsrc:` 权限的资源拒绝删除（409）；持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`（出厂映射与默认配置已含） |
+| feat | **资源管理后台页面**：`/admin/resources` 提供资源白名单的登记 / 编辑 / 启停 / 删除，与 `api/resources` 共用同一套服务与权限（`resources.manage`）。列表显示客户端引用计数，删除仍被 `rsrc:` 权限持有时给出 409 的明确指引；停用与删除的差别在页面上写明 |
+| fix | **修正本机并行开发的端口冲突**（local-sqlite 启动档案）：WSL/容器部署的 localhost 转发会占住 5000/5001，Windows 侧 `dotnet run --launch-profile local-sqlite` 在 5003/5002 起一个零配置的 SQLite 实例（启动建表 + 种子），与部署实例并行开发、数据完全隔离；Kestrel:Endpoints 配置端点的优先级关系与回归修正一并落地，部署实例的 5001/5000 绑定不受影响 |
+| feat | **管理后台视觉与交互改版**（参考 Clerk / WorkOS / Logto console 的设计语言）：主色青绿 → 靛蓝、侧边栏深石板 → 浅色白底、表头去大写字距式样式、卡片 hairline 化；窄屏（720-990px 与手机宽度）三处破相修复 —— 宽表格横向滚动时操作列 sticky 钉在可视右缘、首列不再被压成逐字竖排、顶栏面包屑不再断行；角色/用户/客户端/Scope 四个列表的「随目录增长的无界徽章列」改为「平铺前 2 个 + 「+N」折叠」；角色/Scope/资源三页的常驻教学横幅移除（信息就近安置到副标题与操作弹窗）；钥匙图标换用标准 Feather key 路径 |
+| feat | **新建角色即可绑定初始权限**：创建弹窗带上与编辑弹窗同款的权限勾选清单，不再强制「建空壳 → 再找权限按钮」两步走；全部不勾 = 最少权限默认（与原行为一致），权限保存失败会带错误重开该角色的权限弹窗 |
+| feat | **演示数据补演示资源**：开发环境播种一条演示 MCP 资源（`https://mcp.demo.authhub.local/mcp`），资源页开箱非空；与演示账号/客户端同一门槛（生产需 `AllowInProduction`），幂等先查后建，标识用演示专用域永不与真实/测试标识冲突 |
+
+升级动作：
+
+- **PostgreSQL（可选）**：`Database:Provider=Postgres` + 连接串，建库走 EnsureCreated（PG 专用迁移集未提供，勿跑 `database update`），详见 [deployment.md · PostgreSQL](deployment.md#postgresql)。
+- **Redis 令牌缓存（可选）**：`AuthHub:Redis:Enabled=true`，Redis 故障自动降级直查库；开启前先备好 Redis 实例。
+- **BREAKING（沿用自资源库表化）**：持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`。
+- 升级后无需其它迁移：本版本新增的 `CimdRefreshLeases`、`RegisteredResources` 表由启动期 EnsureCreated/Migrate 按既有分流自动建立。
+
+---
+
+---|---|
+| fix | **修正 #34 引入的部署回归并补齐并行开发档案**：上一版移除 appsettings.Development.json 的 Kestrel:Endpoints 后，systemd 方式启动的实例（不读 launchSettings）失去 HTTPS 绑定只剩 HTTP 5000。现恢复该配置节（部署实例的 5001/5000 由它提供），`local-sqlite` 档案改用 `Kestrel__Endpoints__*__Url` 环境变量覆盖端口（环境变量优先级高于配置文件，本地并行与部署互不影响） |
+| chore | **本机并行开发档案 `local-sqlite`**（launchSettings）：WSL/容器部署占着 5000/5001 的 localhost 转发时，Windows 侧 `dotnet run --launch-profile local-sqlite` 在 5003/5002 起一个零配置的 SQLite 实例（启动建表 + 种子，admin / Admin@12345），与部署实例数据完全隔离。根因修复：移除 appsettings.Development.json 里硬编码的 Kestrel:Endpoints —— 配置端点优先级高于 launchSettings，硬编码会让本地改端口失效并必然 AddressInUse |
+| feat | **PostgreSQL 提供程序**（`Database:Provider=Postgres`，写 `PostgreSQL` 亦可）：走 Npgsql，带与 SQL Server 相同的 3 次重试策略；OpenIddict 官方支持 Npgsql，模型无 SQL Server 硬编码（SQLite 的 DateTimeOffset 变通按 ProviderName 生效，不受影响）。建库走 EnsureCreated —— 既有迁移集是 SQL Server 形状，对 PG 跑 `database update` 必然失败，PG 专用迁移集立项前由 `DatabaseProviders.UsesEnsureCreated` 分流并已在文档写明。兼容性边界由连真实 PostgreSQL 的集成测试钉住（EnsureCreated → 种子 → 签发 → 令牌条目校验回查），CI 加 `postgres:16` 服务容器。注意 Npgsql 对 `timestamptz` 只接受 offset=0 的 `DateTimeOffset`，本服务统一写 UTC 正好满足 |
+| feat | **Redis 令牌条目缓存**（可选，`AuthHub:Redis:Enabled`，默认关闭）：`EnableTokenEntryValidation()` 的"每个带令牌的请求查一次库"变为查 Redis（未命中才回库回填），多实例部署共享缓存。撤销仍立刻生效 —— 令牌级撤销精确删键，批量撤销（`RevokeBySubjectAsync` / `PruneAsync`）递增全局版本号；条目快照带并发令牌，刷新令牌重用检测的乐观并发语义不变；缓存命中的实体重建桩导航并恢复影子外键（`ApplicationId` / `AuthorizationId` 是影子属性，直接 JSON 往返会在后续更新时置空外键）。Redis 故障自动降级直查库（警告 30 秒节流），故障窗口内的撤销由 `EntryTtlMinutes` 兜底。集成测试连真实 Redis 验证两条撤销链路，CI 加 redis:7 服务容器 |
+| fix | **CIMD 并发等待读不到已提交的注册**：等待方轮询用的是 `IOpenIddictApplicationManager`，其 Find* 先过 OpenIddict 的 scoped 实体缓存装饰器，而该装饰器把未命中的 null 也缓存且不挂失效令牌 —— 请求开头那次"查无此客户端"会让自己在本次请求里永远看不到并发方后来提交的记录，等待必然超时。注册器的存在性/新鲜度探测改走无缓存的原生存储接口；写路径（Create/Update）仍走管理器。同时修掉同源的潜在 500：并发创建撞唯一索引后的兜底检查也会读到毒化的 null 而误判失败 |
+| feat | **CIMD 元数据并发重取的跨实例租约**：缓存到期的那一刻多个实例会同时发现过期、同时向同一个第三方站点出站。新增 `CimdRefreshLeases` 表提供带过期时间的短租约（`client_id` 为键、持有者令牌匹配释放），同一时刻只有一个实例出站；其余在缓存仍可用时直接沿用，首次注册撞上并发时短轮询等对方写完再放行（上限 5 秒）。租约时长 = 拉取超时 + 15 秒，持有者崩溃后自然过期。单实例部署无需任何配置 |
+| feat | **资源管理后台页面**：`/admin/resources` 提供资源白名单的登记 / 编辑 / 启停 / 删除，与 `api/resources` 共用同一套服务与权限（`resources.manage`）。列表显示客户端引用计数，删除仍被 `rsrc:` 权限持有时给出 409 的明确指引；停用与删除的差别在页面上写明 |
+| feat | **资源白名单库表化**（[#23](https://github.com/ShenHaoCore/AuthHub/issues/23)）：接入 MCP Server 不再需要「改配置 + 重启」。新增 `RegisteredResources` 表与资源管理 API（`api/resources`，需新权限 `resources.manage`），资源登记/启停/删除即时生效；`AuthHub:Resources` 配置降级为启动期幂等种子（只做加法，从配置删项不会删库行）。默认拒绝红线不变：表为空或登记停用时，一切 `resource` 参数返回 `invalid_target`。**BREAKING**：仍有客户端持有 `rsrc:` 权限的资源拒绝删除（409）；持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`（出厂映射与默认配置已含） |
 
 ---
 

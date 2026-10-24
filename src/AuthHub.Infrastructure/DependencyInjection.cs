@@ -1,6 +1,7 @@
 using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
 using AuthHub.Domain.Interfaces;
+using AuthHub.Infrastructure.Caching;
 using AuthHub.Infrastructure.Identity;
 using AuthHub.Infrastructure.Notifications;
 using AuthHub.Infrastructure.Repositories;
@@ -10,7 +11,14 @@ using AuthHub.Infrastructure.Time;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore;
+using OpenIddict.EntityFrameworkCore.Models;
+using StackExchange.Redis;
 
 namespace AuthHub.Infrastructure;
 
@@ -41,6 +49,8 @@ public static class DependencyInjection
         RegisterSmsSender(services, configuration, environment);
 
         // 管理服务实现（OpenIddict 驱动的部分）
+        services.AddScoped<IRegisteredResourceStore, RegisteredResourceStore>();
+        services.AddScoped<IResourceAdminService, ResourceAdminService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
         services.AddScoped<IRoleAdminService, RoleAdminService>();
         services.AddScoped<IRolePermissionAdminService, RolePermissionAdminService>();
@@ -55,9 +65,56 @@ public static class DependencyInjection
         // 每个请求新建一个等于关掉连接复用，也让"同一域名连续拉取"变成反复 DNS + TLS 握手。
         services.Configure<CimdOptions>(configuration.GetSection(CimdOptions.SectionName));
         services.AddSingleton<ICimdMetadataFetcher, CimdMetadataFetcher>();
+        services.AddScoped<ICimdRefreshLock, CimdRefreshLock>();
         services.AddScoped<ICimdClientRegistrar, CimdClientRegistrar>();
 
+        // Redis 令牌条目缓存（AuthHub:Redis，默认关闭）。
+        //
+        // 本方法在 Program.cs 里排在 AddAuthHubOpenIddict 之后执行，而装饰器必须注册在
+        // OpenIddict 的 EF Core 存储之后（MS DI 单解析取"最后注册者"），顺序依赖成立。
+        RegisterRedisTokenCache(services, configuration);
+
         return services;
+    }
+
+    private static void RegisterRedisTokenCache(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
+
+        if (!configuration.GetValue($"{RedisOptions.SectionName}:Enabled", false))
+        {
+            return;
+        }
+
+        // 连接串没配不在这里报错：默认值（本机回环） + abortConnect=false 意味着
+        // "Redis 不存在"只表现为缓存全降级（直查库），启动与认证都不受影响。
+        // 真正的配置错误（比如指向了内网地址）由运维在部署清单里把关。
+        services.AddSingleton<IConnectionMultiplexer>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptionsMonitor<RedisOptions>>().CurrentValue;
+            return ConnectionMultiplexer.Connect(options.ConnectionString);
+        });
+
+        // 装饰器包住"当前注册的那个令牌存储"（UseEntityFrameworkCore 注册的 EF Core 实现）。
+        // 捕获既有描述符的实现类型而不是硬编码 EF 存储的泛型形状，OpenIddict 升级时这里不用动。
+        var innerStore = services.FirstOrDefault(descriptor =>
+                descriptor.ServiceType == typeof(IOpenIddictTokenStore<OpenIddictEntityFrameworkCoreToken>))
+            ?? throw new InvalidOperationException(
+                "Redis 令牌缓存要求先注册 OpenIddict 的令牌存储（AddAuthHubOpenIddict 必须先于 AddInfrastructure 执行，" +
+                "或确认 UseEntityFrameworkCore() 未被移除）。");
+
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IOpenIddictTokenStore<OpenIddictEntityFrameworkCoreToken>),
+            sp => new RedisCachedTokenStore(
+                (IOpenIddictTokenStore<OpenIddictEntityFrameworkCoreToken>)ActivatorUtilities.CreateInstance(
+                    sp, innerStore.ImplementationType!),
+                sp.GetRequiredService<IConnectionMultiplexer>(),
+                sp.GetRequiredService<IOpenIddictEntityFrameworkCoreContext>(),
+                sp.GetRequiredService<IOptionsMonitor<RedisOptions>>(),
+                sp.GetRequiredService<ILogger<RedisCachedTokenStore>>()),
+            ServiceLifetime.Scoped));
     }
 
     private static void RegisterEmailSender(

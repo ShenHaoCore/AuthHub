@@ -62,7 +62,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | OpenIddict | **7.7.2** | Server + Validation + EF Core 集成 |
 | Entity Framework Core | 10.0.13 | Identity / OpenIddict / 自定义表共用一个 `DbContext` |
 | ASP.NET Core Identity | 10.0 | 用户、角色、密码哈希、锁定、MFA |
-| 数据库 | SQL Server（生产）/ SQLite（开发与测试） | 二者切换只需改配置 |
+| 数据库 | SQL Server / PostgreSQL（生产）/ SQLite（开发与测试） | 切换只需改配置 |
 | 实体 → DTO 映射 | — | 手写扩展方法（`EntityToDtoMapper`）。曾经用 AutoMapper 13.x，因 13.x 存在无补丁的高危漏洞（CVE-2026-32933）且 15+ 改为 RPL/商业双许可而移除——映射只有三张扁平表，手写成本更低 |
 | FluentValidation | 11.x | 校验规则集中在 Application 层，经 `ValidationFilter` 自动执行 |
 | Serilog | 8.x | Console + 按天滚动文件，可平滑接入 Seq / ELK |
@@ -173,6 +173,20 @@ dotnet run --project src/AuthHub.Api
 
 SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 SQL Server 迁移），
 因此不需要为 SQLite 另维护一套迁移文件。**SQLite 仅用于开发与集成测试，不要上生产。**
+
+### 切到 PostgreSQL
+
+```jsonc
+{
+  "Database": { "Provider": "Postgres" },
+  "ConnectionStrings": { "DefaultConnection": "Host=localhost;Database=authhub;Username=authhub;Password=..." }
+}
+```
+
+与 SQLite 一样走 `EnsureCreatedAsync()` 建库建表（PostgreSQL 专用迁移集尚未生成，
+不要对它跑 `dotnet ef database update` —— 那会把 SQL Server 形状的 DDL 发给 PG）。
+兼容性由连真实 PostgreSQL 的集成测试钉住（CI 的 `postgres:16` 服务容器）；
+细节与多实例注意见 [部署 · PostgreSQL](docs/deployment.md#postgresql)。
 
 ## 种子数据
 
@@ -286,8 +300,11 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 - [x] **管理后台补"资源"字段**：客户端新建 / 编辑弹窗已有「允许的资源」勾选项，
       勾选即落成 `rsrc:` 权限。白名单里撤掉的资源不会从已持有的客户端上消失 ——
       它们仍以「已不在白名单」标记出现在弹窗里，避免改个显示名就静默清掉权限。
-- [ ] **Redis 令牌缓存**：`EnableTokenEntryValidation()` 目前每次校验都查库，
-      高并发下会成为瓶颈；可把令牌状态缓存到 Redis 并订阅撤销事件。
+- [x] **Redis 令牌缓存**：已完成。`EnableTokenEntryValidation()` 的"每个带令牌的请求查一次库"
+      变为可选的 Redis 缓存（`AuthHub:Redis:Enabled`，默认关闭）。撤销仍立刻生效：
+      令牌级撤销精确删键，批量撤销（RevokeBySubjectAsync / PruneAsync）递增全局版本号；
+      Redis 故障自动降级直查库。多实例部署共享缓存，单实例部署零影响。
+      后续可扩：分布式限流、分布式会话。配置与语义见 [部署](docs/deployment.md)。
 - [ ] **分布式 JWKS 校验**：下游目前可离线验签；进一步可加公钥轮换与缓存控制头。
 - [ ] **OpenTelemetry**：分布式追踪（导出到 OTLP）。
 - [ ] **CI 安全扫描**：`dotnet list package --vulnerable` 与 OWASP Dependency Check

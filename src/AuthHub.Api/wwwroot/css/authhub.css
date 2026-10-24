@@ -1,8 +1,10 @@
 /* ==========================================================================
    AuthHub 管理后台样式表（Razor Pages，/admin/*）
    --------------------------------------------------------------------------
-   版式参考 ABP Framework 的 LeptonX 主题：深色侧边栏 + 浅色内容区、
-   卡片式页面（工具栏在卡片头、表格在卡片体）、统计卡、模态表单。
+   版式参考现代鉴权控制台（Clerk / WorkOS / Logto console）的设计语言：
+   浅色侧边栏 + 软底活动态、浅灰页面底上的 hairline 白卡、常规大小写表头、
+   靛蓝主色。旧版（LeptonX 式深侧边栏 + 青绿主色）只存在于令牌历史里，
+   回退方法见 authhub-tokens.css 的主色注释。
 
    调色板不在这里定义 —— 见 authhub-tokens.css（与协议页 authhub-auth.css
    共用同一份令牌，避免登录页与后台出现色差）。
@@ -121,7 +123,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     font-weight: 600;
     letter-spacing: .08em;
     text-transform: uppercase;
-    color: rgba(166, 176, 195, .62);
+    color: #98a2b3;
 }
 .ah-nav-group:first-child { padding-top: 4px; }
 
@@ -131,19 +133,21 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     gap: 10px;
     padding: 9px 10px;
     margin-bottom: 2px;
-    border-radius: var(--ah-radius-sm);
+    border-radius: 8px;
     color: var(--ah-sidebar-text);
     font-size: 13.5px;
+    font-weight: 500;
     text-decoration: none;
     transition: background .12s ease, color .12s ease;
 }
 .ah-nav-item:hover { background: var(--ah-sidebar-hover); color: var(--ah-sidebar-text-strong); text-decoration: none; }
 
+/* 活动态：软底色 + 主色文字（Clerk / WorkOS 一系的控制台做法），
+   比实底色块 + 白字轻，且与浅色侧边栏同频 */
 .ah-nav-item.is-active {
-    background: var(--ah-primary);
-    color: #fff;
+    background: var(--ah-primary-soft);
+    color: var(--ah-primary);
     font-weight: 600;
-    box-shadow: 0 4px 12px rgba(var(--ah-primary-rgb), .32);
 }
 
 .ah-nav-item .ah-icon { flex: 0 0 auto; opacity: .9; }
@@ -176,6 +180,10 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     align-items: center;
     gap: 8px;
     min-width: 0;
+    /* 窄屏（≤480px）时面包屑文字会换行断字、把 60px 定高的顶栏撑破 ——
+       一律不换行，超出部分整体裁切（两端的关键项：菜单按钮与用户菜单不受影响） */
+    overflow: hidden;
+    white-space: nowrap;
     color: var(--ah-muted);
     font-size: 13px;
 }
@@ -495,7 +503,7 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
     width: 100%;
     min-height: 36px;
     padding: 7px 11px;
-    border: 1px solid var(--ah-border);
+    border: 1px solid #d0d5dd;
     border-radius: var(--ah-radius-sm);
     background: var(--ah-surface);
     color: var(--ah-text);
@@ -654,17 +662,19 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: 13px;
 }
 .ah-table th {
-    padding: 10px 14px;
+    padding: 9px 14px;
     text-align: left;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: .06em;
-    text-transform: uppercase;
+    /* 表头常规大小写 + 透明底：大写字距式表头配灰底是上一代控制台的样式，
+       现代鉴权后台（Clerk / WorkOS）统一是普通大小写的小号灰字 + hairline */
+    text-transform: none;
+    letter-spacing: 0;
     color: var(--ah-muted);
-    background: #fafbfc;
+    background: transparent;
     border-bottom: 1px solid var(--ah-border);
     white-space: nowrap;
 }
@@ -678,12 +688,71 @@ code, kbd, samp { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-table .ah-col-actions { width: 1%; white-space: nowrap; text-align: right; }
 .ah-table .ah-col-num { width: 1%; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 
+/*
+ * 操作列钉在右侧：窄屏下表格横向滚动时（.ah-table-wrap 的设计行为），
+ * 编辑 / 删除这类高频动作不再被卷进滚动区深处，始终悬在可视右缘。
+ *
+ * 左缘的 1px 分隔线用 background 渐变画而不是 border-left ——
+ * border-collapse: collapse 的边框画在表格层上，不跟随 sticky 单元格滚动。
+ * 这条线常驻：表格溢出时它提示"左边还有内容"，不溢出时它是普通的列分隔线；
+ * 早期版本这里用内阴影，在表格不溢出的页面上会渲染成一道悬空渐变（已废）。
+ * 背景必须实底 —— sticky 单元格是透明的，滚过去的文字会从它底下透出来。
+ */
+.ah-table .ah-col-actions {
+    position: sticky;
+    right: 0;
+    background:
+        linear-gradient(var(--ah-border), var(--ah-border)) left center / 1px 100% no-repeat,
+        var(--ah-surface);
+}
+.ah-table thead .ah-col-actions { z-index: 1; }
+.ah-table tbody tr:hover .ah-col-actions {
+    background:
+        linear-gradient(var(--ah-border), var(--ah-border)) left center / 1px 100% no-repeat,
+        #f9fafc;
+}
+
+/* 首列（通常是名称 / 主标识）给一个下限：表格被挤压时它最先被压成逐字竖排 */
+.ah-table td:first-child { min-width: 96px; }
+
 .ah-cell-main { font-weight: 600; }
 .ah-cell-sub { color: var(--ah-muted); font-size: 12px; }
 .ah-cell-mono { font-family: var(--ah-mono); font-size: 12.5px; }
 .ah-cell-nowrap { white-space: nowrap; }
 
 .ah-tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/*
+ * 「+N」折叠徽章：角色列表的权限列只平铺前几个权限点，其余收进这里。
+ * 展开后用 display:contents 把 <details> 与内层 .ah-tag-list 都溶解进外层
+ * 徽章连排 —— 多出的徽章与前面的同行连排，summary 变成行尾的「收起」钮。
+ */
+.ah-chip-more { display: inline-flex; }
+.ah-chip-more > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border: 1px dashed var(--ah-primary-border);
+    border-radius: 999px;
+    background: var(--ah-primary-soft);
+    color: var(--ah-primary);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+.ah-chip-more > summary::-webkit-details-marker { display: none; }
+.ah-chip-more[open],
+.ah-chip-more[open] > .ah-tag-list { display: contents; }
+.ah-chip-more[open] > summary {
+    order: 99;
+    border-color: var(--ah-border);
+    background: var(--ah-surface);
+    color: var(--ah-muted);
+    font-weight: 500;
+}
 
 /* ============================================================== 徽章 */
 
@@ -930,7 +999,7 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     min-width: 0;
     font-size: 13px;
     word-break: break-all;
-    color: #123c8f;
+    color: var(--ah-primary);
 }
 .ah-secret-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
 .ah-secret-list li {
@@ -996,4 +1065,10 @@ dialog.ah-modal::backdrop { background: rgba(16, 22, 34, .48); }
     .ah-dl dd { margin-bottom: 10px; }
     .ah-secret-list { grid-template-columns: minmax(0, 1fr); }
     dialog.ah-modal, dialog.ah-modal.ah-modal-lg { width: calc(100vw - 20px); }
+
+    /* 窄屏表格减密：列间距 14px 会把可读内容挤成竖排 */
+    .ah-table th, .ah-table td { padding: 9px 10px; }
+    /* 勾选组两列网格同样收成单列，避免长描述被压成窄条 */
+    .ah-check-row { grid-template-columns: minmax(0, 1fr); }
+    .ah-modal-foot { flex-wrap: wrap; }
 }

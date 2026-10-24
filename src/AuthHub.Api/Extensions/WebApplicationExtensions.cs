@@ -2,6 +2,7 @@ using AuthHub.Api.Middleware;
 using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
 using AuthHub.Infrastructure.Configuration;
+using System.Data.Common;
 using AuthHub.Infrastructure.Data;
 using AuthHub.Infrastructure.Data.Seed;
 using Microsoft.EntityFrameworkCore;
@@ -109,6 +110,11 @@ internal static class WebApplicationExtensions
 
     /// <summary>
     /// 建库 / 迁移 + 种子数据，由 <c>AuthHub:Seeding</c> 下的开关控制，默认全关。
+    ///
+    /// 资源白名单的「配置 → 库」种子（<see cref="ResourceSeeder"/>）刻意**不**受这两个开关门控：
+    /// 它是安全配置而不是演示数据 —— 老部署升级后，<c>AuthHub:Resources</c> 里的资源必须自动
+    /// 入库生效，不能因为"生产没开 Seeding"就悄悄清空白名单（那等于把所有 resource 请求
+    /// 变成 invalid_target）。
     /// </summary>
     public static async Task InitializeAuthHubDatabaseAsync(this WebApplication app)
     {
@@ -117,6 +123,10 @@ internal static class WebApplicationExtensions
 
         if (!migrateOnStartup && !seedingEnabled)
         {
+            // 迁移与播种都不在启动期做（表通常由外部流水线建好）：
+            // 资源种子仍要尝试 —— 配置里登记过的资源必须进库。表万一还不存在时降级为警告
+            // （白名单为空 = 默认拒绝，方向安全），不阻断启动。
+            await TrySeedResourcesAsync(app);
             return;
         }
 
@@ -128,9 +138,11 @@ internal static class WebApplicationExtensions
             var dbContext = services.GetRequiredService<AuthHubDbContext>();
             var provider = app.Configuration["Database:Provider"] ?? DatabaseProviders.SqlServer;
 
-            if (DatabaseProviders.IsSqlite(provider))
+            if (DatabaseProviders.UsesEnsureCreated(provider))
             {
-                // SQLite 用于开发 / 集成测试：直接按模型建表，避免维护两套迁移
+                // 没有专用迁移集的提供程序（SQLite / PostgreSQL）：直接按模型建表。
+                // SQLite 是为省掉两套迁移；PostgreSQL 的迁移集尚未生成 ——
+                // 对它跑 Migrate 会把 SQL Server 形状的 DDL 发给 PG，必然失败，故一并走 EnsureCreated。
                 await dbContext.Database.EnsureCreatedAsync();
             }
             else
@@ -146,6 +158,38 @@ internal static class WebApplicationExtensions
             // 把"是不是生产"传进去：播种内容含演示账号与源码里公开的演示密钥，
             // 生产环境必须由 AuthHub:Seeding:AllowInProduction=true 再确认一次（见 AuthHubSeeder.Decide）。
             await AuthHubSeeder.SeedAsync(services, app.Configuration, app.Environment.IsProduction());
+        }
+
+        // 结构已就绪（迁移或 EnsureCreated 之后），资源种子直接执行：
+        // 配置非法时 fail-fast（进程起不来），与库表化之前 RegisterResources 的启动期行为一致。
+        await ResourceSeeder.SeedAsync(
+            services.GetRequiredService<AuthHubDbContext>(),
+            app.Configuration,
+            app.Logger);
+    }
+
+    /// <summary>
+    /// 结构不归本进程管的部署形态（MigrateOnStartup=false）：资源种子尽力而为 ——
+    /// 表已由外部建好则正常入库；表不存在/库不可达则降级为警告，**不阻断启动**。
+    /// 失败方向是"白名单为空"（默认拒绝），宁可少放行，不会多放行。
+    /// </summary>
+    private static async Task TrySeedResourcesAsync(WebApplication app)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+
+            await ResourceSeeder.SeedAsync(
+                scope.ServiceProvider.GetRequiredService<AuthHubDbContext>(),
+                app.Configuration,
+                app.Logger);
+        }
+        catch (DbException exception)
+        {
+            app.Logger.LogWarning(
+                exception,
+                "资源白名单未能从配置播种（数据库尚不可用或 RegisteredResources 表不存在）——" +
+                "白名单为空意味着所有 resource 请求都会被 invalid_target 拒绝，待表就绪后重启即可恢复。");
         }
     }
 

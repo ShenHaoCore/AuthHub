@@ -35,6 +35,7 @@ public static class AdminNav
         public const string Roles = "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z";
         public const string Clients = "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12";
         public const string Scopes = "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3";
+        public const string Resources = "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z";
         public const string Audit = "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01";
         public const string Profile = "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z";
         public const string Code = "M16 18l6-6-6-6M8 6l-6 6 6 6";
@@ -52,7 +53,7 @@ public static class AdminNav
         public const string Check = "M20 6L9 17l-5-5";
         public const string Clock = "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2";
         public const string Info = "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01";
-        public const string Key = "M12.65 10a6 6 0 1 1-1.3 1.3L12 10zm0 0h9m-3 0v3";
+        public const string Key = "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4";
         public const string Mail = "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 7l-10 6L2 7";
         public const string Phone = "M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z";
     }
@@ -72,7 +73,8 @@ public static class AdminNav
         new AdminNavGroup("OAuth 资源", new[]
         {
             new AdminNavItem("clients", "客户端", "/admin/clients", Icons.Clients, AuthHubConstants.Permissions.ClientsManage, "OAuth 资源"),
-            new AdminNavItem("scopes", "Scope", "/admin/scopes", Icons.Scopes, AuthHubConstants.Permissions.ScopesManage, "OAuth 资源")
+            new AdminNavItem("scopes", "Scope", "/admin/scopes", Icons.Scopes, AuthHubConstants.Permissions.ScopesManage, "OAuth 资源"),
+            new AdminNavItem("resources", "资源", "/admin/resources", Icons.Resources, AuthHubConstants.Permissions.ResourcesManage, "OAuth 资源")
         }),
         new AdminNavGroup("运维", new[]
         {
@@ -119,6 +121,7 @@ public static class AdminNav
     {
         AuthHubConstants.Permissions.ClientsManage => "客户端",
         AuthHubConstants.Permissions.ScopesManage => "Scope",
+        AuthHubConstants.Permissions.ResourcesManage => "资源",
         AuthHubConstants.Permissions.UsersManage => "用户",
         AuthHubConstants.Permissions.RolesManage => "角色",
         AuthHubConstants.Permissions.TokensRevoke => "令牌",

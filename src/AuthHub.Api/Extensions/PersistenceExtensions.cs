@@ -11,7 +11,7 @@ namespace AuthHub.Api.Extensions;
 /// 只会让联表查询与事务变得别扭。因此这里只注册一个 AuthHubDbContext。
 ///
 /// 提供程序由 <c>Database:Provider</c> 决定：SQLite 用于开发与集成测试（无需外部服务），
-/// 其余走 SQL Server（带 3 次重试，覆盖 Azure SQL 式的瞬时故障）。
+/// PostgreSQL 与 SQL Server 面向部署（均带 3 次重试，覆盖瞬时故障）。
 /// </summary>
 internal static class PersistenceExtensions
 {
@@ -39,6 +39,11 @@ internal static class PersistenceExtensions
             if (DatabaseProviders.IsSqlite(provider))
             {
                 options.UseSqlite(connectionString);
+            }
+            else if (DatabaseProviders.IsPostgres(provider))
+            {
+                // 与 SQL Server 同样的重试策略：覆盖网络抖动与 PG 连接池瞬时的 53300（too_many_connections）
+                options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure(maxRetryCount: 3));
             }
             else
             {

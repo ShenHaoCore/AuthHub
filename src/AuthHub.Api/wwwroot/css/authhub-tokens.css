@@ -37,20 +37,24 @@
     color-scheme: light;
 
     /* ---- 基础表面与文字（冷灰石板） ---- */
-    --ah-bg: #f1f5f9;
+    --ah-bg: #f7f8fb;
     --ah-surface: #ffffff;
-    --ah-border: #e2e8f0;
-    --ah-text: #0f172a;
-    --ah-muted: #64748b;
+    --ah-border: #e7eaf0;
+    --ah-text: #101828;
+    --ah-muted: #667085;
 
-    /* ---- 主色（青绿） ---- */
-    --ah-primary: #0f766e;
-    --ah-primary-hover: #115e59;
-    --ah-primary-soft: #f0fdfa;
-    --ah-primary-border: #99f6e4;
+    /* ---- 主色（靛蓝） ----
+       2026-10-24 视觉改版：从青绿（#0f766e）换到靛蓝，对齐主流鉴权控制台
+       （Clerk / WorkOS / Logto）的色彩语言。整站颜色只由这几个令牌派生，
+       想回青绿把本组五项换回去即可：#0f766e / #115e59 / #f0fdfa / #99f6e4 /
+       rgb 15,118,110（accent #14b8a6）。 */
+    --ah-primary: #4f46e5;
+    --ah-primary-hover: #4338ca;
+    --ah-primary-soft: #eef2ff;
+    --ah-primary-border: #c7d2fe;
     /* 供 rgba(var(--ah-primary-rgb), α) 使用，避免各处硬编码色值 */
-    --ah-primary-rgb: 15, 118, 110;
-    --ah-primary-accent: #14b8a6;
+    --ah-primary-rgb: 79, 70, 229;
+    --ah-primary-accent: #6366f1;
 
     /* ---- 语义色 ---- */
     --ah-danger: #b42318;
@@ -69,24 +73,26 @@
     --ah-info-soft: #f0f9ff;
     --ah-info-border: #b9e6fe;
 
-    /* ---- 侧边栏（深石板；仅后台使用） ---- */
-    --ah-sidebar-bg: #0f172a;
-    --ah-sidebar-bg-soft: #1e293b;
-    --ah-sidebar-text: #94a3b8;
-    --ah-sidebar-text-strong: #f8fafc;
-    --ah-sidebar-divider: rgba(248, 250, 252, .08);
-    --ah-sidebar-hover: rgba(248, 250, 252, .06);
+    /* ---- 侧边栏（浅色；仅后台使用） ----
+       与主色同批改版：深石板侧边栏换为浅色 —— Clerk / WorkOS 一系的控制台
+       全部是浅侧边栏 + 软底活动态，比"深侧边栏 + 实底色块"轻得多。 */
+    --ah-sidebar-bg: #ffffff;
+    --ah-sidebar-bg-soft: #f4f6fb;
+    --ah-sidebar-text: #536072;
+    --ah-sidebar-text-strong: #101828;
+    --ah-sidebar-divider: #edf0f5;
+    --ah-sidebar-hover: #f4f6fb;
     --ah-sidebar-width: 258px;
 
     /* ---- 形状与阴影 ---- */
-    --ah-radius-lg: 14px;
+    --ah-radius-lg: 12px;
     --ah-radius: 10px;
     --ah-radius-sm: 8px;
 
-    --ah-shadow-xs: 0 1px 2px rgba(15, 23, 42, .04);
-    --ah-shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 2px 8px rgba(15, 23, 42, .04);
-    --ah-shadow-md: 0 2px 6px rgba(15, 23, 42, .06), 0 14px 34px rgba(15, 23, 42, .10);
-    --ah-shadow-lg: 0 24px 64px rgba(15, 23, 42, .18);
+    --ah-shadow-xs: 0 1px 2px rgba(16, 24, 40, .03);
+    --ah-shadow-sm: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 8px rgba(16, 24, 40, .04);
+    --ah-shadow-md: 0 4px 10px rgba(16, 24, 40, .06), 0 16px 40px rgba(16, 24, 40, .10);
+    --ah-shadow-lg: 0 24px 64px rgba(16, 24, 40, .16);
 
     /* ---- 量度 ---- */
     --ah-topbar-height: 60px;

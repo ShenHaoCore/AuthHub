@@ -30,18 +30,6 @@
         </div>
     }
 
-    <div class="ah-alert ah-alert--info">
-        <ah-icon path="@AdminNav.Icons.Info" size="16" />
-        <div class="ah-alert-body">
-            <strong>这里能改什么、不能改什么</strong>
-            <span>
-                <strong>能改</strong>：已有权限点发给哪个角色（回默认值：弹窗里点「恢复默认」）；<br />
-                <strong>改不了</strong>：权限点与策略编译在服务端，新增要走代码 —— 加常量（<code>AuthHubConstants.Permissions</code>）→ 建同名策略 → 端点引用。
-                每次变更都会写一条审计（<code>admin.role.permissions.updated</code>）；权限声明随登录写入会话 Cookie，在线用户最迟 5 分钟刷新，重新登录立即生效。
-            </span>
-        </div>
-    </div>
-
     <div class="ah-card">
         <div class="ah-card-header">
             <div>
@@ -88,10 +76,27 @@
                                     }
                                     else
                                     {
+                                        // 权限点目录会持续增长，全部平铺会让行高随目录膨胀 ——
+                                        // 只露前两个，其余收进「+N」折叠块；全量视图在下方
+                                        // 权限矩阵与每行的「权限」编辑弹窗里。
+                                        var head = role.Permissions.Take(2).ToList();
+                                        var tail = role.Permissions.Skip(2).ToList();
                                         <div class="ah-tag-list">
-                                            @foreach (var permission in role.Permissions)
+                                            @foreach (var permission in head)
                                             {
                                                 <span class="ah-badge ah-badge--success">@permission</span>
+                                            }
+                                            @if (tail.Count > 0)
+                                            {
+                                                <details class="ah-chip-more">
+                                                    <summary>+@tail.Count</summary>
+                                                    <div class="ah-tag-list">
+                                                        @foreach (var permission in tail)
+                                                        {
+                                                            <span class="ah-badge ah-badge--success">@permission</span>
+                                                        }
+                                                    </div>
+                                                </details>
                                             }
                                         </div>
                                     }
@@ -223,7 +228,6 @@
                        autocomplete="off" value="@Model.NewRoleName" />
                 <div class="ah-hint">
                     建议使用英文名（会作为令牌里的 <code>role</code> 声明）。
-                    自定义角色创建后不绑定任何权限，用列表里的「权限」按钮勾选即可生效。
                 </div>
             </div>
 
@@ -231,6 +235,31 @@
                 <label class="ah-label" for="create-role-desc">说明</label>
                 <input class="ah-input" id="create-role-desc" name="NewRoleDescription" type="text"
                        autocomplete="off" value="@Model.NewRoleDescription" placeholder="这个角色负责什么" />
+            </div>
+
+            <div class="ah-fieldset">
+                <legend class="ah-legend">初始权限（全部不勾 = 创建无权限角色，之后随时可调）</legend>
+                @foreach (var group in Model.PermissionGroups)
+                {
+                    <div class="ah-perm-group">
+                        <div class="ah-perm-group-head">
+                            <span>@group.Title</span>
+                            <span class="ah-perm-count ah-badge">@group.Permissions.Count 项</span>
+                        </div>
+                        <div class="ah-perm-items">
+                            @foreach (var permission in group.Permissions)
+                            {
+                                <label class="ah-perm-item">
+                                    <input type="checkbox" name="SelectedPermissions" value="@permission.Name" />
+                                    <span>
+                                        @(string.IsNullOrWhiteSpace(permission.Description) ? permission.Name : permission.Description)
+                                        <code>@permission.Name</code>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </ah-dialog-body>
         <ah-dialog-foot submit="创建角色" />
@@ -305,7 +334,9 @@
                 }
 
                 <div class="ah-hint" style="margin-top:12px">
-                    勾选结果写进数据库，优先级高于配置 <code>AuthHub:RolePermissions</code>，保存后立即生效。
+                    勾选结果写进数据库，优先级高于配置 <code>AuthHub:RolePermissions</code>，保存后立即生效；
+                    每次变更都会写一条审计（<code>admin.role.permissions.updated</code>）。
+                    权限点与策略编译在服务端，新增要走代码（加常量 → 建同名策略 → 端点引用），这里只改「发给谁」。
                     <strong>全部取消勾选</strong>表示"这个角色没有任何权限"，与点「恢复默认」（回落配置 / 出厂默认）是两件不同的事。
                     权限点会被展开成 <code>authhub:permission</code> 声明写入会话与令牌；
                     已在线的用户最迟 5 分钟刷新，重新登录则立即生效。

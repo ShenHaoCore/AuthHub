@@ -7,12 +7,11 @@ using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
 using AuthHub.Domain.Enums;
 using AuthHub.Domain.Interfaces;
-using AuthHub.Infrastructure.Configuration;
 using AuthHub.Infrastructure.Security;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore.Models;
 using Oidc = OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace AuthHub.Infrastructure.Services;
@@ -29,43 +28,48 @@ namespace AuthHub.Infrastructure.Services;
 /// <para><b>为什么可以降级</b>：CIMD 的元数据由客户端自己托管，第三方站点抖动是常态。
 /// 缓存未过期却因为一次网络失败把用户挡在门外，收益（更早发现地址变更）远小于代价。
 /// 但"从未成功拉过"没有缓存可降级，只能拒。</para>
+///
+/// <para><b>为什么"查记录"走 <see cref="IOpenIddictApplicationStore{TApplication}"/> 而不走
+/// <see cref="IOpenIddictApplicationManager"/> 的 Find*</b>：管理器的所有 Find* 都先过
+/// OpenIddict 的实体缓存装饰器（scoped 的 <c>OpenIddictApplicationCache</c>），而它**把未命中
+/// 的 null 也缓存**且不挂任何失效令牌（<c>CreateEntryAsync</c> 只给非 null 结果加失效信号）。
+/// 本类的探测全是"先查后动"—— 查的那一刻记录不存在，等并发方写完库后再查，走管理器只会
+/// 命中那条永不过期的 null：并发等待永远超时，撞唯一索引后的兜底检查也会误判"没人注册"
+/// 而把成功变 500。原生存储每次直查数据库，没有这层缓存；写路径（Create/Update）仍走管理器，
+/// 由它维护缓存与数据库的一致性。</para>
 /// </summary>
 internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 {
     private readonly IOpenIddictApplicationManager _applications;
+    private readonly IOpenIddictApplicationStore<OpenIddictEntityFrameworkCoreApplication> _applicationStore;
     private readonly ICimdMetadataFetcher _fetcher;
+    private readonly ICimdRefreshLock _refreshLock;
+    private readonly IRegisteredResourceStore _resourceStore;
     private readonly IAuditLogService _audit;
     private readonly IClock _clock;
     private readonly CimdOptions _options;
-    private readonly string[] _resources;
     private readonly ILogger<CimdClientRegistrar> _logger;
 
     public CimdClientRegistrar(
         IOpenIddictApplicationManager applications,
+        IOpenIddictApplicationStore<OpenIddictEntityFrameworkCoreApplication> applicationStore,
         ICimdMetadataFetcher fetcher,
+        ICimdRefreshLock refreshLock,
+        IRegisteredResourceStore resourceStore,
         IAuditLogService audit,
         IClock clock,
         IOptions<CimdOptions> options,
-        IConfiguration configuration,
         ILogger<CimdClientRegistrar> logger)
     {
         _applications = applications;
+        _applicationStore = applicationStore;
         _fetcher = fetcher;
+        _refreshLock = refreshLock;
+        _resourceStore = resourceStore;
         _audit = audit;
         _clock = clock;
         _options = options.Value;
         _logger = logger;
-
-        // 资源权限：显式配了就用配置，否则沿用服务端认定的资源全集。
-        // 资源本身已经是白名单（AuthHub:Resources），客户端请求其中任何一项都合理 ——
-        // 真正的受众收窄发生在令牌的 aud 上，不在这里。
-        _resources = _options.AllowedResources.Count > 0
-            ? _options.AllowedResources
-                .Where(resource => !string.IsNullOrWhiteSpace(resource))
-                .Select(resource => resource.Trim())
-                .Distinct(StringComparer.Ordinal)
-                .ToArray()
-            : AuthHubResourceRegistry.Load(configuration);
     }
 
     public async Task<CimdResolution> ResolveAsync(string clientId, CancellationToken cancellationToken = default)
@@ -78,7 +82,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             return CimdResolution.NotApplicable;
         }
 
-        var application = await _applications.FindByClientIdAsync(clientId, cancellationToken);
+        var application = await _applicationStore.FindByClientIdAsync(clientId, cancellationToken);
 
         // 同名的应用存在但不是自动注册来的 → 手工登记优先，行为完全不变
         if (application is not null && !await IsCimdRegisteredAsync(application, cancellationToken))
@@ -97,6 +101,16 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         if (isFresh)
         {
             return CimdResolution.Allowed;
+        }
+
+        // 到期重取前先取得跨实例租约：缓存到期的同一时刻，所有实例都会走到这里，
+        // 没有这把锁就会一起向同一个第三方站点出站。拿不到锁代表别人正在拉，
+        // 这里既不出站也不报错 —— 见 WaitForConcurrentRefreshAsync。
+        await using var lease = await _refreshLock.TryAcquireAsync(clientId, cancellationToken);
+
+        if (lease is null)
+        {
+            return await WaitForConcurrentRefreshAsync(application, clientId, cancellationToken);
         }
 
         var fetched = await _fetcher.FetchAsync(metadataUri, cancellationToken);
@@ -127,9 +141,71 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 
     // ------------------------------------------------------------------ 注册与刷新
 
+    /// <summary>
+    /// 另一个实例正在刷新元数据时的处理。
+    ///
+    /// <para><b>有缓存</b>：直接继续用（与"拉取失败降级"同义）—— 对方拉完会写库，
+    /// 这次请求不必等，也不该因为别人在刷新而失败。</para>
+    ///
+    /// <para><b>没有缓存</b>（首次注册撞上并发）：没有可降级的旧值，但对方通常几秒内就写完。
+    /// 这里做**有上限**的轮询：等到记录出现就放行；等到超时仍没有，才拒绝并说明原因。
+    /// 直接拒绝会让"两个并发的首个授权请求"里慢的那个莫名失败，用户看到的是需要重试一次的登录页。
+    /// 轮询必须走无缓存的原生存储 —— 见类注释，走管理器会命中本请求早先缓存的 null。</para>
+    /// </summary>
+    private async Task<CimdResolution> WaitForConcurrentRefreshAsync(
+        OpenIddictEntityFrameworkCoreApplication? application,
+        string clientId,
+        CancellationToken cancellationToken)
+    {
+        if (application is not null)
+        {
+            _logger.LogDebug(
+                "CIMD 元数据由其他实例刷新中，本次继续使用缓存 | ClientId={ClientId}",
+                clientId);
+
+            return CimdResolution.Allowed;
+        }
+
+        // 轮询次数按拉取超时折算，最多 60 次（6 秒）：等待上限略大于一次拉取的耗时。
+        // 刻意用固定延时而不是读时钟 —— 测试里可以注入假时钟，若用假时钟作截止条件，
+        // 循环会永远不结束。
+        var attempts = Math.Clamp((int)(_options.FetchTimeout.TotalMilliseconds / PollIntervalMs), 1, 60);
+
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            await Task.Delay(PollIntervalMs, cancellationToken);
+
+            if (await _applicationStore.FindByClientIdAsync(clientId, cancellationToken) is not null)
+            {
+                _logger.LogDebug(
+                    "等待期间 CIMD 客户端已由其他实例注册完成 | ClientId={ClientId}",
+                    clientId);
+
+                return CimdResolution.Allowed;
+            }
+        }
+
+        await _audit.LogAsync(
+            new AuditEntry(
+                AuditActionType.ClientCreated,
+                false,
+                ClientId: clientId,
+                Details: "CIMD 自动注册被拒：等待并发注册超时。"),
+            cancellationToken);
+
+        _logger.LogWarning(
+            "CIMD 客户端等待并发注册超时 | ClientId={ClientId}",
+            clientId);
+
+        return CimdResolution.Rejected("该客户端的元数据正在注册中，请稍后重试。");
+    }
+
+    /// <summary>等待并发注册的轮询间隔（毫秒）。</summary>
+    private const int PollIntervalMs = 100;
+
     private async Task CreateAsync(CimdClientMetadata metadata, string digest, CancellationToken cancellationToken)
     {
-        var descriptor = BuildDescriptor(metadata, digest);
+        var descriptor = await BuildDescriptorAsync(metadata, digest, cancellationToken);
         descriptor.Properties[CimdProperties.FetchedAt] =
             JsonSerializer.SerializeToElement(_clock.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         descriptor.Properties[CimdProperties.Disabled] = JsonSerializer.SerializeToElement(false);
@@ -142,7 +218,8 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         {
             // 并发首访：两个请求同时发现"未注册"，一个成功、另一个撞唯一索引。
             // 这不是错误 —— 只要库里已经有这条记录，本次请求就继续。
-            if (await _applications.FindByClientIdAsync(metadata.ClientId, cancellationToken) is not null)
+            // 查原生存储而不是管理器：后者可能还拿着"未注册"的缓存结论（见类注释）。
+            if (await _applicationStore.FindByClientIdAsync(metadata.ClientId, cancellationToken) is not null)
             {
                 _logger.LogDebug("CIMD 客户端 {ClientId} 已由并发请求注册，本次跳过创建。", metadata.ClientId);
                 return;
@@ -170,15 +247,15 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     }
 
     private async Task UpdateAsync(
-        object application,
+        OpenIddictEntityFrameworkCoreApplication application,
         CimdClientMetadata metadata,
         string digest,
         CancellationToken cancellationToken)
     {
-        var descriptor = BuildDescriptor(metadata, digest);
+        var descriptor = await BuildDescriptorAsync(metadata, digest, cancellationToken);
 
         // 保留管理员设置的禁用标记与原始首次拉取时间：刷新元数据不该顺带"解禁"
-        var properties = await _applications.GetPropertiesAsync(application, cancellationToken);
+        var properties = await _applicationStore.GetPropertiesAsync(application, cancellationToken);
 
         descriptor.Properties[CimdProperties.Disabled] = properties.TryGetValue(CimdProperties.Disabled, out var disabled)
             ? disabled
@@ -204,11 +281,29 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     }
 
     /// <summary>
-    /// 构建 OpenIddict 的应用描述。CIMD 客户端一律是 **public + 授权码 + PKCE**：
-    /// 没有登记密钥的环节，所以不可能是 confidential；不强制 PKCE 则授权码在
-    /// 公共客户端手里等于明文口令。
+    /// 构建资源权限的授予清单。
+    ///
+    /// 显式配了 <c>AuthHub:Cimd:AllowedResources</c> 就用配置（语义不变）；
+    /// 否则沿用**当前的**资源白名单（RegisteredResources 表启用中的全集）。
+    /// 刻意每次现查而不是注册时快照：白名单已库表化、运行时可增删，
+    /// 自动注册的客户端授予的 <c>rsrc:</c> 权限应该始终与白名单一致 ——
+    /// 真正的受众收窄发生在令牌的 aud 上，不在这里。
     /// </summary>
-    private OpenIddictApplicationDescriptor BuildDescriptor(CimdClientMetadata metadata, string digest)
+    private async Task<string[]> ResolveAllowedResourcesAsync(CancellationToken cancellationToken)
+    {
+        if (_options.AllowedResources.Count > 0)
+        {
+            return _options.AllowedResources
+                .Where(resource => !string.IsNullOrWhiteSpace(resource))
+                .Select(resource => resource.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        return (string[])await _resourceStore.GetEnabledResourcesAsync(cancellationToken);
+    }
+
+    private async Task<OpenIddictApplicationDescriptor> BuildDescriptorAsync(CimdClientMetadata metadata, string digest, CancellationToken cancellationToken)
     {
         var descriptor = new OpenIddictApplicationDescriptor
         {
@@ -238,7 +333,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             descriptor.Permissions.Add(Oidc.Permissions.Prefixes.Scope + scope);
         }
 
-        foreach (var resource in _resources)
+        foreach (var resource in await ResolveAllowedResourcesAsync(cancellationToken))
         {
             descriptor.Permissions.Add(Oidc.Permissions.Prefixes.Resource + resource);
         }
@@ -258,7 +353,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     /// 拉取或校验失败时的分岔：有缓存 → 记一条警告继续用；无缓存 → 拒。
     /// </summary>
     private async Task<CimdResolution> DegradeOrRejectAsync(
-        object? application,
+        OpenIddictEntityFrameworkCoreApplication? application,
         string clientId,
         string reason,
         CancellationToken cancellationToken)
@@ -286,25 +381,25 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         return CimdResolution.Rejected(reason);
     }
 
-    private async Task<bool> IsCimdRegisteredAsync(object application, CancellationToken cancellationToken)
+    private async Task<bool> IsCimdRegisteredAsync(OpenIddictEntityFrameworkCoreApplication application, CancellationToken cancellationToken)
     {
-        var properties = await _applications.GetPropertiesAsync(application, cancellationToken);
+        var properties = await _applicationStore.GetPropertiesAsync(application, cancellationToken);
 
         return properties.TryGetValue(CimdProperties.Marker, out var marker)
                && marker.ValueKind == JsonValueKind.True;
     }
 
-    private async Task<bool> IsDisabledAsync(object application, CancellationToken cancellationToken)
+    private async Task<bool> IsDisabledAsync(OpenIddictEntityFrameworkCoreApplication application, CancellationToken cancellationToken)
     {
-        var properties = await _applications.GetPropertiesAsync(application, cancellationToken);
+        var properties = await _applicationStore.GetPropertiesAsync(application, cancellationToken);
 
         return properties.TryGetValue(CimdProperties.Disabled, out var disabled)
                && disabled.ValueKind == JsonValueKind.True;
     }
 
-    private async Task<DateTimeOffset?> GetFetchedAtAsync(object application, CancellationToken cancellationToken)
+    private async Task<DateTimeOffset?> GetFetchedAtAsync(OpenIddictEntityFrameworkCoreApplication application, CancellationToken cancellationToken)
     {
-        var properties = await _applications.GetPropertiesAsync(application, cancellationToken);
+        var properties = await _applicationStore.GetPropertiesAsync(application, cancellationToken);
 
         if (!properties.TryGetValue(CimdProperties.FetchedAt, out var value)
             || value.ValueKind != JsonValueKind.String)

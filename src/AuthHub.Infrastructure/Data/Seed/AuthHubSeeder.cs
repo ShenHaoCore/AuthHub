@@ -1,6 +1,8 @@
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
+using AuthHub.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,7 +12,7 @@ using Oidc = OpenIddict.Abstractions.OpenIddictConstants;
 namespace AuthHub.Infrastructure.Data.Seed;
 
 /// <summary>
-/// 种子数据：内置角色、Scope、演示客户端、演示账号。
+/// 种子数据：内置角色、Scope、演示客户端、演示账号、演示资源。
 ///
 /// 设计原则：
 /// - 幂等：每一项都先查后建，重复启动不会产生脏数据；
@@ -84,8 +86,43 @@ public static class AuthHubSeeder
         await SeedScopesAsync(services, logger, cancellationToken);
         await SeedClientsAsync(services, logger, webClientSecret, m2mClientSecret, cancellationToken);
         await SeedUsersAsync(services, logger, adminPassword, demoPassword, cancellationToken);
+        await SeedDemoResourceAsync(services, logger, cancellationToken);
 
         logger.LogInformation("种子数据初始化完成。");
+    }
+
+    /// <summary>
+    /// 演示资源：让开发环境的资源白名单开箱非空，串起「演示客户端请求 → 资源 → aud」的完整演示链路。
+    ///
+    /// <para>与演示账号/演示客户端同一门槛：只在播种被放行时执行（生产需 AllowInProduction），
+    /// 且幂等（先查后建）。资源标识用演示专用域（.local 保留段，永不与真实/测试标识冲突）；
+    /// 管理员可随时在资源页下线或删除，删除后不会被重新种出（它不在 <c>AuthHub:Resources</c> 配置种子里）。</para>
+    /// </summary>
+    private static async Task SeedDemoResourceAsync(
+        IServiceProvider services,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var dbContext = services.GetRequiredService<AuthHubDbContext>();
+
+        var demo = AuthHubResourceRegistry.NormalizeResource("https://mcp.demo.authhub.local/mcp")
+            ?? throw new InvalidOperationException("演示资源标识不合法 —— 这说明 NormalizeResource 的校验规则变了，请同步修正演示种子。");
+
+        if (await dbContext.RegisteredResources.AnyAsync(r => r.Resource == demo, cancellationToken))
+        {
+            return;
+        }
+
+        dbContext.RegisteredResources.Add(new RegisteredResource
+        {
+            Resource = demo,
+            DisplayName = "演示 MCP Server（示例）",
+            Description = "随演示数据种出的资源标识（RFC 8707），可在本页下线或删除。",
+            Enabled = true
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("已播种演示资源 {Resource}（可在资源页下线或删除）。", demo);
     }
 
     // ------------------------------------------------------------------ 角色

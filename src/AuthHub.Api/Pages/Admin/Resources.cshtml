@@ -1,0 +1,290 @@
+@page "/admin/resources"
+@model AuthHub.Api.Pages.Admin.ResourcesModel
+
+<div class="ah-page-header">
+    <div>
+        <h1 class="ah-page-title">资源</h1>
+        <p class="ah-page-sub">
+            资源标识白名单（RFC 8707）：客户端请求里带的 <code>resource</code> 必须在这里登记过，
+            否则一律返回 <code>invalid_target</code>。登记与启停<b>立即生效，不需要重启</b>。<code>AuthHub:Resources</code> 配置只是启动期种子（只加不删），
+            下线资源请在本页操作。
+        </p>
+    </div>
+    <div class="ah-page-header-actions">
+        <button type="button" class="ah-btn ah-btn--sm ah-btn--primary" data-dialog-open="#dlg-create">
+            <ah-icon path="@AdminNav.Icons.Plus" size="15" />
+            登记资源
+        </button>
+    </div>
+</div>
+
+<div class="ah-stack">
+    @if (!string.IsNullOrEmpty(Model.FormError))
+    {
+        <div class="ah-alert ah-alert--danger" role="alert">
+            <ah-icon path="@AdminNav.Icons.Alert" size="16" />
+            <div class="ah-alert-body">
+                <strong>操作未完成</strong>
+                <span>@Model.FormError</span>
+            </div>
+        </div>
+    }
+
+    <div class="ah-card">
+        <div class="ah-card-header">
+            <form method="get" action="/admin/resources" class="ah-toolbar" role="search">
+                <div class="ah-search">
+                    <ah-icon path="@AdminNav.Icons.Search" size="15" />
+                    <input class="ah-input" type="search" name="q" value="@Model.Search"
+                           placeholder="搜索资源标识 / 显示名 / 说明" aria-label="搜索资源" />
+                </div>
+                <button type="submit" class="ah-btn ah-btn--primary">筛选</button>
+                @if (Model.HasFilter)
+                {
+                    <a class="ah-btn" href="/admin/resources">重置</a>
+                }
+            </form>
+        </div>
+
+        @if (Model.Resources.Count == 0)
+        {
+            <div class="ah-card-body">
+                <div class="ah-empty">
+                    <span class="ah-empty-icon" aria-hidden="true">
+                        <ah-icon path="@AdminNav.Icons.Resources" size="22" />
+                    </span>
+                    @if (Model.HasFilter)
+                    {
+                        <strong>没有匹配的资源</strong>
+                        <span>换一个关键词，或清空筛选条件后重试。</span>
+                    }
+                    else
+                    {
+                        <strong>白名单是空的</strong>
+                        <span>
+                            空表意味着默认拒绝：所有带 <code>resource</code> 的请求都会失败。
+                            用右上角的「登记资源」加入第一个。
+                        </span>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ah-card-body ah-card-body-flush">
+                <div class="ah-table-wrap">
+                    <table class="ah-table">
+                        <thead>
+                            <tr>
+                                <th>资源标识</th>
+                                <th>状态</th>
+                                <th>说明</th>
+                                <th>客户端引用</th>
+                                <th class="ah-col-actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var resource in Model.Resources)
+                            {
+                                var dialogId = ResourcesModel.DialogId(resource.Id);
+                                var referenced = Model.ReferenceCount(resource.Resource);
+                                <tr>
+                                    <td>
+                                        <div class="ah-cell-main ah-cell-mono">@resource.Resource</div>
+                                        @if (!string.IsNullOrWhiteSpace(resource.DisplayName))
+                                        {
+                                            <div class="ah-cell-sub" style="margin-top:3px">@resource.DisplayName</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (resource.Enabled)
+                                        {
+                                            <span class="ah-badge ah-badge--success">已启用</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge ah-badge--warning">已停用</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(resource.Description))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@resource.Description</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (referenced == 0)
+                                        {
+                                            <span class="ah-cell-sub">未被引用</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ah-badge ah-badge--info">@Model.ReferenceText(resource.Resource)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="ah-act">
+                                            <button type="button" class="ah-act-btn" data-dialog-open="#@dialogId"
+                                                    title="编辑资源" aria-label="编辑资源 @resource.Resource">
+                                                <ah-icon path="@AdminNav.Icons.Edit" size="15" />
+                                            </button>
+
+                                            <form method="post" asp-page-handler="delete"
+                                                  data-confirm="将删除资源登记 @resource.Resource。@(referenced == 0 ? "当前没有客户端持有它的 rsrc: 权限。" : $"仍有 {Model.ReferenceText(resource.Resource)} 持有它的 rsrc: 权限，删除会被拒绝（需先在客户端侧收回）。")此操作不可撤销，继续？">
+                                                <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+                                                <input type="hidden" name="TargetId" value="@resource.Id" />
+                                                <button type="submit" class="ah-act-btn ah-act-danger" title="删除资源"
+                                                        aria-label="删除资源 @resource.Resource">
+                                                    <ah-icon path="@AdminNav.Icons.Trash" size="15" />
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="ah-card-footer">
+                <span class="ah-pagination-info">
+                    共 <strong>@Model.TotalCount</strong> 个资源登记
+                    @if (Model.ReferenceCountsTruncated)
+                    {
+                        <text> · 客户端超过 200 个，"客户端引用"列只统计前 200 个（下界）</text>
+                    }
+                </span>
+            </div>
+        }
+    </div>
+</div>
+
+@* ------------------------------------------------------------ 登记资源 *@
+@* 自动打开标记必须写成显式的小写字面量 "true" / "false"（写 @Model.AutoOpenCreate 会渲染成
+   "True"/"False"，属性照样存在 → 前端会把弹窗全打开）。契约见 wwwroot/js/authhub.js。 *@
+<ah-dialog id="dlg-create" title="登记资源" auto-open="@(Model.AutoOpenCreate ? "true" : "false")">
+    <form method="post" asp-page-handler="create">
+        <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+
+        <ah-dialog-body>
+            <div class="ah-field">
+                <label class="ah-label" for="create-resource">资源标识<span class="ah-req">*</span></label>
+                <input class="ah-input ah-input--mono" id="create-resource" name="NewResource" type="text" required
+                       autocomplete="off" value="@Model.NewResource" placeholder="例如 https://mcp.example.com/mcp" />
+                <div class="ah-hint">
+                    必须是<b>绝对 URI</b>且不含 fragment。入库前会规范化为 <code>Uri.AbsoluteUri</code> 形态
+                    （例如补上默认端口），客户端请求里的写法要与之一致，否则匹配不上。
+                </div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-display">显示名</label>
+                <input class="ah-input" id="create-display" name="NewDisplayName" type="text"
+                       autocomplete="off" value="@Model.NewDisplayName" placeholder="给人看的名字，例如 报表服务" />
+                <div class="ah-hint">只用于本页展示，不参与校验。</div>
+            </div>
+
+            <div class="ah-field">
+                <label class="ah-label" for="create-description">说明</label>
+                <textarea class="ah-textarea" id="create-description" name="NewDescription" rows="2"
+                          placeholder="这个资源是什么、谁在用">@Model.NewDescription</textarea>
+            </div>
+
+            <div class="ah-alert ah-alert--info" style="margin-top:14px">
+                <ah-icon path="@AdminNav.Icons.Info" size="16" />
+                <div class="ah-alert-body">
+                    <strong>登记后还需要客户端配合</strong>
+                    <span>
+                        客户端必须在 <code>rsrc:</code> 权限里持有这个资源标识，才能为它换取令牌。
+                        登记只是让该标识不再被 <code>invalid_target</code> 拒绝。
+                    </span>
+                </div>
+            </div>
+        </ah-dialog-body>
+        <ah-dialog-foot submit="登记" />
+    </form>
+</ah-dialog>
+
+@* ------------------------------------------------------------ 编辑资源 *@
+@foreach (var resource in Model.Resources)
+{
+    var dialogId = ResourcesModel.DialogId(resource.Id);
+    var id = resource.Id.ToString();
+    var isEditFailure = Model.IsEditFailure(id);
+
+    // 失败重渲染时优先回填用户刚提交的值（否则"弹窗重开了但内容被还原"），成功路径用库里的值
+    var displayName = isEditFailure ? Model.EditDisplayName : resource.DisplayName;
+    var description = isEditFailure ? Model.EditDescription : resource.Description;
+    var isEnabled = isEditFailure ? Model.EditEnabled : resource.Enabled;
+
+    <ah-dialog id="@dialogId" title="编辑资源" auto-open="@(isEditFailure ? "true" : "false")">
+        <form method="post" asp-page-handler="save">
+            <input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" />
+            <input type="hidden" name="EditId" value="@resource.Id" />
+
+            <ah-dialog-body>
+                @if (isEditFailure && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="ah-alert ah-alert--danger" role="alert" style="margin-bottom:15px">
+                        <span>@Model.FormError</span>
+                    </div>
+                }
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-resource-@id">资源标识</label>
+                    <input class="ah-input ah-input--mono" id="edit-resource-@id" type="text"
+                           value="@resource.Resource" readonly />
+                    <div class="ah-hint">
+                        业务键，不可修改。要换标识请删除后重新登记 —— 客户端侧的 <code>rsrc:</code> 权限也要同步改。
+                    </div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-display-@id">显示名</label>
+                    <input class="ah-input" id="edit-display-@id" name="EditDisplayName" type="text"
+                           autocomplete="off" value="@displayName" />
+                    <div class="ah-hint">清空并保存即删除该字段。</div>
+                </div>
+
+                <div class="ah-field">
+                    <label class="ah-label" for="edit-description-@id">说明</label>
+                    <textarea class="ah-textarea" id="edit-description-@id" name="EditDescription" rows="2">@description</textarea>
+                    <div class="ah-hint">清空并保存即删除该字段。</div>
+                </div>
+
+                <fieldset class="ah-fieldset">
+                    <legend class="ah-legend">状态</legend>
+                    <div class="ah-check-row">
+                        <label class="ah-check">
+                            <input type="checkbox" name="EditEnabled" value="true" checked="@isEnabled" />
+                            <span>
+                                登记启用
+                                <span class="ah-check-desc">
+                                    取消勾选即等同未登记：请求立刻返回 <code>invalid_target</code>，
+                                    但记录保留，重新勾选即可恢复。
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div class="ah-alert ah-alert--warning" style="margin-top:14px">
+                    <ah-icon path="@AdminNav.Icons.Alert" size="16" />
+                    <div class="ah-alert-body">
+                        <strong>当前有 @Model.ReferenceText(resource.Resource) 持有它的 rsrc: 权限</strong>
+                        <span>
+                            停用或删除会让这些客户端立刻失去该受众，正在途中的请求会失败。
+                            已签发的令牌不会被改写，但下一次校验起按新状态执行。
+                        </span>
+                    </div>
+                </div>
+            </ah-dialog-body>
+            <ah-dialog-foot submit="保存" />
+        </form>
+    </ah-dialog>
+}
