@@ -1,6 +1,8 @@
 # 本机开发环境记录(WSL2 部署)
 
 > 记录时间:2026-10-24 · 环境:Windows 11 + WSL2 Ubuntu 24.04(NAT 模式)
+> 2026-10-25 更新:部署形态改为 **Release 发布产物 + FHS 标准布局**(`/opt` 版本化产物、
+> `/etc` 配置、`/var/lib` 密钥环),源码不再驻留 WSL(见第 1、2、6 节)。
 > 本文描述 AuthHub 在本机 WSL 中的部署形态、配套基础设施与运维/排障要点。
 
 ## 1. 服务清单
@@ -11,9 +13,17 @@
 | Redis | 7.0.15 | 6379 | 系统服务 `redis-server` |
 | PostgreSQL | 16.15 | 5432 | 系统服务 `postgresql` |
 
-- 代码位置:`~/AuthHub`(WSL 内克隆;origin=GitHub,mirror=G 盘仓库),分支 `develop`
-  (PostgreSQL 支持、Redis 令牌缓存均已合入;Redis 缓存默认关闭,要开就在服务单元加
-  `Environment=AuthHub__Redis__Enabled=true` 后 daemon-reload + restart)
+- 部署布局(FHS 运维标准):
+
+  | 路径 | 内容 |
+  |---|---|
+  | `/opt/authhub/releases/vX.Y.Z/` | 每个版本一份完整的 Release 发布产物(framework-dependent,约 126MB) |
+  | `/opt/authhub/current` | 软链,指向当前在用的版本 —— **切版本/回滚只改这一条链** |
+  | `/etc/authhub/authhub.env` | 全部环境配置(root:ubuntu,640),与服务单元分离 |
+  | `/var/lib/authhub/keys/` | Data Protection 密钥环(令牌/会话签名密钥,已从 `~/.aspnet` 迁入) |
+
+  源码克隆已于 2026-10-25 移除,更新与回滚流程见第 6 节。
+  (PostgreSQL 支持、Redis 令牌缓存均已合入;Redis 缓存已开启,开关在 `/etc/authhub/authhub.env` 的 `AuthHub__Redis__Enabled`)
 - 数据库:PostgreSQL 模式(`Database:Provider=Postgres`,启动时 EnsureCreated + 种子数据,不走 EF 迁移;
   见 [deployment.md · PostgreSQL](deployment.md#postgresql))。
   旧 SQLite 库已于 2026-10-24 确认废弃并删除
@@ -28,18 +38,39 @@ systemctl --user restart authhub     # 重启
 journalctl --user -u authhub -f      # 跟日志
 ```
 
-服务单元:`~/.config/systemd/user/authhub.service`,关键环境变量:
+服务单元:`~/.config/systemd/user/authhub.service`,只保留运行语义(配置全部在
+`/etc/authhub/authhub.env`,由 `EnvironmentFile=` 引入):
 
 ```ini
-Environment=ASPNETCORE_ENVIRONMENT=Development
-Environment=Database__Provider=Postgres
-Environment="ConnectionStrings__DefaultConnection=Host=localhost;Database=authhub;Username=authhub;Password=123"
-Environment=AuthHub__Seeding__MigrateOnStartup=true
-Environment=AuthHub__Seeding__Enabled=true
+[Service]
+EnvironmentFile=/etc/authhub/authhub.env
+WorkingDirectory=/opt/authhub/current
+ExecStart=/usr/bin/dotnet AuthHub.Api.dll
+Restart=on-failure
+RestartSec=3
 ```
 
-- 切回 SQLite(回退):改回 `Database__Provider=Sqlite` + `Data Source=authhub.db` 并去掉上面两行 Seeding 变量即可(旧库已删除,回退后从空库重新 EnsureCreated + 种子)
-- **systemd 的 `Environment=` 值含空格必须加引号**,否则被按空格拆分(踩过:连接串被截断为 `Data`,SQLite 解析崩溃)
+`/etc/authhub/authhub.env` 当前内容(改配置改这里,然后 `systemctl --user restart authhub`):
+
+```ini
+ASPNETCORE_ENVIRONMENT=Development
+Database__Provider=Postgres
+ConnectionStrings__DefaultConnection=Host=localhost;Database=authhub;Username=authhub;Password=123
+AuthHub__Seeding__MigrateOnStartup=true
+AuthHub__Seeding__Enabled=true
+AuthHub__Redis__Enabled=true
+AuthHub__Security__DataProtectionKeysPath=/var/lib/authhub/keys
+```
+
+- Redis 令牌条目缓存(v1.4.0 起可用)已于 2026-10-24 开启:带 Bearer 的 API 请求
+  令牌条目查 Redis(键形 `authhub:tokens:id:*`,TTL 默认 60 分钟),撤销仍即时生效;
+  Redis 故障自动降级直查 PG。后台页面走 Cookie 会话,不产生缓存键属正常。
+- 切回 SQLite(回退):把 env 文件里 `Database__Provider` 改回 `Sqlite`、连接串改回
+  `Data Source=authhub.db`,并去掉两行 Seeding 变量即可(旧库已删除,回退后从空库
+  重新 EnsureCreated + 种子)
+- **配置演进提示**:单元内 `Environment=` 的值含空格必须整体加引号,否则被按空格拆分
+  (踩过:连接串被截断为 `Data`,SQLite 解析崩溃);改用 EnvironmentFile 后该坑不再适用 ——
+  env 文件里**不加引号**,值按行原样读取。历史教训保留在此,防止有人把配置搬回单元时重蹈覆辙
 
 ## 3. WSL 保活(重要)
 
@@ -82,10 +113,18 @@ Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转�
 
 ## 5. HTTPS 开发证书
 
-- Kestrel 使用 WSL 内的 ASP.NET 开发证书(CN=localhost,有效期至 2027-10-24)
+- Kestrel 使用 WSL 内的 ASP.NET 开发证书(CN=localhost,有效期至 2027-10-24),
+  证书实体在 `~/.dotnet/corefx/cryptography/x509stores/my`(应用直接读证书库,
+  不依赖任何文件路径)
+- 导出副本统一保管在 `/etc/authhub/certs/`(`authhub-dev-cert.pem` 644 /
+  `authhub-dev-cert.key` 640,root:ubuntu)—— Windows 与 Firefox 侧导入用的就是它们
 - 已导出并导入 Windows `LocalMachine\Root` 与 `CurrentUser\Root`,Edge/Chrome 显示正常锁标志
-- Firefox 使用独立证书库,需手动导入 `C:\Users\Administrator\Downloads\authhub-dev-cert.pem` 并勾选"信任此 CA 标识网站"
-- **坑**:Root 存储里若残留历史同名的过期 localhost 证书,Edge 会优先匹配到旧证书而报不安全(命令行验证却通过)。已清理 4 张 2022~2024 年残留;证书到期后重新 `dotnet dev-certs https` → 导出 → 导入即可
+- Firefox 使用独立证书库,需手动导入 `/etc/authhub/certs/authhub-dev-cert.pem`
+  (Windows 侧 `Downloads\authhub-dev-cert.pem` 是它的另一份拷贝)并勾选"信任此 CA 标识网站"
+- **坑**:Root 存储里若残留历史同名的过期 localhost 证书,Edge 会优先匹配到旧证书而报不安全(命令行验证却通过)。已清理 4 张 2022~2024 年残留
+- **到期续期(2027-10 前)**:`dotnet dev-certs https` 重新生成 → 导出覆盖
+  `/etc/authhub/certs/` 两个文件 → 重新导入 Windows 两个 Root 存储 → Firefox 手动导入,
+  全流程即文档这一节
 
 ## 6. 代码同步通道
 
@@ -96,7 +135,24 @@ Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转�
 | mirror(WSL) | `/mnt/g/Repos/AuthHub` | G 盘镜像中转,不依赖外网 |
 
 - 本网络 GitHub 直连被墙:HTTPS 依赖 Watt Toolkit 的 hosts 加速(**Watt 必须以管理员运行**才能写入 hosts;360 可能拦截 hosts 修改)
-- SSH 通道走 `ssh.github.com:443`,天然可达,不依赖 Watt/防火墙,为 WSL 侧首选
+- SSH 通道走 `ssh.github.com:443`,天然可达,不依赖 Watt/防火墙;`~/.ssh` 与该通道保留,需要临时克隆排障时仍可用
+
+### WSL 侧更新与回滚(发布产物形态)
+
+源码克隆已移除,更新 = 发布新版本目录 → 切软链 → 重启;回滚 = 把软链切回旧版本:
+
+```bash
+# 1) 先在 Windows 侧把 G 盘仓库同步到目标提交(git pull)
+# 2) 从镜像发布到新版本目录(不依赖外网;9p 跨文件系统构建较慢,分钟级属正常)
+dotnet publish /mnt/g/Repos/AuthHub/src/AuthHub.Api/AuthHub.Api.csproj \
+  -c Release -o /opt/authhub/releases/vX.Y.Z
+
+# 3) 切换并重启(先启动验证,确认无误后再切;旧版本目录保留用于回滚)
+ln -sfn /opt/authhub/releases/vX.Y.Z /opt/authhub/current
+systemctl --user restart authhub
+
+# 回滚:把 current 指回上一个版本目录,重启即可(秒级)
+```
 
 ## 7. 踩坑记录
 
