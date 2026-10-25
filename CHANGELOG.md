@@ -24,6 +24,12 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
 
+## 未发布
+
+| 类型 | 内容 |
+|---|---|
+| feat | **部署产物通道（CI 构建 → GitHub Release → 下载部署）**：新增 `release-artifacts.yml`，Release 发布后自动从该 tag 构建 framework-dependent 部署包（`authhub-<tag>-linux-fdd.tar.gz` + 同名 `.sha256` 校验和）并挂到 Release；WSL / 新机器部署改为「下载 → 校验 → 解压 → 切软链 → 重启」，不再依赖任何机器上的源码路径与本地构建（发版动作不变，见 branch-management.md 第 2 节）。工作流另支持 workflow_dispatch 空跑验证与对存量版本补挂产物 |
+
 ## v1.5.1 —— MCP 受众一致性修复
 
 2026-10-25

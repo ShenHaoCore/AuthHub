@@ -3,6 +3,8 @@
 > 记录时间:2026-10-24 · 环境:Windows 11 + WSL2 Ubuntu 24.04(NAT 模式)
 > 2026-10-25 更新:部署形态改为 **Release 发布产物 + FHS 标准布局**(`/opt` 版本化产物、
 > `/etc` 配置、`/var/lib` 密钥环),源码不再驻留 WSL(见第 1、2、6 节)。
+> 2026-10-25 再更新:部署产物改由 CI 构建并挂到 GitHub Release,WSL 侧只下载不构建,
+> 与任何机器上的源码路径解耦(见第 6 节)。
 > 本文描述 AuthHub 在本机 WSL 中的部署形态、配套基础设施与运维/排障要点。
 
 ## 1. 服务清单
@@ -22,7 +24,7 @@
   | `/etc/authhub/authhub.env` | 全部环境配置(root:ubuntu,640),与服务单元分离 |
   | `/var/lib/authhub/keys/` | Data Protection 密钥环(令牌/会话签名密钥,已从 `~/.aspnet` 迁入) |
 
-  源码克隆已于 2026-10-25 移除,更新与回滚流程见第 6 节。
+  源码克隆已于 2026-10-25 移除,更新与回滚流程见第 6 节(产物从 GitHub Release 下载)。
   (PostgreSQL 支持、Redis 令牌缓存均已合入;Redis 缓存已开启,开关在 `/etc/authhub/authhub.env` 的 `AuthHub__Redis__Enabled`)
 - 数据库:PostgreSQL 模式(`Database:Provider=Postgres`,启动时 EnsureCreated + 种子数据,不走 EF 迁移;
   见 [deployment.md · PostgreSQL](deployment.md#postgresql))。
@@ -132,27 +134,38 @@ Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转�
 |---|---|---|
 | origin(WSL,SSH over 443) | `git@github.com:ShenHaoCore/AuthHub.git` | WSL 内 pull/push,密钥 `~/.ssh/id_ed25519`,`~/.ssh/config` 将 github.com 路由到 `ssh.github.com:443` |
 | origin(Windows,HTTPS) | 同上 | Windows 侧经 Watt Toolkit 加速使用 |
-| mirror(WSL) | `/mnt/g/Repos/AuthHub` | G 盘镜像中转,不依赖外网 |
+| mirror(WSL) | `/mnt/g/Dev/Repos/AuthHub` | G 盘开发副本(Windows 侧克隆),不依赖外网;仅开发/排障用,不参与部署 |
 
 - 本网络 GitHub 直连被墙:HTTPS 依赖 Watt Toolkit 的 hosts 加速(**Watt 必须以管理员运行**才能写入 hosts;360 可能拦截 hosts 修改)
 - SSH 通道走 `ssh.github.com:443`,天然可达,不依赖 Watt/防火墙;`~/.ssh` 与该通道保留,需要临时克隆排障时仍可用
 
-### WSL 侧更新与回滚(发布产物形态)
+### WSL 侧更新与回滚(Release 产物形态)
 
-源码克隆已移除,更新 = 发布新版本目录 → 切软链 → 重启;回滚 = 把软链切回旧版本:
+部署产物由 CI 构建并挂到 GitHub Release(工作流 `.github/workflows/release-artifacts.yml`,
+Release 发布后自动执行;资产 `authhub-<tag>-linux-fdd.tar.gz` + 同名 `.sha256`)。
+WSL 只下载、校验、解压、切链 —— 不碰源码、不做本地构建,与任何机器上的源码路径
+无关,换电脑/挪目录/换盘符都不用改流程:
 
 ```bash
-# 1) 先在 Windows 侧把 G 盘仓库同步到目标提交(git pull)
-# 2) 从镜像发布到新版本目录(不依赖外网;9p 跨文件系统构建较慢,分钟级属正常)
-dotnet publish /mnt/g/Repos/AuthHub/src/AuthHub.Api/AuthHub.Api.csproj \
-  -c Release -o /opt/authhub/releases/vX.Y.Z
-
-# 3) 切换并重启(先启动验证,确认无误后再切;旧版本目录保留用于回滚)
-ln -sfn /opt/authhub/releases/vX.Y.Z /opt/authhub/current
-systemctl --user restart authhub
-
-# 回滚:把 current 指回上一个版本目录,重启即可(秒级)
+V=vX.Y.Z    # 目标版本 tag
+BASE=https://github.com/ShenHaoCore/AuthHub/releases/download/$V
+# 1) 下载产物与校验和并核对(公共仓库,资产下载无需认证)
+cd /tmp && curl -fLO "$BASE/authhub-$V-linux-fdd.tar.gz"{,.sha256} \
+  && sha256sum -c "authhub-$V-linux-fdd.tar.gz.sha256"
+# 2) 解压到版本目录(归档无顶层目录,直接落入)
+mkdir -p "/opt/authhub/releases/$V" \
+  && tar -xzf "/tmp/authhub-$V-linux-fdd.tar.gz" -C "/opt/authhub/releases/$V"
+# 3) 切软链、重启;旧版本目录保留,回滚 = 指回旧目录 + 重启(秒级)
+ln -sfn "/opt/authhub/releases/$V" /opt/authhub/current \
+  && systemctl --user restart authhub
 ```
+
+- 产物为 framework-dependent,部署机只需 .NET 10 运行时(本机 WSL 装的是 SDK,已覆盖)
+- 网络可达性(2026-10-25 实测):WSL 直连 github.com 与两个资产下载域
+  (objects/release-assets.githubusercontent.com)链路均通,本节流程即基于此。
+  若哪天再被墙:资产在 Windows 侧下载后拷入 WSL(如 `\\wsl$\Ubuntu-24.04\tmp`),
+  其余步骤不变
+- G 盘镜像自此只服务开发与排障,不再参与部署
 
 ## 7. 踩坑记录
 
