@@ -149,9 +149,13 @@ WSL 只下载、校验、解压、切链 —— 不碰源码、不做本地构�
 ```bash
 V=vX.Y.Z    # 目标版本 tag
 BASE=https://github.com/ShenHaoCore/AuthHub/releases/download/$V
-# 1) 下载产物与校验和并核对(公共仓库,资产下载无需认证)
-cd /tmp && curl -fLO "$BASE/authhub-$V-linux-fdd.tar.gz"{,.sha256} \
-  && sha256sum -c "authhub-$V-linux-fdd.tar.gz.sha256"
+# 1) 下载产物与校验和并核对(公共仓库,资产下载无需认证)。
+#    两个文件必须分开下载:curl「多 URL + -O」在 GitHub 资产的 302 重定向下,
+#    第二个文件不会按预期落盘(2026-10-25 实测踩坑),别合并成一条命令
+cd /tmp
+curl -fLO "$BASE/authhub-$V-linux-fdd.tar.gz"
+curl -fLO "$BASE/authhub-$V-linux-fdd.tar.gz.sha256"
+sha256sum -c "authhub-$V-linux-fdd.tar.gz.sha256"
 # 2) 解压到版本目录(归档无顶层目录,直接落入)
 mkdir -p "/opt/authhub/releases/$V" \
   && tar -xzf "/tmp/authhub-$V-linux-fdd.tar.gz" -C "/opt/authhub/releases/$V"
@@ -162,7 +166,8 @@ ln -sfn "/opt/authhub/releases/$V" /opt/authhub/current \
 
 - 产物为 framework-dependent,部署机只需 .NET 10 运行时(本机 WSL 装的是 SDK,已覆盖)
 - 网络可达性(2026-10-25 实测):WSL 直连 github.com 与两个资产下载域
-  (objects/release-assets.githubusercontent.com)链路均通,本节流程即基于此。
+  (objects/release-assets.githubusercontent.com)链路均通,本节流程即基于此;
+  下载速度约 50~100KB/s,50MB 产物约 10~15 分钟,慢但稳定。
   若哪天再被墙:资产在 Windows 侧下载后拷入 WSL(如 `\\wsl$\Ubuntu-24.04\tmp`),
   其余步骤不变
 - G 盘镜像自此只服务开发与排障,不再参与部署
