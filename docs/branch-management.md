@@ -96,6 +96,7 @@ git tag -a v1.4.0 -m "v1.4.0: <一句话说明>" && git push origin v1.4.0
 
 # 4) PR release/1.4.0 → develop（把定版与修复带回集成主干）
 # 5) 建 GitHub Release（写清「升级到本版本要做什么」），删除 release 分支
+#    Release 发布后 CI 自动构建部署产物并挂载到该 Release（release-artifacts.yml），无需手工操作
 ```
 
 ### 3. 线上救火（hotfix）
