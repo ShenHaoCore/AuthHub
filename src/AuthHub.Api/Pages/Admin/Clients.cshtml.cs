@@ -322,7 +322,7 @@ public class ClientsModel : AdminPageModel
         }
 
         return await RedirectBackWithSuccessAsync(SetDisabled
-            ? $"已禁用自动注册的客户端 {TargetClientId}。它的授权请求会被直接拒绝。"
+            ? $"已停用自动注册的客户端 {TargetClientId}。它的授权请求会被直接拒绝。"
             : $"已恢复自动注册的客户端 {TargetClientId}。", cancellationToken);
     }
 

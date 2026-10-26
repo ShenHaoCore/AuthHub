@@ -1,6 +1,6 @@
 # 部署
 
-> 从 [README](../README.md) 拆出。
+> 从 [README](../../README.md) 拆出。
 
 ## 目录
 
@@ -78,7 +78,7 @@ AuthHub__Security__GuardMode=Warn   # 全部降级成启动日志；Off 则完�
 ```
 
 完整的规则表、以及「为什么这几条判 Fail 而那几条只判 Warn」，见
-[环境配置 · 启动期环境护栏](configuration.md#启动期环境护栏)。
+[环境配置 · 启动期环境护栏](../reference/configuration.md#启动期环境护栏)。
 
 ## 容器 / 反代部署的两个隐性依赖
 
@@ -187,7 +187,7 @@ dotnet ef database update -p src/AuthHub.Infrastructure -s src/AuthHub.Api
 
 ## Docker
 
-见 [`Dockerfile`](../Dockerfile)：
+见 [`Dockerfile`](../../Dockerfile)：
 
 ```bash
 docker build -t authhub:local .

@@ -27,7 +27,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 28px 0;
-    /* 氛围：冷石板底 + 靛蓝径向光晕，非整页仪表盘 */
+    /* 氛围：冷石板底 + 蓝色径向光晕，非整页仪表盘 */
     background:
         radial-gradient(ellipse 80% 55% at 50% -10%, rgba(var(--ah-primary-rgb), .16), transparent 55%),
         radial-gradient(ellipse 50% 40% at 100% 100%, rgba(var(--ah-primary-rgb), .06), transparent 50%),

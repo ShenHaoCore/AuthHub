@@ -193,14 +193,29 @@
                                         }
                                         else
                                         {
-                                            <span>@item.UserName</span>
+                                            @* 与其它列表的"用户"列一致：主行 14px/600，而不是普通正文 *@
+                                            <span class="ah-cell-main">@item.UserName</span>
                                         }
                                     </td>
                                     <td class="ah-cell-mono">
-                                        @(string.IsNullOrEmpty(item.ClientId) ? "—" : item.ClientId)
+                                        @if (string.IsNullOrEmpty(item.ClientId))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            @item.ClientId
+                                        }
                                     </td>
                                     <td class="ah-cell-mono ah-cell-nowrap">
-                                        @(string.IsNullOrEmpty(item.IpAddress) ? "—" : item.IpAddress)
+                                        @if (string.IsNullOrEmpty(item.IpAddress))
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            @item.IpAddress
+                                        }
                                     </td>
                                     <td title="@item.Details">@AuditDisplay.Shorten(item.Details)</td>
                                 </tr>

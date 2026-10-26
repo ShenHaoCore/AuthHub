@@ -94,7 +94,9 @@
         </aside>
 
         <div class="ah-main">
-            <header class="ah-topbar">
+            @* 外层深色壳 + 内层浅色圆角浮条：LeptonX 的 lpx-topbar-container / lpx-topbar 结构 *@
+            <header class="ah-topbar-shell">
+            <div class="ah-topbar">
                 <button type="button" class="ah-icon-btn" id="ah-sidebar-toggle"
                         aria-label="切换侧边栏" aria-controls="ah-sidebar">
                     <ah-icon path="@AdminNav.Icons.Menu" size="18" />
@@ -165,6 +167,7 @@
                         </form>
                     </div>
                 </div>
+            </div>
             </header>
 
             <main class="ah-content">
