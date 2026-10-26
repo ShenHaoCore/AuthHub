@@ -1,10 +1,10 @@
 # 与原始需求 / OpenIddict 实际 API 的差异
 
-> 从 [README](../README.md) 拆出。写这节是因为**照着文档写会编译不过或运行期才炸**。
+> 从 [README](../../README.md) 拆出。写这节是因为**照着文档写会编译不过或运行期才炸**。
 > 以下每一条都是实际踩过的。
 >
 > **版本说明**：本文件记录的是 **OpenIddict 5.8** 时代的事实；项目现已升级到 **7.7.2**。
-> 升级时确认过的变更见 [README 路线图](../README.md#已完成)（logout→end-session、
+> 升级时确认过的变更见 [README 路线图](../../README.md#已完成)（logout→end-session、
 > `HasPrompt`→`HasPromptValue`、`Prompts`→`PromptValues`、userinfo 方法名大小写、
 > `Type` 列长 50→150）。其余条目（刷新令牌参数、Discover 文档处理器的内部细节等）
 > 在 7.7.2 上**仍然成立**，已逐条复核。

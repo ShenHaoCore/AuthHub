@@ -1,11 +1,11 @@
 # 安全设计要点
 
-> 从 [README](../README.md) 拆出。
+> 从 [README](../../README.md) 拆出。
 
 | 项 | 做法 |
 |----|------|
 | 授权码拦截 | 强制 PKCE（`RequireProofKeyForCodeExchange`），且把 `CodeChallengeMethods` 收窄成只有 **S256**：`plain` 等价于把 verifier 明文放在前端渠道，OAuth 2.1 已弃用。实测 `plain` → 400 `invalid_request`，发现文档也只声明 S256（两处读的是同一个集合） |
-| 令牌受众 | 资源指示器（RFC 8707）：客户端声明 `resource` 时令牌 `aud` **只**指向该资源，不再叠加 Scope 关联的 `authhub-api`。受众收窄避免"发给 MCP Server 的票同时是 AuthHub API 的通行证"。见 [mcp-integration](mcp-integration.md) |
+| 令牌受众 | 资源指示器（RFC 8707）：客户端声明 `resource` 时令牌 `aud` **只**指向该资源，不再叠加 Scope 关联的 `authhub-api`。受众收窄避免"发给 MCP Server 的票同时是 AuthHub API 的通行证"。见 [mcp-integration](../guides/mcp-integration.md) |
 | 刷新令牌 | 每次刷新旋转，宽限期 0；**复用已旋转的旧令牌会撤销该授权下全部令牌**（重放防护） |
 | 令牌撤销 | `EnableTokenEntryValidation()` 让每次校验都查令牌状态，未过期的 JWT 也能立即失效 |
 | 令牌形态 | `DisableAccessTokenEncryption()` 产出 JWS 而非 JWE，下游可凭 `/.well-known/jwks` 离线校验 |
@@ -23,10 +23,10 @@
 
 | 主题 | 去哪看 |
 |------|--------|
-| 后台侧授权三层模型、防自锁护栏、权限声明时效性 | [admin-ui.md · 权限模型](admin-ui.md#权限模型) |
-| 反向代理信任范围（`X-Forwarded-*` 会被静默丢弃） | [deployment.md · 反向代理信任范围](deployment.md#②-反向代理信任范围authhubsecuritytrustforwardedheaders--knownproxies--knownnetworks) |
-| Data Protection 密钥环（会话 Cookie / 防伪令牌 / MFA 票据） | [deployment.md · 隐性依赖 ①](deployment.md#①-data-protection-密钥环authhubsecuritydataprotectionkeyspath) |
+| 后台侧授权三层模型、防自锁护栏、权限声明时效性 | [admin-ui.md · 权限模型](../guides/admin-ui.md#权限模型) |
+| 反向代理信任范围（`X-Forwarded-*` 会被静默丢弃） | [deployment.md · 反向代理信任范围](../operations/deployment.md#②-反向代理信任范围authhubsecuritytrustforwardedheaders--knownproxies--knownnetworks) |
+| Data Protection 密钥环（会话 Cookie / 防伪令牌 / MFA 票据） | [deployment.md · 隐性依赖 ①](../operations/deployment.md#①-data-protection-密钥环authhubsecuritydataprotectionkeyspath) |
 | 启动期环境护栏（开发配置被带进生产会在启动期被拦下） | [configuration.md · 启动期环境护栏](configuration.md#启动期环境护栏) |
-| CSP 与零外部依赖的后台约定 | [admin-ui.md · 前端约定](admin-ui.md#前端约定改动前请先读) |
-| 错误响应不泄露内部信息（只给 `traceId`） | [api-reference.md · 错误响应约定](api-reference.md#错误响应约定) |
-| 签名密钥必须持久化（临时密钥重启即作废全部令牌） | [deployment.md · 配置（生产）](deployment.md#配置生产) |
+| CSP 与零外部依赖的后台约定 | [admin-ui.md · 前端约定](../guides/admin-ui.md#前端约定改动前请先读) |
+| 错误响应不泄露内部信息（只给 `traceId`） | [api-reference.md · 错误响应约定](../guides/api-reference.md#错误响应约定) |
+| 签名密钥必须持久化（临时密钥重启即作废全部令牌） | [deployment.md · 配置（生产）](../operations/deployment.md#配置生产) |
