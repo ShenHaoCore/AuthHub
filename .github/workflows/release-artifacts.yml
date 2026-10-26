@@ -2,7 +2,7 @@ name: Release Artifacts
 
 # 部署产物通道:Release 发布后,自动从该 tag 源码构建「免构建部署包」并挂到 Release 上。
 # 部署端(WSL/任意新机器)从此只下载产物 —— 不需要源码、不需要本地构建,
-# 也不依赖任何机器上的源码路径(部署流程见 docs/local-wsl-environment.md 第 6 节)。
+# 也不依赖任何机器上的源码路径(部署流程见 docs/operations/local-wsl-environment.md 第 6 节)。
 #
 # 触发:
 # - release published:发版动作(branch-management.md 第 2 节第 5 步)完全不变,
