@@ -135,7 +135,7 @@ public static class AuditDisplay
         {
             AuditActionType.UserLoginSucceeded => "ah-badge--success",
             AuditActionType.UserExternalLoginSucceeded => "ah-badge--success",
-            AuditActionType.TwoFactorEnabled => "ah-badge--info",
+            AuditActionType.TwoFactorEnabled => "ah-badge--success",
             AuditActionType.UserLockedOut => "ah-badge--warning",
             AuditActionType.TokenRevoked => "ah-badge--warning",
             AuditActionType.TwoFactorRecoveryCodeUsed => "ah-badge--warning",

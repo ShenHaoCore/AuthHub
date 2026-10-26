@@ -414,7 +414,377 @@ public class AdminUiTests
         var tokens = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub-tokens.css"));
         tokens.Should().Contain("IBM Plex Sans");
         tokens.Should().Contain("/fonts/IBMPlexSans-Regular.woff2");
-        tokens.Should().Contain("--ah-primary: #4f46e5", because: "共用令牌主色为靛蓝（2026-10-24 视觉改版，对齐现代鉴权控制台）");
+        tokens.Should().Contain("--ah-primary: #355dff", because: "主色取 LeptonX 主题主色（2026-10 视觉基线）");
+    }
+
+    // ==================================================================== 版式与令牌契约
+    //
+    // 后台的度量集中在一份令牌与一份后台样式表里。这里断言的是"声明值"而不是计算样式：
+    // 缝只能看到标记与静态资源，像素度量在发布验证阶段用固定视口实测（见 spec 的分工）。
+
+    [Fact]
+    public async Task Tokens_should_pin_the_leptonx_layout_metrics()
+    {
+        using var session = NewSession();
+
+        var tokens = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub-tokens.css"));
+
+        tokens.Should().Contain("--ah-sidebar-width: 280px", because: "侧栏宽度取自 LeptonX 实测");
+        tokens.Should().Contain("--ah-topbar-height: 64px", because: "LeptonX 内容区高度按 100vh - 64px 计算");
+        tokens.Should().Contain("--ah-sidebar-bg: #161616", because: "深色侧栏底是整套版式的地基色");
+        tokens.Should().Contain("--ah-bg: #f5f5f7", because: "浅色内容底与深色壳形成浮卡边界");
+        tokens.Should().Contain("--ah-border: #e7e9ec", because: "1px 描边与面包屑竖线共用这个颜色");
+        tokens.Should().Contain("--ah-radius-lg: 8px", because: "卡片圆角只从令牌取，不在页面里硬编码");
+        // 阴影值也进令牌：同一字面量此前在卡片与统计卡各抄一遍，改一处就会漏另一处
+        tokens.Should().Contain("--ah-card-shadow: 0 0 20px rgba(76, 87, 125, .02)",
+            because: "LeptonX 的 .card 阴影是卡片的唯一来源");
+    }
+
+    [Fact]
+    public async Task Admin_layout_should_wrap_the_topbar_in_a_dark_shell_with_a_rounded_light_bar()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin"));
+        var css = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub.css"));
+        var authCss = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub-auth.css"));
+
+        Regex.IsMatch(html, @"<header class=""ah-topbar-shell"">\s*<div class=""ah-topbar"">",
+                RegexOptions.Singleline)
+            .Should().BeTrue(because: "LeptonX 是深色壳里套一条浅色浮条；少了外层壳，浮条圆角处透不出深色");
+
+        CssRule(css, ".ah-topbar-shell").Should().Contain("background: var(--ah-sidebar-bg)",
+            because: "壳必须是深色，才能和内层浅色浮条形成对比");
+        var bar = CssRule(css, ".ah-topbar");
+        bar.Should().Contain("background: var(--ah-bg)", because: "浮条是浅色，取内容区底色");
+        bar.Should().Contain("border-radius: 1em 1em 0 0",
+            because: "浮条只有上两角是圆角，下方要接平内容区");
+
+        css.Should().Contain("@import url(\"/css/authhub-tokens.css\")",
+            because: "后台样式表只引用共享令牌，不自己再定义一份调色板");
+        css.Should().NotContain(":root",
+            because: "调色板只在令牌文件里定义；页面样式表本地再写一份就会两处漂移");
+        authCss.Should().NotContain(":root",
+            because: "协议页同样只消费令牌，不另立一套变量");
+    }
+
+    [Fact]
+    public async Task Admin_stylesheet_should_declare_the_leptonx_content_and_card_metrics()
+    {
+        using var session = NewSession();
+
+        var css = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub.css"));
+
+        CssRule(css, ".ah-content").Should().Contain("padding: 42px 28px 56px",
+            because: "LeptonX 的内容区内边距是 3em 2em 4em");
+
+        var card = CssRule(css, ".ah-card");
+        card.Should().Contain("border: 0", because: "LeptonX 的卡片无边框，靠阴影与底色分层");
+        card.Should().Contain("border-radius: var(--ah-radius-lg)",
+            because: "圆角从令牌取；硬编码会让改令牌时这里偷偷落后");
+        card.Should().Contain("box-shadow: var(--ah-card-shadow)",
+            because: "阴影同样从令牌取；统计卡与卡片共用同一个值");
+    }
+
+    // ==================================================================== 列表文字层级
+    //
+    // 三档：主行 14px/600、次行 12px/次要文字色、正文 14px。
+    // 等宽类只换字族 —— 它被直接用在单元格与主行上，自带字号会造成"同列不同尺寸"，
+    // 这也正是"用户/角色页 14px、客户端/Scope/审计页 12.5px"的根因。
+
+    [Fact]
+    public async Task List_pages_should_use_the_shared_cell_levels()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        string[] listPages =
+        [
+            "/admin/users", "/admin/roles", "/admin/clients",
+            "/admin/scopes", "/admin/resources", "/admin/audit-logs"
+        ];
+
+        foreach (var path in listPages)
+        {
+            var html = await CookieSession.ReadHtmlAsync(await session.GetAsync(path));
+
+            html.Should().Contain("ah-cell-main", because: $"{path} 的主行要使用统一层级，而不是普通正文");
+            html.Should().Contain("ah-cell-sub", because: $"{path} 的次要说明要使用统一层级");
+
+            Regex.IsMatch(html, @"style=""[^""]*font-size", RegexOptions.IgnoreCase)
+                .Should().BeFalse(because: $"{path} 不允许用内联字号绕过文字层级（包括 <td> 内的 <span>）");
+        }
+    }
+
+    [Fact]
+    public async Task Dashboard_should_use_the_primary_level_for_its_list_cells()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin"));
+
+        // 「最近事件」表的用户列此前是普通正文，比其它列表的主行轻一档。
+        // 绑定到单元格里的 span，而不是页面上任意出现的类名。
+        html.Should().Contain("<span class=\"ah-cell-main\">", because: "仪表盘列表的主行与其他列表同层级");
+        html.Should().Contain("<span class=\"ah-cell-sub\">—", because: "空值同样走次要说明层级");
+    }
+
+    [Fact]
+    public async Task Monospace_cell_should_change_font_family_only()
+    {
+        using var session = NewSession();
+
+        var css = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub.css"));
+        var mono = CssRule(css, ".ah-cell-mono");
+
+        mono.Should().Contain("font-family", because: "等宽只替换字族");
+        mono.Should().NotContain("font-size",
+            because: "自带字号会让同一个列表里出现 12.5px 与 14px 两种正文");
+    }
+
+    [Fact]
+    public async Task List_typography_metrics_should_match_the_baseline()
+    {
+        using var session = NewSession();
+
+        var css = await CookieSession.ReadHtmlAsync(await session.GetAsync("/css/authhub.css"));
+
+        CssRule(css, ".ah-table").Should().Contain("font-size: 14px", because: "表格正文统一 14px");
+        CssRule(css, ".ah-table td").Should().Contain("padding: 8px", because: "单元格间距取自 LeptonX");
+        CssRule(css, ".ah-table th").Should().Contain("font-size: 13px", because: "表头小一档但仍是正文规模");
+
+        CssRule(css, ".ah-cell-main").Should().Contain("font-size: 14px").And.Contain("font-weight: 600",
+            because: "主行靠字重区分，不靠放大字号；放大字号会让行高与正文不一致");
+        CssRule(css, ".ah-cell-sub").Should().Contain("font-size: 12px").And.Contain("color: var(--ah-muted)",
+            because: "次行是说明与空值的层级，不能借用状态色");
+    }
+
+    [Fact]
+    public async Task Profile_should_use_the_secondary_level_without_inline_sizes()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/profile"));
+
+        // 个人页没有表格，主行层级不适用；它只用次行承载说明与空值
+        html.Should().Contain("ah-cell-sub", because: "个人页的说明文字与其他列表同一档");
+        Regex.IsMatch(html, @"style=""[^""]*font-size", RegexOptions.IgnoreCase)
+            .Should().BeFalse(because: "个人页同样不允许内联字号绕过层级");
+    }
+
+    [Fact]
+    public async Task Empty_values_should_render_as_secondary_text()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var scopes = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/scopes"));
+        var resources = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/resources"));
+
+        // Scope 未关联资源 → 「关联资源」列为空
+        // （不用用户页的「最近登录」：同类的登录用例会写 LastLoginAt，断言随执行顺序红绿）
+        scopes.Should().Contain("class=\"ah-cell-sub\">—",
+            because: "空值走灰字说明，而不是留白单元格");
+        // 资源未绑定到任何客户端 → 引用数为零
+        resources.Should().Contain("class=\"ah-cell-sub\">未被引用",
+            because: "\"没有\"用文字说清，不用 0 或空白");
+    }
+
+    // ==================================================================== 状态语义
+    //
+    // 一张"语义 → 色调/措辞"的对照表：绿＝正常/已完成，琥珀＝待处理/有风险，
+    // 红＝不可用/失败，灰＝分类/计数/说明，蓝只给身份标签（角色名、"内置"）。
+    // 同一含义在不同页面不得换色、换词、换载体。
+
+    [Fact]
+    public async Task List_pages_should_not_use_info_tone_or_legacy_wording()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        string[] listPages =
+        [
+            "/admin/users", "/admin/roles", "/admin/clients",
+            "/admin/scopes", "/admin/resources", "/admin/audit-logs"
+        ];
+
+        foreach (var path in listPages)
+        {
+            var html = await CookieSession.ReadHtmlAsync(await session.GetAsync(path));
+            var text = System.Net.WebUtility.HtmlDecode(html);
+
+            text.Should().NotContain("ah-badge--info",
+                because: $"{path} 的徽章色调只表达状态；蓝色是身份标签专用（info 已停用）");
+            text.Should().NotContain("已禁用",
+                because: $"{path} 的停用类状态全站统一写作\"已停用\"，不得有\"已禁用\"变体");
+        }
+    }
+
+    [Fact]
+    public async Task Seed_accounts_mfa_should_render_as_warning_badges()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/users"));
+
+        // 两个种子账号都没开 MFA；是/否型状态必须是徽章，不能退回灰字
+        Regex.Count(html, @"ah-badge--warning"">未开启<")
+            .Should().BeGreaterThanOrEqualTo(2, because: "两个种子账号的 MFA 都应为琥珀色\"未开启\"徽章");
+        html.Should().NotContain("ah-cell-sub\">未开启",
+            because: "灰字不承载状态；同一列的 MFA 不能一处徽章、一处灰字");
+        html.Should().NotContain("未启用",
+            because: "MFA 措辞与个人页统一为\"已开启 / 未开启\"");
+    }
+
+    [Fact]
+    public async Task Profile_mfa_wording_should_match_the_list()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/profile"));
+
+        // 绑定到 Authenticator 卡片本身：页面上别的 alert 也可能带 warning 色
+        Regex.IsMatch(html, @"Authenticator App[\s\S]{0,400}?ah-badge--warning"">\s*未开启")
+            .Should().BeTrue(because: "未开启属于\"待处理/有风险\"，用琥珀色");
+        html.Should().Contain("未开启", because: "个人页与用户列表同一措辞");
+        html.Should().NotContain("未启用", because: "\"未启用\"是旧措辞，已统一为\"未开启\"");
+    }
+
+    [Fact]
+    public async Task Role_identity_labels_should_stay_primary_and_permissions_success()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/roles"));
+        var text = System.Net.WebUtility.HtmlDecode(html);
+
+        text.Should().Contain("ah-badge--primary\">内置",
+            because: "身份标签是蓝色唯一的用途");
+        text.Should().Contain("ah-badge--success\">clients.manage",
+            because: "已授予的权限点用绿");
+        text.Should().Contain("ah-cell-sub\">无权限",
+            because: "没有任何权限时用灰字说明，而不是彩色徽章");
+
+        // 角色名作为身份标签出现在"用户所属角色"处（个人页角色列表与用户编辑弹窗），
+        // 角色列表自己的名称列是主行文字 —— 这里在用户页钉住蓝色的那一处。
+        var users = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/users"));
+        users.Should().Contain("ah-badge--primary\">Administrator<",
+            because: "用户所属角色是身份标签，用蓝");
+    }
+
+    [Fact]
+    public async Task Resource_states_should_map_to_success_and_danger_badges()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/resources"));
+        var editId = Regex.Match(html, "name=\"EditId\" value=\"(?<id>[^\"]+)\"").Groups["id"].Value;
+        editId.Should().NotBeEmpty(because: "种子资源应渲染出可编辑的登记项");
+
+        html.Should().Contain("ah-badge--success\">已启用");
+
+        async Task SaveAsync(bool enabled)
+        {
+            var fields = new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = await AntiforgeryTokenAsync(session, "/admin/resources"),
+                ["ReturnUrl"] = "/admin/resources",
+                ["EditId"] = editId
+            };
+            if (enabled)
+            {
+                fields["EditEnabled"] = "true";
+            }
+
+            var response = await session.PostFormAsync("/admin/resources?handler=save", fields);
+            response.StatusCode.Should().Be(HttpStatusCode.Found);
+        }
+
+        try
+        {
+            await SaveAsync(enabled: false);
+
+            var disabled = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/resources"));
+            disabled.Should().Contain("ah-badge--danger\">已停用",
+                because: "\"不可用\"是红色；此前这一处被写成琥珀，会被误读成\"待处理\"");
+        }
+        finally
+        {
+            // 恢复种子状态，不给其它用例留脏数据
+            await SaveAsync(enabled: true);
+        }
+    }
+
+    [Fact]
+    public async Task Classification_labels_should_stay_neutral_on_the_client_page()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/clients"));
+        var text = System.Net.WebUtility.HtmlDecode(html);
+
+        // 分类信息（类型、授权类型、协议）是"是什么"，不是"好不好" —— 一律裸徽章
+        text.Should().Contain("class=\"ah-badge\">public</span>",
+            because: "客户端类型是分类，不得借用状态色");
+        text.Should().Contain("class=\"ah-badge\">confidential</span>",
+            because: "客户端类型是分类，不得借用状态色");
+        text.Should().Contain("ah-badge\">authorization_code</span>",
+            because: "授权类型是分类，不得借用状态色");
+        text.Should().Contain("ah-badge\" style=\"margin-left:4px\">协议</span>",
+            because: "协议标记是分类，不得借用状态色");
+        foreach (var tone in new[] { "success", "warning", "danger" })
+        {
+            text.Should().NotContain($"ah-badge--{tone}\">public",
+                because: "分类标签带状态色会和真正的状态混淆");
+            text.Should().NotContain($"ah-badge--{tone}\">authorization_code",
+                because: "分类标签带状态色会和真正的状态混淆");
+        }
+    }
+
+    [Fact]
+    public async Task Audit_success_should_use_the_success_tone()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/audit-logs"));
+
+        // 审计条目的动作名由 C# 侧查表渲染，Razor 会把非 ASCII 编码成 &#x...;
+        // 先解码再断言，否则匹配的是实体而不是文案。
+        var text = System.Net.WebUtility.HtmlDecode(html);
+
+        // 刚刚这次登录本身就是一条成功审计（标签与徽章之间有换行，按空白容忍匹配）
+        Regex.IsMatch(text, @"ah-badge--success""[^>]*>\s*登录成功")
+            .Should().BeTrue(because: "成功动作用绿");
+        Regex.IsMatch(text, @"ah-badge--warning""[^>]*>\s*登录成功")
+            .Should().BeFalse(because: "成功不是\"待处理\"，不得用琥珀");
+    }
+
+    [Fact]
+    public async Task Reference_counts_should_be_plain_text_not_colored_badges()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/scopes"));
+        var text = System.Net.WebUtility.HtmlDecode(html);
+
+        // 种子 Scope（openid / profile …）被演示客户端引用，数量必须是正文
+        Regex.IsMatch(text, @">\s*\d+\s*个客户端")
+            .Should().BeTrue(because: "引用数量以正文呈现，用户能读到具体数字");
+        foreach (var tone in new[] { "success", "warning", "danger", "primary" })
+        {
+            Regex.IsMatch(text, $@"ah-badge--{tone}""[^>]*>\s*\d+\s*个客户端")
+                .Should().BeFalse(because: "计数不是状态，不得装进彩色徽章");
+        }
     }
 
     // ==================================================================== 页内锚点
@@ -708,6 +1078,18 @@ public class AdminUiTests
 
         token.Should().NotBeNull(because: $"{path} 上应当渲染出 __RequestVerificationToken");
         return token!;
+    }
+
+    /// <summary>
+    /// 取出某条选择器的规则体（含选择器与花括号）。
+    /// 整份样式表里做 <c>Contain</c> 会让"值还在、但挂到了别的选择器上"照样通过，
+    /// 所以度量断言一律绑定到所属规则。
+    /// </summary>
+    private static string CssRule(string css, string selector)
+    {
+        var match = Regex.Match(css, Regex.Escape(selector) + @"\s*\{[^}]*\}", RegexOptions.Singleline);
+        match.Success.Should().BeTrue(because: $"样式表里应存在 {selector} 规则");
+        return match.Value;
     }
 
     /// <summary>页面里所有指向站外的 src / href。</summary>

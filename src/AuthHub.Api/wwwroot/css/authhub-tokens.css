@@ -36,25 +36,28 @@
 :root {
     color-scheme: light;
 
-    /* ---- 基础表面与文字（冷灰石板） ---- */
-    --ah-bg: #f7f8fb;
+    /* ---- 基础表面与文字（ABP LeptonX Lite 实测值） ----
+       页面底 #f5f5f7、描边 #e7e9ec、正文灰 #686b6e、标题近黑 #161616，
+       均取自 LeptonX 的 bootstrap-dim.css。 */
+    --ah-bg: #f5f5f7;
     --ah-surface: #ffffff;
-    --ah-border: #e7eaf0;
-    --ah-text: #101828;
-    --ah-muted: #667085;
+    --ah-border: #e7e9ec;
+    --ah-text: #161616;
+    --ah-muted: #686b6e;
+    /* 供 rgba(var(--ah-muted-rgb), α) 使用，避免各处硬编码色值 */
+    --ah-muted-rgb: 104, 107, 110;
 
-    /* ---- 主色（靛蓝） ----
-       2026-10-24 视觉改版：从青绿（#0f766e）换到靛蓝，对齐主流鉴权控制台
-       （Clerk / WorkOS / Logto）的色彩语言。整站颜色只由这几个令牌派生，
-       想回青绿把本组五项换回去即可：#0f766e / #115e59 / #f0fdfa / #99f6e4 /
-       rgb 15,118,110（accent #14b8a6）。 */
-    --ah-primary: #4f46e5;
-    --ah-primary-hover: #4338ca;
-    --ah-primary-soft: #eef2ff;
-    --ah-primary-border: #c7d2fe;
+    /* ---- 主色（ABP LeptonX Lite 的 --lpx-primary） ----
+       2026-10-26 二次对齐：上一轮的 #4f46e5（靛蓝）是前一版鉴权控制台的主色，
+       并非 LeptonX 实际值；#355dff 才是 lepton-x-lite 的 --lpx-primary，hover /
+       active / focus 也照抄它的 btn-primary 派生色。 */
+    --ah-primary: #355dff;
+    --ah-primary-hover: #2d4fd9;
+    --ah-primary-soft: #ebefff;
+    --ah-primary-border: #c2cdff;
     /* 供 rgba(var(--ah-primary-rgb), α) 使用，避免各处硬编码色值 */
-    --ah-primary-rgb: 79, 70, 229;
-    --ah-primary-accent: #6366f1;
+    --ah-primary-rgb: 53, 93, 255;
+    --ah-primary-accent: #5375ff;
 
     /* ---- 语义色 ---- */
     --ah-danger: #b42318;
@@ -73,37 +76,38 @@
     --ah-info-soft: #f0f9ff;
     --ah-info-border: #b9e6fe;
 
-    /* ---- 侧边栏（浅色；仅后台使用） ----
-       与主色同批改版：深石板侧边栏换为浅色 —— Clerk / WorkOS 一系的控制台
-       全部是浅侧边栏 + 软底活动态，比"深侧边栏 + 实底色块"轻得多。 */
-    --ah-sidebar-bg: #ffffff;
-    --ah-sidebar-bg-soft: #f4f6fb;
-    --ah-sidebar-text: #536072;
-    --ah-sidebar-text-strong: #101828;
-    --ah-sidebar-divider: #edf0f5;
-    --ah-sidebar-hover: #f4f6fb;
-    --ah-sidebar-width: 258px;
+    /* ---- 侧边栏（深色；仅后台使用） ----
+       LeptonX Lite 实测：宽 280px、底 #161616、菜单字 #9198a5、
+       选中项 #222 实底 + 白字，hover 只变色不换底。 */
+    --ah-sidebar-bg: #161616;
+    --ah-sidebar-bg-soft: #222222;
+    --ah-sidebar-text: #9198a5;
+    --ah-sidebar-text-strong: #ffffff;
+    --ah-sidebar-divider: #242424;
+    --ah-sidebar-hover: #222222;
+    --ah-sidebar-width: 280px;
 
     /* ---- 派生交互色（角色命名，供后台与协议页共用） ---- */
     --ah-hover: #f1f3f5;           /* 中性控件 hover 底色（图标钮 / 菜单 / 分页 / 行内操作） */
-    --ah-surface-subtle: #fafbfc;  /* 卡片脚 / 表格行 hover / 权限组头这类"比白深半档"的底 */
+    --ah-surface-subtle: #fafbfc;  /* 表格行 hover / 权限组头这类"比白深半档"的底 */
     --ah-surface-muted: #f6f7f9;   /* 只读输入 / 中性徽章这类非交互灰底 */
     --ah-border-input: #d0d5dd;    /* 输入框描边：比 hairline 深一档，焦点切换才可感知 */
-    --ah-primary-press: #3730a3;   /* 主按钮按下态（比 hover 再深一档） */
+    --ah-primary-press: #2a4acc;   /* 主按钮按下态（比 hover 再深一档） */
     --ah-danger-hover: #912018;    /* 危险钮 hover（--ah-danger 的深档） */
 
-    /* ---- 形状与阴影 ---- */
-    --ah-radius-lg: 12px;
-    --ah-radius: 10px;
+    /* ---- 形状与阴影（LeptonX 全局圆角 0.5rem、卡片阴影 0 0 20px） ---- */
+    --ah-radius-lg: 8px;
+    --ah-radius: 8px;
     --ah-radius-sm: 8px;
 
-    --ah-shadow-xs: 0 1px 2px rgba(16, 24, 40, .03);
+    --ah-card-shadow: 0 0 20px rgba(76, 87, 125, .02);
     --ah-shadow-sm: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 8px rgba(16, 24, 40, .04);
     --ah-shadow-md: 0 4px 10px rgba(16, 24, 40, .06), 0 16px 40px rgba(16, 24, 40, .10);
     --ah-shadow-lg: 0 24px 64px rgba(16, 24, 40, .16);
 
     /* ---- 量度 ---- */
-    --ah-topbar-height: 60px;
+    --ah-topbar-height: 64px;      /* LeptonX 内容区 min-height: calc(100vh - 64px)，即浮条总高 64px */
+    --ah-brand-height: 72px;       /* 侧栏品牌区：LeptonX 的 lpx-logo-container 高 72px */
     --ah-font: "IBM Plex Sans", "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     --ah-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
 }

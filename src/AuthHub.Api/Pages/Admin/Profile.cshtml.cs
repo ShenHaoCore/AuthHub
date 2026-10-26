@@ -198,7 +198,7 @@ public class ProfileModel : PageModel
         }
 
         TempData["MfaRecoveryCodes"] = result.Value.ToArray();
-        TempData["Success"] = "两步验证已启用。请立刻保存下面的恢复码 —— 它们不会再显示第二次。";
+        TempData["Success"] = "两步验证已开启。请立刻保存下面的恢复码 —— 它们不会再显示第二次。";
         return Redirect("/admin/profile#mfa");
     }
 

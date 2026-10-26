@@ -192,7 +192,7 @@ else
                                 </div>
                             </div>
                             <div class="ah-card-header-actions">
-                                <span class="ah-badge ah-badge--primary">@profile.Permissions.Count 个权限点</span>
+                                <span class="ah-badge">@profile.Permissions.Count 个权限点</span>
                             </div>
                         </div>
                         <div class="ah-card-body">
@@ -348,7 +348,7 @@ else
                         <div class="ah-alert ah-alert--danger" role="alert">
                             <ah-icon path="@AdminNav.Icons.Alert" size="16" />
                             <div class="ah-alert-body">
-                                <strong>两步验证未启用</strong>
+                                <strong>两步验证未开启</strong>
                                 <span>@Model.MfaError</span>
                             </div>
                         </div>
@@ -378,7 +378,7 @@ else
                             @if (profile.TwoFactorEnabled)
                             {
                                 <p class="ah-page-sub" style="margin:0 0 4px">
-                                    已启用。关闭后会同时<strong>重置 Authenticator 密钥</strong>，
+                                    已开启。关闭后会同时<strong>重置 Authenticator 密钥</strong>，
                                     下次开启将得到一个全新的密钥，需要重新扫码。
                                 </p>
                             }

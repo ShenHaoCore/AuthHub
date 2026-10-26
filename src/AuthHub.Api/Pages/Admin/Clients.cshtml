@@ -126,7 +126,7 @@
                                                 <span class="ah-badge ah-badge--warning">CIMD 自动注册</span>
                                                 @if (client.IsDisabled)
                                                 {
-                                                    <span class="ah-badge ah-badge--danger">已禁用</span>
+                                                    <span class="ah-badge ah-badge--danger">已停用</span>
                                                 }
                                             </div>
                                         }
@@ -134,11 +134,11 @@
                                     <td>
                                         @if (isPublic)
                                         {
-                                            <span class="ah-badge ah-badge--info">public</span>
+                                            <span class="ah-badge">public</span>
                                         }
                                         else if (string.Equals(client.ClientType, "confidential", StringComparison.Ordinal))
                                         {
-                                            <span class="ah-badge ah-badge--primary">confidential</span>
+                                            <span class="ah-badge">confidential</span>
                                         }
                                         else
                                         {
@@ -390,7 +390,7 @@
                                 @option.Name
                                 @if (option.IsProtocol)
                                 {
-                                    <span class="ah-badge ah-badge--info" style="margin-left:4px">协议</span>
+                                    <span class="ah-badge" style="margin-left:4px">协议</span>
                                 }
                                 <span class="ah-check-desc">@option.DisplayName</span>
                             </span>
@@ -540,7 +540,7 @@
                                     @option.Name
                                     @if (option.IsProtocol)
                                     {
-                                        <span class="ah-badge ah-badge--info" style="margin-left:4px">协议</span>
+                                        <span class="ah-badge" style="margin-left:4px">协议</span>
                                     }
                                     <span class="ah-check-desc">@option.DisplayName</span>
                                 </span>
