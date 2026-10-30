@@ -227,7 +227,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 
 ```bash
 dotnet build AuthHub.slnx              # 须 0 警告 0 错误
-dotnet test AuthHub.slnx -c Release    # 单元 228 + 集成 192
+dotnet test AuthHub.slnx -c Release    # 单元 + 集成测试须全绿（当前 232 + 192）
 ```
 
 流水线在 GitHub Actions 上（`.github/workflows/`），全部跑在 `ubuntu-latest`：
