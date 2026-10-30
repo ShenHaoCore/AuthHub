@@ -12,45 +12,20 @@ using StackExchange.Redis;
 namespace AuthHub.Infrastructure.Caching;
 
 /// <summary>
-/// OpenIddict 令牌存储的 Redis 缓存装饰器：包住 EF Core 存储，把令牌条目校验的
-/// 两次热读（<see cref="FindByIdAsync"/> / <see cref="FindByReferenceIdAsync"/>）从
-/// "每次查库"变成"命中 Redis 则不出站到数据库"。
-///
-/// <para><b>为什么挂在存储而不是管理器/缓存接口上</b>：OpenIddict 维护者明确说
-/// 分布式缓存的正确扩展缝就是自定义/包装存储（openiddict#1797）——管理器的所有读
-/// 都经存储，包装存储即覆盖全部调用方（校验管线、令牌端点、管理服务）。</para>
-///
-/// <para><b>失效设计（本组件的核心承诺：撤销立刻生效）</b>：
-/// ① 令牌级变更（Update/Delete，含 TryRevokeAsync / TryRedeemAsync 的底层路径）→
-///    精确删除该令牌的缓存键；
-/// ② 批量变更（<c>RevokeAsync</c>（按 subject/client 批量）、<c>RevokeBy*Async</c>、
-///    <c>PruneAsync</c>）无法枚举受影响的具体令牌 → 递增全局版本号，所有旧条目立刻
-///    判为过期。OpenIddict 自带的 scoped 内存缓存对批量撤销**同样不失效**（管理器的
-///    批量方法根本不走缓存），所以"批量撤销在其它实例上延迟生效"是引入缓存前就存在的
-///    事实——这里用版本号把它收紧到 0。</para>
-///
-/// <para><b>条目键与版本</b>：键为 <c>{前缀}id:{令牌Id}</c> / <c>{前缀}ref:{引用Id}</c>，
-/// 值是「写入时的版本号 + 条目快照」。读路径并行 GET 条目与版本号（一次网络往返），
-/// 版本不匹配视为未命中 —— 旧版本条目由 TTL 自然回收，不需要扫描删除。</para>
-///
-/// <para><b>缓存命中的实体形状（最容易翻车的地方）</b>：EF 模型上 <c>ApplicationId</c> /
-/// <c>AuthorizationId</c> 是**影子外键**（模型类只有导航属性），JSON 往返会丢；
-/// 而 <c>GetApplicationIdAsync</c> / <c>GetAuthorizationIdAsync</c> 读的是**导航**且对
-/// Detached 实体直接返回 null —— 不处理的话，缓存命中时令牌的 AuthorizationId 会静默
-/// 变 null，刷新令牌轮换出的新令牌将丢失与授权记录的关联。因此条目快照里单独保存两个
-/// 外键 Id，命中时用 Id 重建**桩导航**（只填主键的导航实例）供属性读取；桩**不挂进**
-/// EF 变更跟踪器，避免与同请求内物化的真实 Application/Authorization 行冲突
-/// （EF 拒绝跟踪同键的两个实例）。进入写路径前再把外键写回影子属性（见
-/// <see cref="PrepareForWriteAsync"/>），否则 <c>Update()</c> 会把外键列改成 null。</para>
-///
-/// <para><b>并发令牌</b>：条目快照带上了 <c>ConcurrencyToken</c>，交给内层存储
-/// <c>UpdateAsync</c> 时作为乐观并发比较基准 —— 刷新令牌重用检测依赖的
-/// <c>ConcurrencyException</c> 语义原样保留。</para>
-///
-/// <para><b>故障降级</b>：Redis 任何异常（连接、超时、协议）都只记一条节流的警告，
-/// 然后直查内层存储。缓存层故障绝不把认证打断；故障窗口内发生的撤销由 TTL 兜底
-/// （最迟 <see cref="RedisOptions.EntryTtl"/> 后恢复一致）。</para>
+/// OpenIddict 令牌存储的 Redis 缓存装饰器：两次热读（<see cref="FindByIdAsync"/> /
+/// <see cref="FindByReferenceIdAsync"/>）命中 Redis 则不出站到数据库。
 /// </summary>
+/// <remarks>
+/// - 扩展缝选包装存储而非管理器/缓存接口（openiddict#1797）：管理器所有读都经存储，包装即覆盖全部调用方。
+/// - 失效承诺「撤销立刻生效」：令牌级变更（Update/Delete）精确删该令牌的键；批量变更（Revoke*/Prune）无法枚举
+///   受影响令牌，递增全局版本号让旧条目立即过期。OpenIddict 自带 scoped 内存缓存对批量撤销本就不失效，这里收紧到 0。
+/// - 条目键 <c>{前缀}id:{令牌Id}</c> / <c>{前缀}ref:{引用Id}</c>，值为「写入时版本号 + 快照」；读路径并行 GET
+///   条目与版本号，版本不符视为未命中，旧条目由 TTL 回收。
+/// - 影子外键 ApplicationId/AuthorizationId 在 JSON 往返中会丢，快照单独保存，命中时按 Id 重建桩导航；
+///   桩不挂进变更跟踪器（EF 拒绝同键两实例），写路径前先还原外键（<see cref="PrepareForWriteAsync"/>）。
+/// - ConcurrencyToken 随快照保存，交内层 UpdateAsync 作乐观并发基准，刷新令牌重用检测语义不变。
+/// - Redis 任何异常只记节流警告后降级直查内层存储；故障窗口内的撤销由 TTL（<see cref="RedisOptions.EntryTtl"/>）兜底。
+/// </remarks>
 internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEntityFrameworkCoreToken>
 {
     private readonly IOpenIddictTokenStore<OpenIddictEntityFrameworkCoreToken> _inner;
@@ -83,8 +58,7 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
     {
         ArgumentException.ThrowIfNullOrEmpty(identifier);
 
-        // 与内层存储同语义：同请求内已跟踪的实例优先（它是最新的库内状态，
-        // 且避免了"同一令牌在变更跟踪器里出现两个实例"。
+        // 与内层同语义：同请求内已跟踪实例优先 —— 它是最新库内状态，也避免同键出现两实例。
         var context = await _contextAccessor.GetDbContextAsync(cancellationToken);
         if (FindTracked(context, identifier) is OpenIddictEntityFrameworkCoreToken tracked)
         {
@@ -111,8 +85,7 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
     {
         ArgumentException.ThrowIfNullOrEmpty(identifier);
 
-        // 引用 Id 在库里存的是混淆（SHA-256）后的值，这里的 identifier 就是那个混淆值，
-        // 直接进键不会把原始令牌内容暴露成 Redis 键。
+        // 引用 Id 在库里存的是混淆（SHA-256）后的值，直接进键不会暴露令牌内容。
         var context = await _contextAccessor.GetDbContextAsync(cancellationToken);
         var tracked = context.ChangeTracker.Entries<OpenIddictEntityFrameworkCoreToken>()
             .FirstOrDefault(entry => string.Equals(entry.Entity.ReferenceId, identifier, StringComparison.Ordinal))
@@ -376,8 +349,7 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
             var versionTask = database.StringGetAsync(VersionKey);
             await Task.WhenAll(entryTask, versionTask);
 
-            // 两个 GET 在 WhenAll 之后必然已完成，await 只是取结果；
-            // 不用 .Result 是为了不在异步方法里同步阻塞（哪怕此刻它不会阻塞，读起来也是错误示范）。
+            // 两个 GET 在 WhenAll 后必已完成，await 只取结果；不用 .Result 避免同步阻塞的读法。
             var entry = await entryTask;
             if (entry.IsNull)
             {
@@ -427,8 +399,7 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
         }
         catch (Exception exception) when (exception is RedisException or JsonException or InvalidOperationException)
         {
-            // InvalidOperationException：实体恰好不在这个上下文里被跟踪（并发请求把它换成了别的实例）。
-            // 缓存填充失败只影响命中率，不影响正确性 —— 什么都不用补偿。
+            // InvalidOperationException：实体已被并发请求换成别的实例；填充失败只影响命中率，无需补偿。
             LogDegradation(exception, "写入");
         }
     }
@@ -457,11 +428,8 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
         };
 
     /// <summary>
-    /// 写路径的前置处理：把读路径专用的桩导航摘掉、外键写回影子属性、必要时让出已占用的键。
-    ///
-    /// <para>桩导航绝不能带着进 EF —— <c>Update</c>/<c>Remove</c> 会级联操作导航实体，
-    /// 把只填了主键的桩当成真实行去写/删。外键恢复后，内层存储的
-    /// <c>Attach + Update</c> 拿到的实体与"刚从库里读出来的"完全同构，乐观并发语义不变。</para>
+    /// 写路径前置处理：摘掉桩导航、外键写回影子属性、必要时让出已占用键。
+    /// 桩进 EF 会被 <c>Update</c>/<c>Remove</c> 当真实行级联写删；还原后与刚从库里读出的实体同构，乐观并发语义不变。
     /// </summary>
     private async ValueTask PrepareForWriteAsync(
         OpenIddictEntityFrameworkCoreToken token, CancellationToken cancellationToken)
@@ -471,9 +439,7 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
         token.Application = null;
         token.Authorization = null;
 
-        // 调用方手里的实体可能是分离的（缓存命中重建的），也可能是内层枚举给的已跟踪实例。
-        // 后者已经以自己的形状在跟踪器里，什么都不用做；前者要占住键 —— 若同键已有别的实例
-        // （本请求先前经枚举物化过），让位，否则 Attach 会抛"同键两实例"。
+        // 分离实体（缓存命中重建）要占住键：同键已有别的实例时先让位，否则 Attach 抛"同键两实例"。
         var context = await _contextAccessor.GetDbContextAsync(cancellationToken);
         if (FindTracked(context, token.Id!) is not OpenIddictEntityFrameworkCoreToken tracked
             || !ReferenceEquals(tracked, token))
@@ -506,7 +472,7 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
         }
     }
 
-    /// <summary>删除一个令牌的全部缓存键（Id 键 + 更新前后两个引用 Id 键，后者通常相同）。</summary>
+    /// <summary>删除令牌的全部缓存键（Id 键 + 更新前后的引用 Id 键，后者通常相同）。</summary>
     private async Task InvalidateAsync(string id, string? referenceIdBefore, string? referenceIdAfter, CancellationToken cancellationToken)
     {
         try
