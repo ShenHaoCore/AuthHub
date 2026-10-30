@@ -374,13 +374,17 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
             var versionTask = database.StringGetAsync(VersionKey);
             await Task.WhenAll(entryTask, versionTask);
 
-            if (entryTask.Result.IsNull)
+            // 两个 GET 在 WhenAll 之后必然已完成，await 只是取结果；
+            // 不用 .Result 是为了不在异步方法里同步阻塞（哪怕此刻它不会阻塞，读起来也是错误示范）。
+            var entry = await entryTask;
+            if (entry.IsNull)
             {
                 return null;
             }
 
-            var envelope = JsonSerializer.Deserialize<CachedEnvelope>(entryTask.Result.ToString());
-            var currentVersion = versionTask.Result.IsNull ? 0L : (long)versionTask.Result;
+            var version = await versionTask;
+            var envelope = JsonSerializer.Deserialize<CachedEnvelope>(entry.ToString());
+            var currentVersion = version.IsNull ? 0L : (long)version;
 
             return envelope is not null && envelope.Version == currentVersion ? envelope : null;
         }

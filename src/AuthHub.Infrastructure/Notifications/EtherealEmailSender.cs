@@ -49,22 +49,27 @@ public sealed class EtherealEmailSender : IEmailSender
 
     private readonly EmailOptions _options;
     private readonly ILogger<EtherealEmailSender> _logger;
-    private readonly Lazy<EtherealAccount> _account;
+
+    /// <summary>
+    /// 进程级账号的懒任务：<c>Lazy&lt;Task&lt;T&gt;&gt;</c> 是异步版 Lazy 的惯用写法 ——
+    /// 工厂函数立即返回 Task（首个 await 之前不阻塞调用线程），因此不需要
+    /// <c>GetAwaiter().GetResult()</c>；ExecutionAndPublication 保证并发首次发信只调一次 API。
+    /// </summary>
+    private readonly Lazy<Task<EtherealAccount>> _accountTask;
 
     public EtherealEmailSender(IOptions<EmailOptions> options, ILogger<EtherealEmailSender> logger)
     {
         _options = options.Value;
         _logger = logger;
-        // ExecutionAndPublication：线程安全 + 只调一次 API。多线程并发首次发信时只生成一个账号。
-        // 用同步 Lazy（而非异步 Lazy）是为了让 SendAsync 在拿到账号后能干净地 await 后续 SmtpClient；
-        // 同步阻塞会占用一个线程池线程约 1 秒（API 响应时间），本机自测场景完全可接受。
-        _account = new Lazy<EtherealAccount>(CreateAccount, LazyThreadSafetyMode.ExecutionAndPublication);
+        _accountTask = new Lazy<Task<EtherealAccount>>(
+            CreateAccountAsync,
+            LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     public async Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
     {
-        // Lazy.Value 在 .NET 9 上线程安全（ExecutionAndPublication 模式），首次访问会同步执行工厂函数
-        var account = _account.Value;
+        // 首次发信时懒生成账号；之后整个进程复用同一组凭据
+        var account = await _accountTask.Value;
 
         // Ethereal 要求 From 与认证账号一致，否则拒绝发信（防伪造）
         var from = account.User;
@@ -89,18 +94,20 @@ public sealed class EtherealEmailSender : IEmailSender
     }
 
     /// <summary>调 Ethereal API 创建一组测试账号。失败时抛异常，由调用方捕获。</summary>
-    private EtherealAccount CreateAccount()
+    private async Task<EtherealAccount> CreateAccountAsync()
     {
+        // 15 秒是外部 API 的保护上限
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            var response = SharedClient.PostAsJsonAsync(
+            var response = await SharedClient.PostAsJsonAsync(
                 CreateAccountEndpoint,
                 new { requestor = "AuthHub", version = "1.0.0" },
-                cts.Token).GetAwaiter().GetResult();
+                cts.Token);
             response.EnsureSuccessStatusCode();
 
-            var account = response.Content.ReadFromJsonAsync<EtherealAccount>(JsonOptions, cts.Token).GetAwaiter().GetResult();
+            var account = await response.Content.ReadFromJsonAsync<EtherealAccount>(JsonOptions, cts.Token);
             if (account is null || string.IsNullOrEmpty(account.User) || string.IsNullOrEmpty(account.Pass))
             {
                 throw new InvalidOperationException("Ethereal 返回的账号信息不完整");
