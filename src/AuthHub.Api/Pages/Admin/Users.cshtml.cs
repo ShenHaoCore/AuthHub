@@ -9,15 +9,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace AuthHub.Api.Pages.Admin;
 
-/// <summary>
-/// 用户管理。
-///
-/// 交互遵循 PRG（Post-Redirect-Get）：POST 成功后 302 回列表，刷新页面不会重复提交；
-/// POST 失败则原地重新渲染并把弹窗重新打开（<see cref="AdminPageModel.OpenDialog"/>），用户填过的值不丢。
-///
-/// 所有写操作都直接调用 Application 层的管理服务，因此与 <c>/api/users</c> 走完全相同的
-/// 校验、审计与安全戳刷新逻辑 —— 后台不会成为绕过审计的后门。
-/// </summary>
+/// <summary>用户管理。</summary>
+/// <remarks>
+/// - 交互遵循 PRG：POST 成功 302 回列表，刷新页面不会重复提交；失败原地重渲染并重开弹窗（<see cref="AdminPageModel.OpenDialog"/>），用户填过的值不丢。
+/// - 所有写操作直接调用 Application 层管理服务，与 <c>/api/users</c> 走完全相同的校验、审计与安全戳刷新逻辑 —— 后台不会成为绕过审计的后门。
+/// </remarks>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.UsersManage)]
 public class UsersModel : AdminPageModel
 {
@@ -81,7 +77,6 @@ public class UsersModel : AdminPageModel
 
     // ------------------------------------------------------------------ 视图状态
 
-    /// <summary>列表数据。</summary>
     public PagedResult<UserDto> Users { get; private set; } = PagedResult<UserDto>.Empty(1, DefaultPageSize);
 
     /// <summary>全部角色（用于筛选下拉与编辑弹窗的角色勾选）。</summary>
@@ -93,7 +88,6 @@ public class UsersModel : AdminPageModel
 
     protected override string? EditingId => EditId;
 
-    /// <summary>分页组件模型。</summary>
     public Pages.Shared.PaginationModel Pagination => new()
     {
         Page = Users.Page,
@@ -147,13 +141,9 @@ public class UsersModel : AdminPageModel
     // ------------------------------------------------------------------ POST：保存编辑
 
     /// <summary>
-    /// 保存编辑弹窗。
-    ///
-    /// 两点刻意的取舍：
-    ///   1) 传给服务的字符串按"null 表示不修改"约定（见 <see cref="UnchangedAsNull"/>），
-    ///      否则每次保存都会把未改动的字段记为一次变更，审计日志会被噪声淹没；
-    ///   2) 角色只在**确实发生变化**时才调用 AssignRolesAsync —— 该服务每次都刷新安全戳，
-    ///      无条件调用会让管理员每保存一次资料就把用户所有会话踢下线。
+    /// 保存编辑弹窗。两点刻意取舍：字符串按"null 表示不修改"约定（见 <see cref="UnchangedAsNull"/>），
+    /// 否则未改动字段每次保存都记成一次变更，审计被噪声淹没；角色只在确实变化时才调 AssignRolesAsync ——
+    /// 该服务每次都刷新安全戳，无条件调用会每保存一次就把用户所有会话踢下线。
     /// </summary>
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {

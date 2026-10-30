@@ -1,11 +1,10 @@
 /* ==========================================================================
    AuthHub 管理后台样式表（Razor Pages，/admin/*）
    --------------------------------------------------------------------------
-   版式参考现代鉴权控制台（Clerk / WorkOS / Logto console）的设计语言：
-   浅色侧边栏 + 软底活动态、浅灰页面底上的 hairline 白卡、常规大小写表头、
-   靛蓝主色。旧版（LeptonX 式深侧边栏 + 青绿主色）只存在于令牌历史里，
-   回退方法见 authhub-tokens.css 的主色注释。
-
+   版式按 ABP Framework LeptonX Lite 的实测度量对齐：
+   280px 深色固定侧栏（菜单项 36px 直角、选中 #222 实底）、
+   深色顶栏壳包一条浅色圆角浮条、无描边白卡（24px 内边距）、
+   内容区 42/28/56 内边距；主色 #355dff 取自 --lpx-primary。
    调色板不在这里定义 —— 见 authhub-tokens.css（与协议页 authhub-auth.css
    共用同一份令牌，避免登录页与后台出现色差）。
 
@@ -66,7 +65,6 @@ input, select, textarea { accent-color: var(--ah-primary); }
     display: flex;
     flex-direction: column;
     background: var(--ah-sidebar-bg);
-    border-right: 1px solid var(--ah-sidebar-divider);
 }
 
 .ah-main {
@@ -75,16 +73,21 @@ input, select, textarea { accent-color: var(--ah-primary); }
     margin-left: var(--ah-sidebar-width);
     display: flex;
     flex-direction: column;
+    /* LeptonX .lpx-content-wrapper：1px 描边包住"顶栏浮条 + 内容区"，顶部不描边
+       （顶栏浮条自己已有上边线），让整列看起来是一张从深色壳里浮起的卡。 */
+    border: 1px solid var(--ah-border);
+    border-top: 0;
 }
 
 .ah-content {
     flex: 1 1 auto;
     width: 100%;
-    padding: 24px 26px 40px;
+    /* LeptonX .lpx-content: 3em 2em 4em（基准 14px） */
+    padding: 42px 28px 56px;
 }
 
 .ah-footer {
-    padding: 14px 26px 22px;
+    padding: 0 28px 24px;
     color: var(--ah-muted);
     font-size: 12px;
 }
@@ -95,10 +98,9 @@ input, select, textarea { accent-color: var(--ah-primary); }
     display: flex;
     align-items: center;
     gap: 10px;
-    height: var(--ah-topbar-height);
-    padding: 0 18px;
+    height: var(--ah-brand-height);
+    padding: 0 20px;
     flex: 0 0 auto;
-    border-bottom: 1px solid var(--ah-sidebar-divider);
     color: var(--ah-sidebar-text-strong);
     text-decoration: none;
 }
@@ -119,42 +121,60 @@ input, select, textarea { accent-color: var(--ah-primary); }
 
 /* ---- 侧边栏：导航 ---- */
 
-.ah-nav { flex: 1 1 auto; overflow-y: auto; padding: 12px 10px 22px; }
+.ah-nav { flex: 1 1 auto; overflow-y: auto; padding: 0 0 15px; }
 
 .ah-nav-group {
-    padding: 14px 10px 6px;
+    padding: 16px 18px 6px;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: .08em;
     text-transform: uppercase;
-    color: #98a2b3;
+    color: var(--ah-sidebar-text);
+    opacity: .75;
 }
-.ah-nav-group:first-child { padding-top: 4px; }
+.ah-nav-group:first-child { padding-top: 8px; }
 
+/* LeptonX .lpx-menu-item-link：36px 定高、左右 18px、上下 1px 间距、直角。
+   图标槽固定 36px（图标本身 16px），文字 1em。 */
 .ah-nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 10px;
-    margin-bottom: 2px;
-    border-radius: 8px;
+    gap: 0;
+    height: 36px;
+    line-height: 36px;
+    padding: 0 18px;
+    margin: 1px 0;
+    border-radius: 0;
     color: var(--ah-sidebar-text);
-    font-size: 13.5px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 400;
     text-decoration: none;
-    transition: background .12s ease, color .12s ease;
+    transition: color .25s ease, background-color .3s ease;
 }
-.ah-nav-item:hover { background: var(--ah-sidebar-hover); color: var(--ah-sidebar-text-strong); text-decoration: none; }
+/* hover 只变字色与图标色，不换底（LeptonX 的行为） */
+.ah-nav-item:hover {
+    background: transparent;
+    color: var(--ah-sidebar-text-strong);
+    text-decoration: none;
+}
+.ah-nav-item:hover .ah-icon { color: var(--ah-primary); opacity: 1; }
 
-/* 活动态：软底色 + 主色文字（Clerk / WorkOS 一系的控制台做法），
-   比实底色块 + 白字轻，且与浅色侧边栏同频 */
+/* 选中态：#222 实底 + 白字 + 主色图标 */
 .ah-nav-item.is-active {
-    background: var(--ah-primary-soft);
-    color: var(--ah-primary);
-    font-weight: 600;
+    background: var(--ah-sidebar-bg-soft);
+    color: var(--ah-sidebar-text-strong);
+    font-weight: 400;
 }
+.ah-nav-item.is-active .ah-icon { color: var(--ah-primary); opacity: 1; }
 
-.ah-nav-item .ah-icon { flex: 0 0 auto; opacity: .9; }
+.ah-nav-item .ah-icon {
+    flex: 0 0 16px;
+    width: 16px;
+    /* 图标槽 36px（16 + 20），文字与 LeptonX 一样从 18 + 36 = 54px 起 */
+    margin-right: 20px;
+    opacity: .86;
+    transition: color .25s ease, opacity .25s ease;
+}
 
 .ah-nav-item-hint {
     margin-left: auto;
@@ -162,19 +182,25 @@ input, select, textarea { accent-color: var(--ah-primary); }
     opacity: .75;
 }
 
-/* ---- 顶栏 ---- */
-
-.ah-topbar {
+/* ---- 顶栏 ----
+   LeptonX 结构：外层 sticky 深色壳（#161616），里面一条浅色浮条；
+   浮条顶部 1em 圆角 + 1px 描边，圆角处透出深色壳，形成"卡片顶条"观感。 */
+.ah-topbar-shell {
     position: sticky;
     top: 0;
     z-index: 40;
+    background: var(--ah-sidebar-bg);
+}
+
+.ah-topbar {
     display: flex;
     align-items: center;
     gap: 14px;
     height: var(--ah-topbar-height);
-    padding: 0 22px;
-    background: var(--ah-surface);
-    border-bottom: 1px solid var(--ah-border);
+    padding: 0 18px;
+    background: var(--ah-bg);
+    border: 1px solid var(--ah-border);
+    border-radius: 1em 1em 0 0;
 }
 
 .ah-topbar-spacer { flex: 1 1 auto; }
@@ -189,9 +215,19 @@ input, select, textarea { accent-color: var(--ah-primary); }
     overflow: hidden;
     white-space: nowrap;
     color: var(--ah-muted);
-    font-size: 13px;
+    /* LeptonX .lpx-breadcrumb-item: 0.725rem */
+    font-size: .725rem;
 }
-.ah-breadcrumb .ah-sep { color: #c3c8cf; }
+/* LeptonX 的层级分隔是一条 1px 竖线（.lpx-breadcrumb-separator），不是 "/" 字符 */
+.ah-breadcrumb .ah-sep {
+    flex: 0 0 1px;
+    width: 1px;
+    height: 14px;
+    overflow: hidden;
+    font-size: 0;
+    color: transparent;
+    background: var(--ah-border);
+}
 .ah-breadcrumb .ah-crumb-current { color: var(--ah-text); font-weight: 600; }
 .ah-breadcrumb a { color: var(--ah-muted); }
 .ah-breadcrumb a:hover { color: var(--ah-primary); }
@@ -238,12 +274,13 @@ input, select, textarea { accent-color: var(--ah-primary); }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px; height: 30px;
+    /* LeptonX 顶栏头像 24px（.lpx-avatar-img） */
+    width: 24px; height: 24px;
     flex: 0 0 auto;
     border-radius: 50%;
     background: var(--ah-primary-soft);
     color: var(--ah-primary);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -298,22 +335,28 @@ input, select, textarea { accent-color: var(--ah-primary); }
     align-items: flex-start;
     gap: 4px 16px;
     flex-wrap: wrap;
-    margin-bottom: 18px;
+    margin-bottom: 26px;
 }
 /* 内层分组 div 不参与布局，标题/副标题成为头部直接 flex 项，副标题才能独占整行 */
 .ah-page-header > div:not(.ah-page-header-actions) { display: contents; }
-.ah-page-title { font-size: 21px; letter-spacing: -.2px; }
+.ah-page-title {
+    /* LeptonX .content-header-title: 1.5em、下距 1em；字重用主题默认 500 */
+    font-size: 24px;
+    font-weight: 500;
+}
 .ah-page-sub { margin-top: 4px; color: var(--ah-muted); font-size: 13.5px; }
 .ah-page-header .ah-page-sub { order: 2; flex-basis: 100%; margin-top: 0; }
 .ah-page-header-actions { order: 1; margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 /* ============================================================== 卡片 */
 
+/* LeptonX .card：无边框（border-width:0）、半径 0.5rem、内边距 1.5rem、
+   阴影 0 0 20px rgba(76,87,125,.02)。header/card/body 一起移到视窗白底。 */
 .ah-card {
     background: var(--ah-surface);
-    border: 1px solid var(--ah-border);
+    border: 0;
     border-radius: var(--ah-radius-lg);
-    box-shadow: var(--ah-shadow-xs);
+    box-shadow: var(--ah-card-shadow);
     overflow: hidden;
 }
 .ah-card + .ah-card { margin-top: 18px; }
@@ -334,21 +377,26 @@ input, select, textarea { accent-color: var(--ah-primary); }
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
-    padding: 15px 18px;
-    border-bottom: 1px solid var(--ah-border);
+    padding: 24px 24px 0;
+    border-bottom: 0;
 }
-.ah-card-title { font-size: 15px; }
+.ah-card-title {
+    /* LeptonX .card .card-title: 1.25em（14px 基准 → 17.5px）、500、#161616 */
+    font-size: 17.5px;
+    font-weight: 500;
+    color: var(--ah-text);
+}
 .ah-card-sub { margin-top: 2px; color: var(--ah-muted); font-size: 12.5px; }
 .ah-card-header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.ah-card-body { padding: 18px; }
+.ah-card-body { padding: 24px; }
 .ah-card-body.ah-card-body-flush { padding: 0; }
-.ah-card-body.ah-card-body-tight { padding: 12px 18px; }
+.ah-card-body.ah-card-body-tight { padding: 18px 24px; }
 
 .ah-card-footer {
-    padding: 13px 18px;
+    padding: 14px 24px;
     border-top: 1px solid var(--ah-border);
-    background: var(--ah-surface-subtle);
+    background: transparent;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -404,11 +452,12 @@ input, select, textarea { accent-color: var(--ah-primary); }
     display: flex;
     align-items: flex-start;
     gap: 14px;
-    padding: 18px;
+    padding: 24px;
     background: var(--ah-surface);
-    border: 1px solid var(--ah-border);
+    /* 与 .ah-card 同款：无描边 + 极淡外发光 */
+    border: 0;
     border-radius: var(--ah-radius-lg);
-    box-shadow: var(--ah-shadow-xs);
+    box-shadow: var(--ah-card-shadow);
 }
 .ah-stat-icon {
     display: flex;
@@ -436,14 +485,14 @@ input, select, textarea { accent-color: var(--ah-primary); }
     align-items: center;
     justify-content: center;
     gap: 7px;
-    height: 36px;
-    padding: 0 14px;
+    height: 40px;
+    padding: 0 20px;
     border: 1px solid var(--ah-border);
     border-radius: var(--ah-radius-sm);
     background: var(--ah-surface);
     color: var(--ah-text);
     font: inherit;
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;
@@ -471,7 +520,7 @@ input, select, textarea { accent-color: var(--ah-primary); }
 .ah-btn--ghost { background: transparent; border-color: transparent; color: var(--ah-muted); }
 .ah-btn--ghost:hover { background: var(--ah-hover); color: var(--ah-text); }
 
-.ah-btn--sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; }
+.ah-btn--sm { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 6px; }
 .ah-btn--block { width: 100%; }
 
 .ah-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -509,14 +558,14 @@ input, select, textarea { accent-color: var(--ah-primary); }
 
 .ah-input, .ah-select, .ah-textarea {
     width: 100%;
-    min-height: 36px;
-    padding: 7px 11px;
+    min-height: 40px;
+    padding: 9px 14px;
     border: 1px solid var(--ah-border-input);
     border-radius: var(--ah-radius-sm);
     background: var(--ah-surface);
     color: var(--ah-text);
     font: inherit;
-    font-size: 13.5px;
+    font-size: 14px;
 }
 .ah-textarea { min-height: 82px; resize: vertical; font-family: var(--ah-mono); font-size: 12.5px; }
 
@@ -670,15 +719,14 @@ input, select, textarea { accent-color: var(--ah-primary); }
 .ah-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 14px;
 }
 .ah-table th {
-    padding: 9px 14px;
+    padding: 8px;
     text-align: left;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
-    /* 表头常规大小写 + 透明底：大写字距式表头配灰底是上一代控制台的样式，
-       现代鉴权后台（Clerk / WorkOS）统一是普通大小写的小号灰字 + hairline */
+    /* 表头常规大小写 + 透明底，与 LeptonX 的 .table > * > * 对齐（padding 0.5rem） */
     text-transform: none;
     letter-spacing: 0;
     color: var(--ah-muted);
@@ -687,7 +735,7 @@ input, select, textarea { accent-color: var(--ah-primary); }
     white-space: nowrap;
 }
 .ah-table td {
-    padding: 11px 14px;
+    padding: 8px;
     border-bottom: 1px solid var(--ah-border);
     vertical-align: middle;
 }
@@ -723,9 +771,16 @@ input, select, textarea { accent-color: var(--ah-primary); }
 /* 首列（通常是名称 / 主标识）给一个下限：表格被挤压时它最先被压成逐字竖排 */
 .ah-table td:first-child { min-width: 96px; }
 
-.ah-cell-main { font-weight: 600; }
+/*
+ * 列表单元格的三档文字层级：主行 14px/600、次行 12px/灰、等宽只换字体不换字号。
+ * 等宽先前自带 12.5px，于是"用户/角色"页主行 14px、"客户端/Scope/资源/审计"页
+ * 主行 12.5px，行的 line-height 也跟着在 20/22.4 之间摆动 —— 各列表看起来密度不一。
+ * 现在等宽一律继承所在层级（主行 14 / 次行 12），所有列表共用同一套节奏。
+ */
+.ah-cell-main { font-size: 14px; font-weight: 600; }
 .ah-cell-sub { color: var(--ah-muted); font-size: 12px; }
-.ah-cell-mono { font-family: var(--ah-mono); font-size: 12.5px; }
+.ah-cell-sub code { font-size: inherit; }
+.ah-cell-mono { font-family: var(--ah-mono); }
 .ah-cell-nowrap { white-space: nowrap; }
 
 .ah-tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -768,20 +823,20 @@ input, select, textarea { accent-color: var(--ah-primary); }
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 2px 8px;
-    border: 1px solid var(--ah-border);
-    border-radius: 999px;
-    background: var(--ah-surface-muted);
+    /* LeptonX .badge：padding .35em .65em、字号 .785em、字重 700、圆角 0.5rem、无描边 */
+    padding: 4px 7px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: rgba(var(--ah-muted-rgb), .1);
     color: var(--ah-muted);
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     white-space: nowrap;
 }
-.ah-badge--success { background: var(--ah-success-soft); border-color: var(--ah-success-border); color: var(--ah-success); }
-.ah-badge--danger { background: var(--ah-danger-soft); border-color: var(--ah-danger-border); color: var(--ah-danger); }
-.ah-badge--warning { background: var(--ah-warning-soft); border-color: var(--ah-warning-border); color: var(--ah-warning); }
-.ah-badge--info { background: var(--ah-info-soft); border-color: var(--ah-info-border); color: var(--ah-info); }
-.ah-badge--primary { background: var(--ah-primary-soft); border-color: var(--ah-primary-border); color: var(--ah-primary); }
+.ah-badge--success { background: var(--ah-success-soft); border-color: transparent; color: var(--ah-success); }
+.ah-badge--danger { background: var(--ah-danger-soft); border-color: transparent; color: var(--ah-danger); }
+.ah-badge--warning { background: var(--ah-warning-soft); border-color: transparent; color: var(--ah-warning); }
+.ah-badge--primary { background: rgba(var(--ah-primary-rgb), .1); border-color: transparent; color: var(--ah-primary); }
 
 .ah-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using AuthHub.Application.Interfaces;
+using AuthHub.Domain.Interfaces;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
 
@@ -16,19 +17,22 @@ public sealed class DataProtectionTwoFactorTicketProtector : ITwoFactorTicketPro
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
     private readonly IDataProtector _protector;
+    private readonly IClock _clock;
     private readonly ILogger<DataProtectionTwoFactorTicketProtector> _logger;
 
     public DataProtectionTwoFactorTicketProtector(
         IDataProtectionProvider provider,
+        IClock clock,
         ILogger<DataProtectionTwoFactorTicketProtector> logger)
     {
         _protector = provider.CreateProtector(ProtectorPurpose);
+        _clock = clock;
         _logger = logger;
     }
 
     public string Protect(string userId, bool rememberMe)
     {
-        var expiresAt = DateTimeOffset.UtcNow.Add(Lifetime).ToUnixTimeSeconds();
+        var expiresAt = _clock.UtcNow.Add(Lifetime).ToUnixTimeSeconds();
         var payload = string.Join('|', userId, rememberMe ? "1" : "0", expiresAt.ToString(CultureInfo.InvariantCulture));
         return _protector.Protect(payload);
     }
@@ -55,7 +59,7 @@ public sealed class DataProtectionTwoFactorTicketProtector : ITwoFactorTicketPro
             }
 
             var expiresAt = DateTimeOffset.FromUnixTimeSeconds(expiresAtUnix);
-            if (expiresAt <= DateTimeOffset.UtcNow)
+            if (expiresAt <= _clock.UtcNow)
             {
                 _logger.LogDebug("两阶段登录票据已过期。");
                 return null;

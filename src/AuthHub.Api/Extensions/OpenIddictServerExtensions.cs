@@ -6,19 +6,12 @@ using OpenIddict.Server;
 namespace AuthHub.Api.Extensions;
 
 /// <summary>
-/// OpenIddict 服务端与本地令牌校验的注册。
-///
-/// 分三块：核心（客户端 / 授权 / 令牌 / Scope 存到 EF Core）、服务端（各类端点与令牌策略）、
+/// OpenIddict 服务端与本地令牌校验的注册：核心（EF Core 存储）、服务端（端点与令牌策略）、
 /// 校验（本进程内自校验，同一实例既签发又校验）。
 /// </summary>
 internal static class OpenIddictServerExtensions
 {
-    /// <summary>
-    /// 注册 OpenIddict，并返回签名 / 加密密钥的形态描述（供启动日志展示）。
-    ///
-    /// 返回值来自 <see cref="OpenIddictKeySetup.ConfigureKeys"/> —— 它的配置委托是**同步执行**的，
-    /// 因此到这里时描述已经回填完毕。
-    /// </summary>
+    /// <summary>注册 OpenIddict，并返回签名 / 加密密钥的形态描述（供启动日志展示）。</summary>
     public static string AddAuthHubOpenIddict(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -40,7 +33,6 @@ internal static class OpenIddictServerExtensions
             // 5.2 服务端
             .AddServer(options =>
             {
-                // 端点
                 options.SetAuthorizationEndpointUris("/connect/authorize")
                        .SetTokenEndpointUris("/connect/token")
                        .SetEndSessionEndpointUris("/connect/logout")
@@ -48,7 +40,6 @@ internal static class OpenIddictServerExtensions
                        .SetRevocationEndpointUris("/connect/revoke")
                        .SetUserInfoEndpointUris("/connect/userinfo");
 
-                // 授权类型
                 options.AllowAuthorizationCodeFlow()
                        .AllowClientCredentialsFlow()
                        .AllowRefreshTokenFlow();
@@ -59,17 +50,10 @@ internal static class OpenIddictServerExtensions
                     options.AllowPasswordFlow();
                 }
 
-                // 授权码流程强制 PKCE（OAuth 2.1 要求，防授权码被拦截后直接兑换），且只接受 S256。
-                //
-                // plain（code_challenge == code_verifier）在 OAuth 2.1 里已被弃用：它把校验值
-                // 明文放在前端渠道，攻击者只要读到一次授权请求就拿到了 verifier，防护形同虚设。
-                //
-                // 限制手段是 CodeChallengeMethods 这个集合 —— 它同时驱动两处：
-                // ① 授权请求校验（值不在集合内 → invalid_request）；
-                // ② 发现文档的 code_challenge_methods_supported。
-                // 清空后只留 S256，两处天然一致。注意它挂在 OpenIddictServerOptions 上、
-                // 不在 builder 的直接成员里（7.7.2 无 SetCodeChallengeMethods），
-                // 只能经 builder.Configure 改。
+                // 授权码流程强制 PKCE（OAuth 2.1 要求，防授权码被拦截后直接兑换），且只接受 S256
+                // （plain 已被弃用：校验值明文放在前端渠道，读到一次授权请求就拿到 verifier）。
+                // CodeChallengeMethods 同时驱动授权请求校验与发现文档的 code_challenge_methods_supported；
+                // 7.7.2 没有 SetCodeChallengeMethods，只能经 builder.Configure 改。
                 options.RequireProofKeyForCodeExchange();
 
                 options.Configure(server =>
@@ -78,15 +62,10 @@ internal static class OpenIddictServerExtensions
                     server.CodeChallengeMethods.Add("S256");
                 });
 
-                // 访问令牌只签名、不加密。
-                //
-                // OpenIddict 默认会用服务端加密证书把 Access Token 加密成 JWE，这适合“只有本服务
-                // 能读懂令牌”的场景；但本项目的定位是统一认证中心，下游微服务需要凭 jwks_uri
-                // 在本地离线校验令牌（见第十章“分布式令牌验证 JWKS”），因此必须产出可被第三方
-                // 读取的 JWS。若某些部署希望隐藏令牌内容，请移除这一行并改用 introspection。
+                // 访问令牌只签名、不加密：统一认证中心的下游微服务要凭 jwks_uri 本地离线校验令牌，
+                // 必须产出可被第三方读取的 JWS。若部署想隐藏令牌内容，移除这行并改用 introspection。
                 options.DisableAccessTokenEncryption();
 
-                // 令牌生命周期
                 options.SetAccessTokenLifetime(TimeSpan.FromHours(1));
                 options.SetIdentityTokenLifetime(TimeSpan.FromMinutes(30));
                 options.SetAuthorizationCodeLifetime(TimeSpan.FromMinutes(5));
@@ -105,27 +84,17 @@ internal static class OpenIddictServerExtensions
                     AuthHubConstants.Scopes.ApiWrite,
                     AuthHubConstants.Scopes.Admin);
 
-                // 资源标识（RFC 8707 Resource Indicators）。
+                // 资源标识（RFC 8707 Resource Indicators）：resource 参数会写进令牌 aud，
+                // 但只认白名单里的值，未登记的一律 invalid_target（防 confused deputy，MCP 授权规范列为 MUST）。
                 //
-                // 请求里带 resource 参数时，OpenIddict 会把它写进令牌的 aud；但只会认白名单里的值，
-                // 未登记的一律 invalid_target。这是 OAuth 2.1 里防"令牌被拿去喂给别的资源服务器"
-                // （confused deputy）的基础，MCP 的授权规范把它列为 MUST。
+                // 白名单已库表化（RegisteredResources 表）：内置 ValidateResources handler 对照的是
+                // OpenIddictServerOptions.Resources（启动快照，7.7.2 无运行时增删接口），故精确移除，
+                // 换成 RegisteredResourceValidationHandlers 的读库实现 —— 管理 API 增删后下一请求即生效。
+                // 默认拒绝的红线不变：表为空时任何 resource 参数都被 invalid_target 拒绝。
                 //
-                // 白名单已经**库表化**（RegisteredResources 表）：内置的
-                // Exchange.ValidateResources / Authentication.ValidateResources 对照的是
-                // OpenIddictServerOptions.Resources —— 启动快照，7.7.2 没有运行时增删接口。
-                // 这里把这两个内置 handler 精确移除，换成 RegisteredResourceValidationHandlers
-                // 的读库实现：每个请求现查 RegisteredResources 表（启用中的资源），
-                // 管理 API 增删/启停后下一个请求立即生效，无需重启，多实例也天然一致。
-                // 默认拒绝的红线不变 —— 表为空时，任何 resource 参数都被 invalid_target 拒绝。
-                //
-                // 注意内置的 authhub-api **不在白名单里**：RFC 8707 要求 resource 是绝对 URI，
-                // 而白名单登记会逐个 new Uri()，传 "authhub-api" 直接抛 UriFormatException。
-                // 它作为 aud 依然正常工作 —— 那是 Scope 的 Resources 带出来的（AuthHubSeeder），
-                // 走的是另一条代码路径，与这里的登记集合无关。
-                //
-                // AuthHub:Resources 配置仍是启动期的种子来源与 fail-fast 校验点（见 ResourceSeeder /
-                // AuthHubResourceRegistry）：非法 URI 让进程起不来，合法项播种入库。
+                // authhub-api 不在白名单：RFC 8707 要求绝对 URI，登记时逐个 new Uri() 会直接抛；
+                // 它作为 aud 仍正常工作 —— 由 Scope 的 Resources 带出（AuthHubSeeder），走另一条路径。
+                // AuthHub:Resources 配置仍是启动期种子来源与 fail-fast 校验点（见 ResourceSeeder / AuthHubResourceRegistry）。
                 options.RemoveEventHandler(OpenIddictServerHandlers.Exchange.ValidateResources.Descriptor);
                 options.RemoveEventHandler(OpenIddictServerHandlers.Authentication.ValidateResources.Descriptor);
 

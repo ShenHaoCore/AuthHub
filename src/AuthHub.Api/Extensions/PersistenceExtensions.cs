@@ -4,12 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AuthHub.Api.Extensions;
 
 /// <summary>
-/// 数据访问层的注册。
-///
-/// 本项目让 Identity、OpenIddict 与自定义业务表共用**同一个 DbContext**：
-/// 它们之间本来就有外键关系（授权记录指向应用、用户角色指向用户），拆成多个上下文
-/// 只会让联表查询与事务变得别扭。因此这里只注册一个 AuthHubDbContext。
-///
+/// 数据访问层的注册。Identity、OpenIddict 与自定义业务表共用同一个 AuthHubDbContext：
+/// 它们之间有外键关系（授权记录指向应用、用户角色指向用户），拆成多个上下文会让联表查询与事务变得别扭。
 /// 提供程序由 <c>Database:Provider</c> 决定：SQLite 用于开发与集成测试（无需外部服务），
 /// PostgreSQL 与 SQL Server 面向部署（均带 3 次重试，覆盖瞬时故障）。
 /// </summary>
@@ -21,9 +17,8 @@ internal static class PersistenceExtensions
     {
         var provider = configuration["Database:Provider"] ?? DatabaseProviders.SqlServer;
 
-        // 用 IsNullOrWhiteSpace 而不是 `?? throw`：配置项存在但为空串时 GetConnectionString
-        // 返回的是 ""，`??` 放它过去，于是 UseSqlServer("") 要等到第一次真正连接才炸 ——
-        // 那时错误信息与"少配了连接串"已经看不出关系了。
+        // 用 IsNullOrWhiteSpace 而不是 `?? throw`：配置项存在但为空串时 GetConnectionString 返回 ""，
+        // `??` 放它过去，UseSqlServer("") 要等到第一次真正连接才炸 —— 那时错误信息已看不出是少配了连接串。
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (string.IsNullOrWhiteSpace(connectionString))
         {

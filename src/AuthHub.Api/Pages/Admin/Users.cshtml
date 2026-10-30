@@ -177,15 +177,22 @@
                                     <td>
                                         @if (user.TwoFactorEnabled)
                                         {
-                                            <span class="ah-badge ah-badge--info">已启用</span>
+                                            <span class="ah-badge ah-badge--success">已开启</span>
                                         }
                                         else
                                         {
-                                            <span class="ah-cell-sub">未启用</span>
+                                            <span class="ah-badge ah-badge--warning">未开启</span>
                                         }
                                     </td>
                                     <td class="ah-cell-mono ah-cell-nowrap">
-                                        @(user.LastLoginAt is null ? "—" : AuditDisplay.FormatUtc(user.LastLoginAt.Value))
+                                        @if (user.LastLoginAt is null)
+                                        {
+                                            <span class="ah-cell-sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            @AuditDisplay.FormatUtc(user.LastLoginAt.Value)
+                                        }
                                     </td>
                                     <td class="ah-col-actions">
                                         <div class="ah-act">
@@ -409,7 +416,7 @@
                     <div class="ah-alert ah-alert--info" style="margin-top:14px">
                         <ah-icon path="@AdminNav.Icons.Info" size="16" />
                         <div class="ah-alert-body">
-                            <strong>该账号已启用两步验证</strong>
+                            <strong>该账号已开启两步验证</strong>
                             <span>若要重置其 MFA，需由用户本人在「我的账户」中关闭后重新绑定，或重置 Authenticator 密钥。</span>
                         </div>
                     </div>

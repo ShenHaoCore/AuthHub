@@ -17,6 +17,13 @@
     <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      警告即错误：当前解决方案构建 0 警告，打开它意味着任何新出现的警告
+      （SDK 升级带来的新分析器、新增代码的疏漏）都会直接挡住构建，
+      而不是混在输出里被无视。刻意关闭的规则见下方 NoWarn ——
+      先做取舍再豁免，而不是把警告留着发酵；编辑器侧的对应豁免见 .editorconfig。
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>

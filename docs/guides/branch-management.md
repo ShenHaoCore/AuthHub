@@ -1,6 +1,6 @@
 # 分支管理速览
 
-> 本文是速查版：怎么用。完整规范、命令细节与设计理由见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
+> 本文是速查版：怎么用。完整规范、命令细节与设计理由见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 ## 分支模型（Git Flow）
 
@@ -76,7 +76,7 @@ git switch -c feature/<短横线描述>
 # PR → develop，合并方式 Merge commit，CI 绿后合并，分支自动删除
 ```
 
-合入前顺手在 [CHANGELOG.md](../CHANGELOG.md) 的「未发布」段写一条条目。
+合入前顺手在 [CHANGELOG.md](../../CHANGELOG.md) 的「未发布」段写一条条目。
 
 ### 2. 发布一个版本
 
@@ -96,6 +96,7 @@ git tag -a v1.4.0 -m "v1.4.0: <一句话说明>" && git push origin v1.4.0
 
 # 4) PR release/1.4.0 → develop（把定版与修复带回集成主干）
 # 5) 建 GitHub Release（写清「升级到本版本要做什么」），删除 release 分支
+#    Release 发布后 CI 自动构建部署产物并挂载到该 Release（release-artifacts.yml），无需手工操作
 ```
 
 ### 3. 线上救火（hotfix）

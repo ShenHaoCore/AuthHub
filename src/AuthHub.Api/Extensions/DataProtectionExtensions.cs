@@ -3,33 +3,25 @@ using Microsoft.AspNetCore.DataProtection;
 namespace AuthHub.Api.Extensions;
 
 /// <summary>
-/// Data Protection 密钥环的配置。
-///
-/// <para><b>为什么必须显式配置</b>：密钥环保护的不只是"记住我"那类小玩意 —— 本服务里它同时承载
-/// 三样东西：会话 Cookie 的加密票、防伪令牌、以及 <c>ITwoFactorTicketProtector</c> 的 MFA 票据。
-/// 默认密钥环落在 <c>$HOME/.aspnet/DataProtection-Keys</c>（Windows 上是
-/// <c>%LOCALAPPDATA%\ASP.NET\DataProtection-Keys</c>），而容器里这个位置通常**不在卷上**：
-/// 容器一重建密钥环就换了一套，于是所有在线用户被登出、手上正在填的表单提交全部 400、
-/// 走到一半的 MFA 流程失效。多实例部署时更严重 —— A 实例发的 Cookie 到 B 实例直接解不开。</para>
-///
-/// <para><b>为什么固定 SetApplicationName</b>：密钥环的默认隔离键由**内容根路径**派生，
-/// 两个实例若从不同路径启动（镜像 WORKDIR 不同、挂载点不同）就认不到同一个环，
-/// 于是"共享了密钥目录"也依然互相解不开。固定成常量后，只要密钥目录共享就能互通。</para>
+/// Data Protection 密钥环的配置（会话 Cookie 的加密票、防伪令牌、MFA 票据都由它承载）。
 /// </summary>
+/// <remarks>
+/// - 位置必须显式配置：默认密钥环在容器里通常不在卷上，重建即换一套 ——
+///   所有在线用户被登出、表单提交全部 400、MFA 流程失效；多实例下 A 发的 Cookie B 解不开。
+/// - 固定 SetApplicationName：默认隔离键由内容根路径派生，不同路径启动的实例认不到同一个环；
+///   固定成常量后，只要密钥目录共享就能互通。
+/// </remarks>
 internal static class DataProtectionExtensions
 {
     /// <summary>
-    /// 密钥环的应用名（隔离键）。**改了会让所有既有会话与防伪令牌立即失效**，
-    /// 因此当作常量对待：它是一份需要跨版本、跨实例稳定的约定，不是可调参数。
+    /// 密钥环的应用名（隔离键）。改了会让所有既有会话与防伪令牌立即失效，
+    /// 因此当作跨版本、跨实例稳定的约定对待，不是可调参数。
     /// </summary>
     internal const string ApplicationName = "AuthHub";
 
     /// <summary>
     /// 注册 Data Protection，并返回描述字符串留给启动日志。
-    ///
-    /// 没配持久化位置时**不静默**：生产环境会把警告写进返回的描述里，由启动日志带出去
-    /// （这是本项目一贯的做法 —— 部署期的问题要落在启动日志第一屏，而不是等运行时暴露）。
-    /// 目录配了但不可写则**直接抛**，理由见 <see cref="EnsureWritableDirectory"/>。
+    /// 未配持久化位置时不静默：生产环境把警告写进返回描述；目录配了但不可写则直接抛，见 <see cref="EnsureWritableDirectory"/>。
     /// </summary>
     public static string AddAuthHubDataProtection(
         this IServiceCollection services,
@@ -55,11 +47,9 @@ internal static class DataProtectionExtensions
     }
 
     /// <summary>
-    /// 确保密钥目录存在，并且**真的能写**。
-    ///
-    /// 为什么除了建目录还要写一个探针文件：<c>Directory.CreateDirectory</c> 对"已存在但只读"的目录
-    /// 是**静默成功**的，而"挂了个只读卷"恰恰是容器里最常见的错配。不探这一下，
-    /// 故障会一直拖到第一次签发 Cookie 时才以别的面目出现，排查方向很难指回挂载配置。
+    /// 确保密钥目录存在，并且真的能写（探针文件）：
+    /// <c>Directory.CreateDirectory</c> 对"已存在但只读"的目录静默成功，而"挂了个只读卷"
+    /// 恰恰是容器里最常见的错配，不探这一下故障会拖到第一次签发 Cookie 才暴露。
     /// </summary>
     private static void EnsureWritableDirectory(string fullPath)
     {

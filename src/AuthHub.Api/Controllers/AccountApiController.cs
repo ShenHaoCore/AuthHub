@@ -10,10 +10,7 @@ namespace AuthHub.Api.Controllers;
 
 /// <summary>
 /// 账号自助 API（供 SPA / 移动端等非浏览器渲染场景调用）。
-///
-/// 认证方式为 Identity 会话 Cookie：调用 <c>/connect/authorize</c> 之外的
-/// “登录 / 注册 / 改密 / 绑定 MFA”都发生在本服务的域内，
-/// 因此使用 Cookie 而非 Bearer 令牌。
+/// 认证用 Identity 会话 Cookie 而非 Bearer：登录 / 注册 / 改密 / 绑定 MFA 都发生在本服务域内，不经 <c>/connect/authorize</c>。
 /// </summary>
 [Tags("账号 API")]
 [Route("api/account")]
@@ -47,10 +44,7 @@ public class AccountApiController : ApiControllerBase
     public Task<IActionResult> Register([FromBody] RegisterRequest request)
         => ExecuteAsync(() => _accountService.RegisterAsync(request, GetBaseUrl(), HttpContext.RequestAborted));
 
-    /// <summary>
-    /// 申请密码重置：向邮箱发送重置链接。无论邮箱是否存在都返回 204，
-    /// 避免通过响应差异枚举系统账号。
-    /// </summary>
+    /// <summary>申请密码重置：向邮箱发送重置链接；无论邮箱是否存在都返回 204，避免通过响应差异枚举系统账号。</summary>
     [EndpointSummary("申请密码重置")]
     [EndpointDescription("向邮箱发送重置链接；无论邮箱是否存在均返回 204。")]
     [HttpPost("forgot-password")]
@@ -85,10 +79,7 @@ public class AccountApiController : ApiControllerBase
     public Task<IActionResult> ResendConfirmation([FromBody] ResendEmailConfirmationRequest request)
         => ExecuteAsync(() => _accountService.ResendEmailConfirmationAsync(request.Email, GetBaseUrl(), HttpContext.RequestAborted));
 
-    /// <summary>
-    /// 登录。启用 MFA 的账号会返回 <c>requiresTwoFactor=true</c> 与一次性 <c>twoFactorToken</c>，
-    /// 需再调用 <c>/api/account/2fa/verify</c> 完成登录。
-    /// </summary>
+    /// <summary>登录。启用 MFA 的账号返回 <c>requiresTwoFactor=true</c> 与一次性 <c>twoFactorToken</c>，需再调用 <c>/api/account/2fa/verify</c> 完成登录。</summary>
     [EndpointSummary("登录")]
     [EndpointDescription("启用 MFA 的账号返回 requiresTwoFactor 与一次性 twoFactorToken。")]
     [HttpPost("login")]
@@ -199,8 +190,8 @@ public class AccountApiController : ApiControllerBase
         => ExecuteAsync(() => _consentService.RevokeAsync(authorizationId, HttpContext.RequestAborted));
 
     /// <summary>
-    /// 邮件链接用的对外基址。优先 <c>AuthHub:PublicBaseUrl</c>，其次 <c>AuthHub:Issuer</c>，
-    /// 都未配置时才回退到当前请求（存在 Host 头投毒风险，仅适合本机临时调试）。
+    /// 邮件链接用的对外基址：优先 <c>AuthHub:PublicBaseUrl</c>，其次 <c>AuthHub:Issuer</c>，
+    /// 都未配置才回退当前请求（Host 头投毒风险，仅限本机调试）。
     /// </summary>
     private string GetBaseUrl() => PublicBaseUrlResolver.Resolve(_configuration, Request);
 }

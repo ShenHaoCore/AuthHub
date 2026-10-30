@@ -1,6 +1,6 @@
 # 架构
 
-> 从 [README](../README.md) 拆出。讲的是"这个仓库由哪些部分组成、为什么这么分"。
+> 从 [README](../../README.md) 拆出。讲的是"这个仓库由哪些部分组成、为什么这么分"。
 
 ## 目录树
 
@@ -42,6 +42,10 @@ Api ──▶ Application ──▶ Domain
  └──▶ Infrastructure ─────┘   （Api → Infrastructure 仅用于 DI 注册，不直接使用其类型）
 ```
 
+该契约由 `tests/AuthHub.UnitTests/Architecture/LayeringTests.cs` 在 CI 强制：Domain 不引用外层与
+Web 栈（Identity.Stores 除外）、Application 不引用 Infrastructure/Api/EF/Mvc/Http、Infrastructure 不引用 Api、
+单元测试项目不引用 Api。分层破坏直接表现为测试失败，不靠评审用眼。
+
 ## 两类浏览器页面走两条不同的路（这是刻意的，不是历史遗留）
 
 | | 协议页：登录 / 2FA / 同意授权 / 提示 | 管理后台：`/admin/*` |
@@ -61,8 +65,10 @@ Api ──▶ Application ──▶ Domain
 - `Domain` 引用了 `Microsoft.Extensions.Identity.Stores`：`ApplicationUser` / `ApplicationRole`
   直接继承 `IdentityUser<Guid>` / `IdentityRole<Guid>`。把 Identity 的泛型基类隔在领域模型之外
   收益很小（Identity 是事实上的框架底座），却要为每个字段再写一层映射。
-- `Application` 引用了 `Microsoft.AspNetCore.App` 框架引用：服务里要用 `IHttpContextAccessor`、
-  `AuthenticationProperties` 等类型。这个项目本身就是 Web 应用，不做跨宿主复用，"纯净度"换不来实际收益。
+- `Application` 引用了 `Microsoft.AspNetCore.App` 框架引用：唯一原因是 `SignInManager<TUser>`
+  定义在 ASP.NET Core Identity 程序集里（随共享框架分发，不在 Identity.Core 包中），登录会话的
+  建立/刷新/登出本质上是账号业务的一部分。`ICurrentUser` 接口定义在 Application、实现放在
+  Api（依赖 HttpContext）—— Application 层本身不接触 HttpContext。
 - 查询密集型服务（`OpenIddictClientAdminService`、`TokenAdminService` 等）落在 `Infrastructure`：
   它们直接操作 `IOpenIddict*Manager` 与 `DbContext`，放在 Application 只会制造无意义的接口隔层。
 

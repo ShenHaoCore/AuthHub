@@ -1,6 +1,7 @@
 using AuthHub.Application.Common;
 using AuthHub.Application.Interfaces;
 using AuthHub.Domain.Enums;
+using AuthHub.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using Oidc = OpenIddict.Abstractions.OpenIddictConstants;
@@ -21,6 +22,7 @@ public sealed class OpenIddictTokenAdminService : ITokenAdminService
     private readonly IOpenIddictAuthorizationManager _authorizationManager;
     private readonly IOpenIddictApplicationManager _applicationManager;
     private readonly IAuditLogService _audit;
+    private readonly IClock _clock;
     private readonly ILogger<OpenIddictTokenAdminService> _logger;
 
     public OpenIddictTokenAdminService(
@@ -28,12 +30,14 @@ public sealed class OpenIddictTokenAdminService : ITokenAdminService
         IOpenIddictAuthorizationManager authorizationManager,
         IOpenIddictApplicationManager applicationManager,
         IAuditLogService audit,
+        IClock clock,
         ILogger<OpenIddictTokenAdminService> logger)
     {
         _tokenManager = tokenManager;
         _authorizationManager = authorizationManager;
         _applicationManager = applicationManager;
         _audit = audit;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -138,7 +142,7 @@ public sealed class OpenIddictTokenAdminService : ITokenAdminService
 
     public async Task<Result<int>> PruneAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
     {
-        var threshold = DateTimeOffset.UtcNow.Subtract(olderThan);
+        var threshold = _clock.UtcNow.Subtract(olderThan);
 
         var prunedTokens = await _tokenManager.PruneAsync(threshold, cancellationToken);
         var prunedAuthorizations = await _authorizationManager.PruneAsync(threshold, cancellationToken);

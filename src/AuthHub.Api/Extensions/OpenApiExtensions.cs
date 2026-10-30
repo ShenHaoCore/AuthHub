@@ -6,8 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.OpenApi;
-// Microsoft.OpenApi 2.x（随 .NET 10 的 Microsoft.AspNetCore.OpenApi 引入）把
-// 原 Microsoft.OpenApi.Models 命名空间下的模型类型合并到了 Microsoft.OpenApi 根命名空间。
+// Microsoft.OpenApi 2.x（随 .NET 10 的 Microsoft.AspNetCore.OpenApi 引入）把 Models 命名空间并入了根命名空间。
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
@@ -17,30 +16,13 @@ namespace AuthHub.Api.Extensions;
 /// API 文档配置：OpenAPI 文档 JSON 由框架内置的生成器产出，交互式 UI 由 Scalar 提供。
 /// </summary>
 /// <remarks>
-/// 「生成文档」这一侧自 .NET 9 起不再需要第三方库：<c>AddOpenApi</c> / <c>MapOpenApi</c>
-/// 随 <c>Microsoft.AspNetCore.OpenApi</c> 提供，且原生读取 <c>[Tags]</c> /
-/// <c>[EndpointSummary]</c> / <c>[EndpointDescription]</c>（.NET 8 就有的端点元数据接口）。
-/// 这就是删除 Swashbuckle 的原因。
-///
-/// 「展示文档」仍是 Scalar，它只认一个 URL，与生成器无关。
-/// 两个约定收敛在 <see cref="DocumentRoutePattern"/> 一个常量上，不需要两边手工同步。
-///
-/// 从 Swashbuckle 换过来时有两处**行为差异**，都在本文件里显式处理了，不要当成 bug：
-/// <list type="number">
-///   <item>ApiExplorer 的可见性：内置生成器只认 ApiExplorer 里「可见」的端点，
-///         而 MVC 默认只让 <c>[ApiController]</c> 控制器可见 —— 见
-///         <see cref="AddAuthHubOpenApi"/> 里那段约定；</item>
-///   <item>XML 注释：.NET 10 起内置生成器开始读取 XML 注释（此前由
-///         <see cref="ApplyTagDescriptions"/> 自己补的分组描述仍保留）。</item>
-/// </list>
-///
-/// 收录范围（有意为之，别当成漏了）：文档只收**面向调用方**的端点 ——
-/// 各 <c>/api/*</c> 业务接口、OIDC 协议端点 <c>/connect/*</c>。
-/// 产出浏览器页面的控制器与站点跳转不进来，它们各自在声明处显式关掉
-/// （<c>AccountController</c> 用 <c>[ApiExplorerSettings(IgnoreApi = true)]</c>、
-/// 根路径用 <c>ExcludeFromDescription()</c>）。原因是文档的读者是 API 调用方，
-/// 而登录页 / 提示页需要会话与防伪令牌，既不能在 Scalar 里直接发起，
-/// 出现在侧边栏里也只是噪音。
+/// - 生成侧自 .NET 9 是框架内置的 <c>AddOpenApi</c>/<c>MapOpenApi</c>，原生读 <c>[Tags]</c>/<c>[EndpointSummary]</c>/
+///   <c>[EndpointDescription]</c>；展示侧 Scalar 只认一个 URL。两边路由收敛在 <see cref="DocumentRoutePattern"/> 一个常量上。
+/// - 从 Swashbuckle 迁来的两处显式处理（不要当成 bug）：① 内置生成器只认 ApiExplorer 可见端点，而 MVC 默认只交出
+///   <c>[ApiController]</c> 控制器 —— 见 <see cref="AddAuthHubOpenApi"/> 里的可见性约定；② 分组描述仍由
+///   <see cref="ApplyTagDescriptions"/> 自己补。
+/// - 收录范围有意只含面向调用方的端点（<c>/api/*</c> 与 <c>/connect/*</c>）；浏览器页控制器在各自声明处显式关闭 ——
+///   登录/提示页依赖会话与防伪令牌，进文档既不可发起也只是噪音。
 /// </remarks>
 public static class OpenApiExtensions
 {
@@ -48,8 +30,7 @@ public static class OpenApiExtensions
     public const string DocumentName = "v1";
 
     /// <summary>
-    /// 文档路径模板：既是内置生成器对外提供 JSON 的地址，也是 Scalar 去读取的地址。
-    /// <c>{documentName}</c> 是内置生成器的占位符，会被 <see cref="DocumentName"/> 替换。
+    /// 文档路径模板：生成器出 JSON 与 Scalar 读取共用；<c>{documentName}</c> 由 <see cref="DocumentName"/> 替换。
     /// </summary>
     public const string DocumentRoutePattern = "/openapi/{documentName}.json";
 
@@ -63,22 +44,12 @@ public static class OpenApiExtensions
     /// <returns>原服务集合，便于链式调用。</returns>
     public static IServiceCollection AddAuthHubOpenApi(this IServiceCollection services)
     {
-        // 控制器也要出现在文档里：内置生成器读的是 ApiExplorer 的 ApiDescription 集合，
-        // 这一步负责把控制器端点注册进去（Minimal API 端点则自动可见）。
+        // 内置生成器读 ApiExplorer 的 ApiDescription 集合；这一步把控制器端点注册进去（Minimal API 自动可见）。
         services.AddEndpointsApiExplorer();
 
-        // ⚠ 这一行不是可选项，去掉会让文档静默少 14 个端点。
-        //
-        // MVC 默认只把标注了 [ApiController] 的控制器交给 ApiExplorer（见
-        // ControllerActionDescriptorBuilder：IsVisible 三级都取不到值时判 false）。
-        // 本项目有两个控制器**故意不加** [ApiController] —— AccountController 与
-        // AuthorizationController 要返回 HTML 页面和 302，加了会改变运行时行为。
-        // 于是 /account/*、/connect/*（含 OIDC 的 token / authorize / userinfo / logout）
-        // 全部落在文档之外。
-        //
-        // 以前用 Swashbuckle 时看不到这个坑：它在 AddSwaggerGen 里加了同样作用的约定
-        // （源码原话 "Add Mvc convention to ensure ApiExplorer is enabled for all actions"），
-        // 替我们隐式点亮了所有控制器。换成框架内置生成器后，这一层得自己显式声明。
+        // ⚠ 不是可选项，去掉会让文档静默少 14 个端点：MVC 默认只把 [ApiController] 控制器交给 ApiExplorer，
+        // 而 AccountController / AuthorizationController 故意不加（要返回 HTML 与 302）。
+        // Swashbuckle 曾用内置约定替我们隐式点亮全部控制器，换成内置生成器后得自己显式声明。
         services.Configure<MvcOptions>(options => options.Conventions.Add(new ApiVisibilityConvention()));
 
         services.AddOpenApi(DocumentName, options =>
@@ -113,16 +84,12 @@ public static class OpenApiExtensions
                 .AddPreferredSecuritySchemes([OAuth2SchemeName])
                 // 关闭匿名使用统计：这个服务常部署在内网，不应有任何出网请求。
                 .DisableTelemetry()
-                // 关闭默认字体：Scalar 默认从 fonts.scalar.com 拉取 Inter 字体，
-                // 而本站 CSP 是 font-src 'self'，这些请求必然被拦 —— 内网环境还会
-                // 白白等待 DNS 解析超时。禁用后回退到系统字体栈，视觉差异可忽略。
+                // Scalar 默认从 fonts.scalar.com 拉 Inter，与本站 CSP font-src 'self' 冲突且内网会白等 DNS 超时；
+                // 禁用后回退系统字体栈，视觉差异可忽略。
                 .DisableDefaultFonts()
                 .AddOAuth2Authentication(OAuth2SchemeName, oauth =>
                 {
-                    // 交互式授权只预填 public 客户端的 clientId。
-                    // 机密客户端（web-client / m2m-service）的密钥不写进代码，
-                    // 需要在 UI 的认证面板里手工填写 —— 这些是开发用种子密钥，
-                    // 生产环境必须由环境变量注入，见 README。
+                    // 只预填 public 客户端的 clientId；机密客户端的密钥不进代码，在 UI 认证面板手工填写（生产由环境变量注入）。
                     string[] userScopes =
                     [
                         AuthHubConstants.Scopes.OpenId,
@@ -143,9 +110,7 @@ public static class OpenApiExtensions
 
                     oauth.WithFlows(flows =>
                     {
-                        // 授权码 + PKCE：spa-client 是 public 客户端，没有密钥，因此不需要 WithClientSecret。
-                        // PKCE 显式指定 S256 —— 服务端两个方案都声明支持，
-                        // 但 plain 等于把校验值明文放在前端渠道，这里只走 S256。
+                        // spa-client 是 public 客户端，无需密钥；PKCE 只走 S256 —— plain 等于把校验值明文放在前端渠道。
                         flows.WithAuthorizationCode(flow => flow
                             .WithClientId(AuthHubConstants.SeedClients.Spa)
                             .WithAuthorizationUrl("/connect/authorize")
@@ -209,19 +174,9 @@ public static class OpenApiExtensions
     /// 给分组（tag）补上描述，取自控制器类上的 XML <c>&lt;summary&gt;</c>。
     /// </summary>
     /// <remarks>
-    /// 为什么需要这一步：XML 注释（含控制器摘要、DTO 说明、<c>&lt;param&gt;</c>）是 Swashbuckle
-    /// 在运行时读 .xml 文件解析出来的；框架内置的生成器**不读它** —— 源码生成器版本要到 .NET 10
-    /// 才随包提供（<c>Microsoft.AspNetCore.OpenApi/10.x</c> 的 <c>analyzers/</c> 目录里才有），
-    /// 9.0.x 包里既没有那个生成器，dll 里也搜不到任何 XmlComment 相关符号。
-    ///
-    /// 影响面（升 TFM 时实测过，不是猜的）：
-    /// <list type="bullet">
-    ///   <item>端点摘要 / 描述：不受影响 —— 它们来自 <c>[EndpointSummary]</c> /
-    ///         <c>[EndpointDescription]</c>，是内置生成器原生支持的端点元数据；</item>
-    ///   <item>分组描述：会丢，就是这里补的东西；</item>
-    ///   <item>DTO 属性说明、参数说明：本来就没有（DTO 的 XML 在另一个程序集里，
-    ///         Swashbuckle 当时只加载了 Api 程序集自己的 .xml），无需补。</item>
-    /// </list>
+    /// 框架内置生成器不读 XML 注释（读 .xml 的源码生成器 .NET 10 才随包提供），分组描述会丢，这里自己补。
+    /// 影响面（升 TFM 时实测）：端点摘要/描述来自 <c>[EndpointSummary]</c>/<c>[EndpointDescription]</c>，不受影响；
+    /// DTO 属性/参数说明本来就跨程序集拿不到，无需补。
     /// </remarks>
     private static Task ApplyTagDescriptions(
         OpenApiDocument document,

@@ -16,12 +16,7 @@ public sealed record DailyAuditPoint(string Label, long Count, int Percent)
     public bool IsEmpty => Count == 0;
 }
 
-/// <summary>
-/// 管理后台首页（仪表盘）。
-///
-/// 数据全部来自既有的 Application 服务，不直接碰 DbContext ——
-/// 保证后台看到的数字与 API 返回的口径完全一致。
-/// </summary>
+/// <summary>管理后台首页（仪表盘）。数据全部来自既有的 Application 服务，不直接碰 DbContext —— 后台看到的数字与 API 返回的口径完全一致。</summary>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.Admin)]
 public class IndexModel : PageModel
 {
@@ -119,10 +114,8 @@ public class IndexModel : PageModel
     }
 
     /// <summary>
-    /// 按天统计审计事件数量。
-    ///
-    /// 注意边界：仓储实现用的是闭区间（<c>CreatedAt &gt;= from &amp;&amp; CreatedAt &lt;= to</c>），
-    /// 因此一天的结束时间要取「次日零点减 1 tick」，否则跨天的那一毫秒会被两个桶各算一次。
+    /// 按天统计审计事件数量。注意边界：仓储实现是闭区间（<c>CreatedAt &gt;= from &amp;&amp; CreatedAt &lt;= to</c>），
+    /// 一天的结束时间取「次日零点减 1 tick」，否则跨天的那一毫秒会被两个桶各算一次。
     /// </summary>
     private async Task<IReadOnlyList<DailyAuditPoint>> BuildDailyAsync(
         DateTimeOffset now,

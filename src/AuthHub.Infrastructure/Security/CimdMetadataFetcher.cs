@@ -9,25 +9,15 @@ using Microsoft.Extensions.Options;
 
 namespace AuthHub.Infrastructure.Security;
 
-/// <summary>
-/// 带 SSRF 防护的 CIMD 元数据拉取器。
-///
-/// <para>防护分两层，缺一不可：</para>
-/// <list type="number">
-/// <item><b>URL 层</b>：仅 https、无凭据、无片段、端口 443（<see cref="CimdAddressPolicy.IsAllowedMetadataUri"/>）；</item>
-/// <item><b>连接层</b>：每次真正建连前解析域名，要求**所有**解析结果都是公网地址，
-///       并用解析出的 IP 直连（<see cref="ConnectPublicOnlyAsync"/>）。</item>
-/// </list>
-///
-/// <para>第二层才是防 DNS rebinding 的关键：只校验 URL 字符串的话，
-/// <c>https://evil.example.com</c> 可以解析到 <c>10.0.0.5</c>，第一层看起来完全合规。
-/// 而这里在连接时拿的是解析后的 IP，并在同一个 socket 上完成连接 —— 没有"校验后再解析一次"
-/// 的时间窗可供替换。</para>
-///
-/// <para><b>重定向不交给 HttpClient</b>：<c>AllowAutoRedirect</c> 走的是内部跳转，
-/// 中间每一跳都不会重新过 URL 层校验（可以 http→https 降级、可以跳到内网）。
-/// 这里手工逐跳跟随，每一跳都重新校验，超过 <c>MaxRedirects</c> 立即失败。</para>
-/// </summary>
+/// <summary>带 SSRF 防护的 CIMD 元数据拉取器，手工逐跳跟随重定向。</summary>
+/// <remarks>
+/// - 防护两层缺一不可：URL 层仅 https、无凭据、无片段、端口 443（<see cref="CimdAddressPolicy.IsAllowedMetadataUri"/>）；
+///   连接层每次建连前解析域名，要求所有解析结果都是公网地址并用解析出的 IP 直连（<see cref="ConnectPublicOnlyAsync"/>）。
+/// - 连接层才是防 DNS rebinding 的关键：公网域名可解析到内网 IP 而URL 层完全合规；
+///   这里建连拿的是已解析 IP 且同一 socket 完成，没有"校验后再解析一次"的替换时间窗。
+/// - 重定向不交给 HttpClient：AllowAutoRedirect 的中间跳不会重新过 URL 层校验（可降级 http、可跳内网）；
+///   这里手工逐跳跟随、每跳重校验，超过 <c>MaxRedirects</c> 立即失败。
+/// </remarks>
 public sealed class CimdMetadataFetcher : ICimdMetadataFetcher, IDisposable
 {
     /// <summary>出站请求的 User-Agent：让被请求方能从日志里认出这是谁在拉。</summary>
@@ -56,7 +46,7 @@ public sealed class CimdMetadataFetcher : ICimdMetadataFetcher, IDisposable
         };
 
         // 超时由每次拉取的 CancellationToken 统一控制（覆盖全部重定向跳），
-        // 这里必须关掉 HttpClient 自带的超时，否则两个超时口径不一致
+        // 必须关掉 HttpClient 自带的超时，避免两个超时口径不一致
         _client = new HttpClient(handler, disposeHandler: true)
         {
             Timeout = Timeout.InfiniteTimeSpan
@@ -144,8 +134,7 @@ public sealed class CimdMetadataFetcher : ICimdMetadataFetcher, IDisposable
         }
         catch (HttpRequestException ex)
         {
-            // 连接层拒绝（私网地址、TLS 失败、DNS 失败）都会到这里。
-            // 只记消息不记堆栈：这是"被拒绝"而不是"程序出错"，堆栈只会淹没日志。
+            // 连接层拒绝（私网地址、TLS 失败、DNS 失败）都到这里；只记消息不记堆栈 —— 这是"被拒绝"不是程序出错。
             return CimdFetchResult.Failure($"无法拉取元数据：{ex.Message}");
         }
     }
@@ -155,10 +144,8 @@ public sealed class CimdMetadataFetcher : ICimdMetadataFetcher, IDisposable
     // ------------------------------------------------------------------ 连接层防护
 
     /// <summary>
-    /// 只在解析结果**全部**为公网地址时建连，且用解析出的 IP 直连。
-    ///
-    /// <para>这是整套 SSRF 防护的实际生效点 —— 上层所有 URL 校验都可以被一个
-    /// "公网域名 + 内网 A 记录"绕过，只有这里拿到的是即将建立连接的那个 IP。</para>
+    /// 只在解析结果全部为公网地址时建连并用解析出的 IP 直连 —— 整套 SSRF 防护的实际生效点：
+    /// 上层所有 URL 校验都可被"公网域名 + 内网 A 记录"绕过，只有这里拿到的是即将建连的那个 IP。
     /// </summary>
     private static async ValueTask<Stream> ConnectPublicOnlyAsync(
         SocketsHttpConnectionContext context,
@@ -246,10 +233,7 @@ public sealed class CimdMetadataFetcher : ICimdMetadataFetcher, IDisposable
                    || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// 边读边计数，超过上限立刻放弃。不能先 <c>ReadAsStringAsync</c> 再判断长度 ——
-    /// 那时内存已经被吃掉了，长度检查变成事后追认。
-    /// </summary>
+    /// <summary>边读边计数，超上限立刻放弃；先读成字符串再判长度时内存已经被吃掉了。</summary>
     private async Task<string?> ReadLimitedAsync(HttpContent content, CancellationToken cancellationToken)
     {
         var limit = _options.EffectiveMaxMetadataBytes;

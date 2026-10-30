@@ -23,8 +23,7 @@ using StackExchange.Redis;
 namespace AuthHub.Infrastructure;
 
 /// <summary>
-/// Infrastructure 层 DI 注册入口。
-/// DbContext / Identity / OpenIddict 的注册放在 Program.cs（应用启动期横切配置），
+/// Infrastructure 层 DI 注册入口。DbContext / Identity / OpenIddict 的注册放在 Program.cs（启动期横切配置），
 /// 这里只注册"实现了 Application 层接口"的基础设施组件。
 /// </summary>
 public static class DependencyInjection
@@ -60,18 +59,16 @@ public static class DependencyInjection
         services.AddScoped<IConsentService, OpenIddictConsentService>();
 
         // CIMD 动态客户端注册（AuthHub:Cimd，默认关闭）。
-        //
-        // 拉取器是单例：它持有 SocketsHttpHandler（连接池、ConnectCallback 里的地址策略），
-        // 每个请求新建一个等于关掉连接复用，也让"同一域名连续拉取"变成反复 DNS + TLS 握手。
+        // 拉取器是单例：持有 SocketsHttpHandler（连接池、ConnectCallback 里的地址策略），
+        // 每个请求新建等于关掉连接复用、"同一域名连续拉取"变成反复 DNS + TLS 握手。
         services.Configure<CimdOptions>(configuration.GetSection(CimdOptions.SectionName));
         services.AddSingleton<ICimdMetadataFetcher, CimdMetadataFetcher>();
         services.AddScoped<ICimdRefreshLock, CimdRefreshLock>();
         services.AddScoped<ICimdClientRegistrar, CimdClientRegistrar>();
 
         // Redis 令牌条目缓存（AuthHub:Redis，默认关闭）。
-        //
-        // 本方法在 Program.cs 里排在 AddAuthHubOpenIddict 之后执行，而装饰器必须注册在
-        // OpenIddict 的 EF Core 存储之后（MS DI 单解析取"最后注册者"），顺序依赖成立。
+        // 装饰器必须注册在 OpenIddict 的 EF Core 存储之后（MS DI 单解析取"最后注册者"）；
+        // 本方法在 Program.cs 里排在 AddAuthHubOpenIddict 之后执行，顺序依赖成立。
         RegisterRedisTokenCache(services, configuration);
 
         return services;
@@ -88,9 +85,9 @@ public static class DependencyInjection
             return;
         }
 
-        // 连接串没配不在这里报错：默认值（本机回环） + abortConnect=false 意味着
-        // "Redis 不存在"只表现为缓存全降级（直查库），启动与认证都不受影响。
-        // 真正的配置错误（比如指向了内网地址）由运维在部署清单里把关。
+        // 连接串没配不在这里报错：默认值（本机回环） + abortConnect=false 让"Redis 不存在"
+        // 只表现为缓存全降级（直查库），启动与认证都不受影响。
+        // 真正的配置错误（比如指向内网地址）由运维在部署清单里把关。
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
             var options = sp.GetRequiredService<IOptionsMonitor<RedisOptions>>().CurrentValue;

@@ -20,16 +20,17 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 
 | 文档 | 内容 |
 |------|------|
-| [docs/architecture.md](docs/architecture.md) | 分层架构、两类页面为什么走两条路、有意保留的分层取舍 |
-| [docs/configuration.md](docs/configuration.md) | 四个配置来源、三份文件分工、启动期环境护栏、`dotnet ef` 的连接串来源 |
-| [docs/admin-ui.md](docs/admin-ui.md) | 后台 7 个页面、**权限模型（三层授权）**、前端约定、`<ah-*>` TagHelper、被显式处理掉的陷阱 |
-| [docs/api-reference.md](docs/api-reference.md) | 端点清单与权限要求、错误响应约定（RFC 7807 统一出口） |
-| [docs/security-design.md](docs/security-design.md) | 安全设计要点逐项（PKCE、令牌轮换、限流、CSRF、CSP…） |
-| [docs/deployment.md](docs/deployment.md) | 生产配置清单、容器 / 反代的两个隐性依赖、迁移、Docker |
-| [docs/testing.md](docs/testing.md) | 测试覆盖清单、端到端脚本、Postman 集合 |
-| [docs/mcp-integration.md](docs/mcp-integration.md) | **接入 MCP**：三种"支持 MCP"的区别、资源登记、`aud` 绑定、MCP Server 侧校验、排错表 |
-| [docs/openiddict-notes.md](docs/openiddict-notes.md) | **踩坑记录**：照 OpenIddict 官方文档写会编译不过 / 运行期才炸的 15 处差异 |
-| [docs/engineering-notes.md](docs/engineering-notes.md) | **框架行为陷阱速查**：ASP.NET Core / OpenIddict 侧的病历式记录，分 A/B/C 三档维护，跨项目复用 |
+| [docs/README.md](docs/README.md) | **文档索引**：按用途分为 guides（怎么用）/ reference（是什么）/ operations（部署运维）/ specs（特性规格）/ assets |
+| [docs/reference/architecture.md](docs/reference/architecture.md) | 分层架构、两类页面为什么走两条路、有意保留的分层取舍 |
+| [docs/reference/configuration.md](docs/reference/configuration.md) | 四个配置来源、三份文件分工、启动期环境护栏、`dotnet ef` 的连接串来源 |
+| [docs/guides/admin-ui.md](docs/guides/admin-ui.md) | 后台 7 个页面、**权限模型（三层授权）**、前端约定、`<ah-*>` TagHelper、被显式处理掉的陷阱 |
+| [docs/guides/api-reference.md](docs/guides/api-reference.md) | 端点清单与权限要求、错误响应约定（RFC 7807 统一出口） |
+| [docs/reference/security-design.md](docs/reference/security-design.md) | 安全设计要点逐项（PKCE、令牌轮换、限流、CSRF、CSP…） |
+| [docs/operations/deployment.md](docs/operations/deployment.md) | 生产配置清单、容器 / 反代的两个隐性依赖、迁移、Docker |
+| [docs/guides/testing.md](docs/guides/testing.md) | 测试覆盖清单、端到端脚本、Postman 集合 |
+| [docs/guides/mcp-integration.md](docs/guides/mcp-integration.md) | **接入 MCP**：三种"支持 MCP"的区别、资源登记、`aud` 绑定、MCP Server 侧校验、排错表 |
+| [docs/reference/openiddict-notes.md](docs/reference/openiddict-notes.md) | **踩坑记录**：照 OpenIddict 官方文档写会编译不过 / 运行期才炸的 15 处差异 |
+| [docs/reference/engineering-notes.md](docs/reference/engineering-notes.md) | **框架行为陷阱速查**：ASP.NET Core / OpenIddict 侧的病历式记录，分 A/B/C 三档维护，跨项目复用 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | **分支与协作规范**：`main` / `develop` 模型、分支命名、提交信息、合并方式、发布与 hotfix 流程 |
 | [CHANGELOG.md](CHANGELOG.md) | **版本记录**：每个版本的变更、升级动作与破坏性变更说明（历史版本以本文为准） |
 
@@ -45,12 +46,12 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | 4 | 刷新令牌 + 旋转 + 重放防护（自动撤销整条授权） | `AuthorizationController.Exchange` |
 | 5 | 单点登录（`prompt=none` 静默签发）与全局登出 | `AuthorizationController` |
 | 6 | MFA：TOTP（验证器 App）、邮箱 / 短信验证码 | `AccountApiController`、`AccountService`、`ITwoFactorChannel`（各通道自管目标解析与文案） |
-| 7 | RBAC：角色 → 权限 → 令牌内的 `authhub:permission` 声明（归属三级叠加：出厂默认 / 配置 / 后台落库覆盖，启动期校验） | [权限模型](docs/admin-ui.md#权限模型)、`AuthorizationPolicyExtensions`、`RolePermissionOptions` + `RolePermissionMap.CreateDefaultRoles()`、`LayeredRolePermissionMap`、`RolePermissionOverrides` 表 |
+| 7 | RBAC：角色 → 权限 → 令牌内的 `authhub:permission` 声明（归属三级叠加：出厂默认 / 配置 / 后台落库覆盖，启动期校验） | [权限模型](docs/guides/admin-ui.md#权限模型)、`AuthorizationPolicyExtensions`、`RolePermissionOptions` + `RolePermissionMap.CreateDefaultRoles()`、`LayeredRolePermissionMap`、`RolePermissionOverrides` 表 |
 | 8 | 客户端 CRUD（密钥哈希存储、支持轮换） | `ClientsController`、`OpenIddictClientAdminService` |
 | 9 | Scope 管理 | `ScopesController`、`ScopeService` |
 | 10 | 令牌撤销与黑名单（未过期 JWT 立即失效） | `TokensController`、`EnableTokenEntryValidation` |
-| 11 | **资源指示器（RFC 8707）**：`resource` 参数绑定令牌 `aud`，可按 MCP Server 收窄受众 | [docs/mcp-integration.md](docs/mcp-integration.md)、`OpenIddictServerExtensions`、`AuthorizationController.AttachScopesAndDestinationsAsync` |
-| 12 | **管理后台 UI**（Razor Pages，ABP 版式）：仪表盘、用户、角色与权限、客户端、Scope、审计日志、我的账户 | [docs/admin-ui.md](docs/admin-ui.md)、`src/AuthHub.Api/Pages/`、`wwwroot/` |
+| 11 | **资源指示器（RFC 8707）**：`resource` 参数绑定令牌 `aud`，可按 MCP Server 收窄受众 | [docs/guides/mcp-integration.md](docs/guides/mcp-integration.md)、`OpenIddictServerExtensions`、`AuthorizationController.AttachScopesAndDestinationsAsync` |
+| 12 | **管理后台 UI**（Razor Pages，ABP 版式）：仪表盘、用户、角色与权限、客户端、Scope、审计日志、我的账户 | [docs/guides/admin-ui.md](docs/guides/admin-ui.md)、`src/AuthHub.Api/Pages/`、`wwwroot/` |
 
 附带：审计日志（`AuditLogs` 表 + `/api/audit-logs`）、限流、安全响应头、健康检查、OpenAPI 文档（Scalar UI）。
 
@@ -70,7 +71,7 @@ Bearer 令牌调用 API，也能凭 `jwks_uri` 在本地离线校验令牌，无
 | Scalar.AspNetCore | 2.17 | 交互式 API 文档 UI，替代 Swagger UI；前端资源内嵌在程序集里、不依赖 CDN |
 | Razor Pages | 10.0（ASP.NET Core 内置） | 管理后台的视图层：`_AdminLayout` 共享布局 + 服务端渲染的列表与表单 |
 | 前端 | 原生 CSS / JS，无构建步骤 | `wwwroot/css`、`wwwroot/js`，零 npm、零打包器、零 CDN |
-| xUnit + Moq + FluentAssertions | — | 单元测试 159 项、集成测试 133 项 |
+| xUnit + Moq + FluentAssertions | — | 单元测试 228 项、集成测试 192 项 |
 
 ## 架构
 
@@ -98,7 +99,7 @@ Api ──▶ Application ──▶ Domain
 ```
 
 分层的详细构成、**协议页与管理后台为什么刻意走两条不同的路**，以及几处"看起来不干净但有意
-保留"的分层取舍，见 [docs/architecture.md](docs/architecture.md)。
+保留"的分层取舍，见 [docs/reference/architecture.md](docs/reference/architecture.md)。
 
 ## 快速开始
 
@@ -140,7 +141,7 @@ dotnet run --project src/AuthHub.Api
 > `sysadmin`（用 `SELECT IS_SRVROLEMEMBER('sysadmin')` 确认），省掉一处明文口令。
 > 库名 `AuthHub.Dev` 会在首次运行时自动创建，日志里能看到 `数据库结构已就绪（SqlServer）。`
 >
-> 完整经过见 [docs/openiddict-notes.md 第 15 条](docs/openiddict-notes.md#15-本机-sql-server-的-tcpip-协议默认是关闭的)。
+> 完整经过见 [docs/reference/openiddict-notes.md 第 15 条](docs/reference/openiddict-notes.md#15-本机-sql-server-的-tcpip-协议默认是关闭的)。
 
 启动后：
 
@@ -160,7 +161,7 @@ dotnet run --project src/AuthHub.Api
 
 `appsettings.Development.json` 默认：`Seeding.Enabled=true`、`MigrateOnStartup=true`、
 `RequireHttps=true`、`EnablePasswordFlow=true`。**生产环境这三项都不要直接沿用**，见
-[docs/deployment.md](docs/deployment.md)。
+[docs/operations/deployment.md](docs/operations/deployment.md)。
 
 ### 切到 SQLite（零依赖跑起来）
 
@@ -186,7 +187,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 与 SQLite 一样走 `EnsureCreatedAsync()` 建库建表（PostgreSQL 专用迁移集尚未生成，
 不要对它跑 `dotnet ef database update` —— 那会把 SQL Server 形状的 DDL 发给 PG）。
 兼容性由连真实 PostgreSQL 的集成测试钉住（CI 的 `postgres:16` 服务容器）；
-细节与多实例注意见 [部署 · PostgreSQL](docs/deployment.md#postgresql)。
+细节与多实例注意见 [部署 · PostgreSQL](docs/operations/deployment.md#postgresql)。
 
 ## 种子数据
 
@@ -215,7 +216,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 | `User` | 无管理权限 |
 
 表里是**代码里的出厂默认**，实际生效值可以被两层覆盖：`AuthHub:RolePermissions`
-配置节（部署期基线）与后台勾选落库的运行时覆盖（见 [权限模型](docs/admin-ui.md#权限模型)），
+配置节（部署期基线）与后台勾选落库的运行时覆盖（见 [权限模型](docs/guides/admin-ui.md#权限模型)），
 后者优先级更高。仓库里 `appsettings.json` 的默认值与这张表逐字一致，
 有一条集成测试钉住两者不许漂移。
 
@@ -226,7 +227,7 @@ SQLite 路径下启动时走 `EnsureCreatedAsync()` 按模型建表（不套用 
 
 ```bash
 dotnet build AuthHub.slnx              # 须 0 警告 0 错误
-dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
+dotnet test AuthHub.slnx -c Release    # 单元 228 + 集成 192
 ```
 
 流水线在 GitHub Actions 上（`.github/workflows/`），全部跑在 `ubuntu-latest`：
@@ -239,20 +240,20 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
 
 **分支模型**：`main`（生产就绪）+ `develop`（集成）。功能分支从 `develop` 开、合回 `develop`，发布时 `develop` → `main` 并打 tag。两个长期分支都开了保护：**禁止直接 push、禁止强推与删除**。完整规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-测试覆盖清单、端到端脚本与 Postman 集合见 [docs/testing.md](docs/testing.md)。
+测试覆盖清单、端到端脚本与 Postman 集合见 [docs/guides/testing.md](docs/guides/testing.md)。
 安全漏洞的报告方式见 [SECURITY.md](SECURITY.md)（不要开公开 Issue）。
 
 ## 待办与扩展方向
 
 ### 已完成
 
-- [x] **管理后台 UI**（Razor Pages，7 个页面，见 [docs/admin-ui.md](docs/admin-ui.md)）。
+- [x] **管理后台 UI**（Razor Pages，7 个页面，见 [docs/guides/admin-ui.md](docs/guides/admin-ui.md)）。
       后续可补：审计日志导出 CSV、客户端「测试连接」、
       用户的 MFA 重置（目前需用户本人在「我的账户」里关闭后重新绑定）。
 - [x] **角色→权限映射可配置**：已完成。授权拆成三层（能力目录 / 授权策略 / 授权关系），
       ② 授权策略既可在 `AuthHub:RolePermissions` 里配（配错在启动期就失败），
       也可在后台 `/admin/roles` 勾选落库（即时生效）；③ 授权关系本来就走后台 UI。
-      详见 [权限模型](docs/admin-ui.md#权限模型)。
+      详见 [权限模型](docs/guides/admin-ui.md#权限模型)。
 - [x] **权限归属的后台编辑**：已完成。`/admin/roles` 的权限树改成可勾选提交，落
       `RolePermissionOverrides` 表（一行一角色的**完整权限快照**，空数组=显式收回全部），
       `IRolePermissionMap` 变成"出厂默认 ← 配置 ← 数据库覆盖"三级叠加 + 快照缓存 + `Invalidate()`。
@@ -290,12 +291,12 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
       ③ `plain` 模式用 `options.Configure(o => o.CodeChallengeMethods...)` 清成只有 S256 ——
       **更正上一版的说法**：不是"OpenIddict 没有 API"，而是这个集合挂在 `OpenIddictServerOptions`
       上、不在 builder 的直接成员里。同一份集合同时驱动请求校验与发现文档，两处天然一致。
-      详见 [docs/mcp-integration.md](docs/mcp-integration.md)。
+      详见 [docs/guides/mcp-integration.md](docs/guides/mcp-integration.md)。
 
 ### 待办
 
 - [ ] **DCR（RFC 7591）动态注册**：CIMD 已在 v1.3.0 落地（见
-      [`docs/mcp-integration.md`](docs/mcp-integration.md) 第 7 节），但只支持
+      [`docs/guides/mcp-integration.md`](docs/guides/mcp-integration.md) 第 7 节），但只支持
       `POST /connect/register` 的客户端仍需手工登记。做 DCR 需要速率限制与客户端清理策略。
 - [x] **管理后台补"资源"字段**：客户端新建 / 编辑弹窗已有「允许的资源」勾选项，
       勾选即落成 `rsrc:` 权限。白名单里撤掉的资源不会从已持有的客户端上消失 ——
@@ -304,7 +305,7 @@ dotnet test AuthHub.slnx -c Release    # 单元 159 + 集成 133
       变为可选的 Redis 缓存（`AuthHub:Redis:Enabled`，默认关闭）。撤销仍立刻生效：
       令牌级撤销精确删键，批量撤销（RevokeBySubjectAsync / PruneAsync）递增全局版本号；
       Redis 故障自动降级直查库。多实例部署共享缓存，单实例部署零影响。
-      后续可扩：分布式限流、分布式会话。配置与语义见 [部署](docs/deployment.md)。
+      后续可扩：分布式限流、分布式会话。配置与语义见 [部署](docs/operations/deployment.md)。
 - [ ] **分布式 JWKS 校验**：下游目前可离线验签；进一步可加公钥轮换与缓存控制头。
 - [ ] **OpenTelemetry**：分布式追踪（导出到 OTLP）。
 - [ ] **CI 安全扫描**：`dotnet list package --vulnerable` 与 OWASP Dependency Check

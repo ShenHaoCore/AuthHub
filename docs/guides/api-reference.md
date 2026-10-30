@@ -1,6 +1,6 @@
 # API 参考
 
-> 从 [README](../README.md) 拆出。端点清单与错误响应约定。
+> 从 [README](../../README.md) 拆出。端点清单与错误响应约定。
 > 交互式文档见运行时 `/scalar/v1`（Development 默认开启），文档 JSON 在 `/openapi/v1.json`。
 
 ## 目录
@@ -38,7 +38,7 @@
 
 文档只收录面向调用方的接口（`/api/*`、`/api/account/*`、`/connect/*`）；
 产出浏览器页面的端点（`/account/*`、`GET /`）**有意排除**，理由与做法见
-[openiddict-notes.md 第 10 条](openiddict-notes.md#文档只收录面向调用方的接口页面与站点跳转不在其中)。
+[openiddict-notes.md 第 10 条](../reference/openiddict-notes.md#文档只收录面向调用方的接口页面与站点跳转不在其中)。
 
 ## 会话与账号（浏览器，Cookie 认证）
 
@@ -134,4 +134,4 @@ Content-Type 恒定是 `application/problem+json`。
 
 ⚠ 顺带一个坑：控制器上挂 `[Produces("application/json")]` 会覆盖 Content-Type，
 把 `application/problem+json` 悄悄打回 `application/json` ——
-完整经过见 [openiddict-notes.md 第 5 条](openiddict-notes.md#5-producesapplicationjson-会悄悄破坏-rfc-7807)。
+完整经过见 [openiddict-notes.md 第 5 条](../reference/openiddict-notes.md#5-producesapplicationjson-会悄悄破坏-rfc-7807)。

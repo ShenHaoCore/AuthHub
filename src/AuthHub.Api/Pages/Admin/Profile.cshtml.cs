@@ -7,29 +7,13 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace AuthHub.Api.Pages.Admin;
 
-/// <summary>
-/// 我的账户：档案、修改密码、两步验证。
-///
-/// 设计上刻意分成**三个标签页**而不是长滚动页：改密与 MFA 都是"会改变账号安全状态"的操作，
-/// 视觉上与只读信息混在一起容易误操作。标签用纯 CSS/JS 渐进增强，无 JS 时三块内容仍然全部可见可提交。
-///
-/// 几个实现细节：
-///
-/// 1) **改密后不需要重新登录**。<c>AccountService.ChangePasswordAsync</c> 内部调用了
-///    <c>RefreshSignInAsync</c>：它会刷新安全戳并**重签当前会话的 Cookie**，
-///    因此本机不掉线，而其它设备上的旧会话会被安全戳校验拦下。
-///
-/// 2) **MFA 是两阶段**。`BeginTwoFactorSetupAsync` 只生成密钥（并顺带生成一批恢复码），
-///    此时 MFA 仍未启用；必须用 Authenticator 里的 6 位码调用 `EnableTwoFactorAsync`
-///    才算真正开启，**那一刻会重新生成一批恢复码**，之前那批作废。
-///    所以界面上只在第二阶段展示恢复码 —— 展示第一批等于给用户一堆马上失效的码。
-///
-/// 3) **密钥用 TempData 跨重定向传递**。`BeginTwoFactorSetupAsync` 是"有副作用的写操作"
-///    （会落库 AuthenticatorKey），不能放在 GET 里做；于是走 POST → 302 → GET，
-///    密钥/otpauth URI 通过 TempData（Data Protection 加密、HttpOnly、读取即删）带过去。
-///    重新渲染时（比如验证码填错）会再调一次 begin —— 它会复用已存在的未确认密钥，
-///    不会让用户刚扫进 App 的密钥失效。
-/// </summary>
+/// <summary>我的账户：档案、修改密码、两步验证（三个标签页）。</summary>
+/// <remarks>
+/// - 刻意三个标签页而非长滚动页：改密与 MFA 是「改变账号安全状态」的操作，与只读信息混排容易误操作；标签用纯 CSS/JS 渐进增强，无 JS 时三块内容仍全部可见可提交。
+/// - 改密后不需要重新登录：<c>AccountService.ChangePasswordAsync</c> 内部调 <c>RefreshSignInAsync</c>，刷新安全戳并重签当前会话 Cookie —— 本机不掉线，其它设备的旧会话被安全戳校验拦下。
+/// - MFA 两阶段：begin 只生成密钥（顺带生成一批恢复码）尚未启用；用 6 位码 enable 才算开启，那一刻重新生成恢复码、旧批作废 —— 界面只在第二阶段展示恢复码。
+/// - 密钥用 TempData 跨重定向传递：begin 是有副作用的写操作不能放 GET，走 POST → 302 → GET，由 TempData（Data Protection 加密、HttpOnly、读取即删）带过去；重渲染再调 begin 会复用未确认密钥，不会让已扫进 App 的密钥失效。
+/// </remarks>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.Authenticated)]
 public class ProfileModel : PageModel
 {
@@ -198,7 +182,7 @@ public class ProfileModel : PageModel
         }
 
         TempData["MfaRecoveryCodes"] = result.Value.ToArray();
-        TempData["Success"] = "两步验证已启用。请立刻保存下面的恢复码 —— 它们不会再显示第二次。";
+        TempData["Success"] = "两步验证已开启。请立刻保存下面的恢复码 —— 它们不会再显示第二次。";
         return Redirect("/admin/profile#mfa");
     }
 

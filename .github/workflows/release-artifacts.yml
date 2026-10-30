@@ -1,0 +1,112 @@
+name: Release Artifacts
+
+# 部署产物通道:Release 发布后,自动从该 tag 源码构建「免构建部署包」并挂到 Release 上。
+# 部署端(WSL/任意新机器)从此只下载产物 —— 不需要源码、不需要本地构建,
+# 也不依赖任何机器上的源码路径(部署流程见 docs/operations/local-wsl-environment.md 第 6 节)。
+#
+# 触发:
+# - release published:发版动作(branch-management.md 第 2 节第 5 步)完全不变,
+#   部署资产在 Release 发布后自动出现。
+# - workflow_dispatch:空跑验证构建链路,默认只上传 workflow 产物不上传 Release;
+#   填 attach_to_tag 可把产物补挂到既有版本的 Release(存量版本迁移到本通道用)。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      attach_to_tag:
+        description: 可选:把构建产物补挂到该 tag 的 Release(留空 = 空跑,仅上传 workflow 产物)
+        default: ""
+        required: false
+
+# 挂载 Release 资产需要写权限;本工作流只此一项。
+# 注意:release 事件只从默认分支(main)读取本文件 —— 首次生效依赖下个发版周期
+# 把本文件合入 main(release 分支自带,无需额外操作)。
+permissions:
+  contents: write
+
+# 产物构建不该被新事件自动取消;重复挂载靠 gh release upload --clobber 幂等覆盖。
+concurrency:
+  group: release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  fdd-artifact:
+    name: 构建部署产物(FDD)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 构建源与版本号三选一:release 事件 = 该 Release 的 tag;dispatch 带
+      # attach_to_tag = 该 tag;dispatch 留空 = 当前分支(仅空跑验证)。
+      - name: 确定构建源与版本号
+        id: meta
+        env:
+          ATTACH_TO_TAG: ${{ inputs.attach_to_tag }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            version="$GITHUB_REF_NAME"; ref="$GITHUB_REF"; attach=true
+          elif [ -n "$ATTACH_TO_TAG" ]; then
+            version="$ATTACH_TO_TAG"; ref="refs/tags/$ATTACH_TO_TAG"; attach=true
+          else
+            version="$GITHUB_REF_NAME"; ref="$GITHUB_REF"; attach=false
+          fi
+          {
+            echo "version=$version"
+            echo "ref=$ref"
+            echo "attach=$attach"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 拉取代码
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.meta.outputs.ref }}
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: 缓存 NuGet 包
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'AuthHub.slnx') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # 与部署端形态一致:framework-dependent,部署机只需 .NET 10 运行时。
+      # 只 publish API 工程 —— 它带出全部依赖,单个输出目录即完整部署包。
+      - name: 发布
+        run: dotnet publish src/AuthHub.Api/AuthHub.Api.csproj -c Release --nologo -o publish-out
+
+      - name: 打包并生成校验和
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          asset="authhub-${version}-linux-fdd.tar.gz"
+          mkdir -p dist
+          # 归档不含顶层目录:部署端 tar -xzf 直接落进 /opt/authhub/releases/<版本>/
+          tar -czf "dist/${asset}" -C publish-out .
+          (cd dist && sha256sum "$asset" > "${asset}.sha256")
+
+      - name: 挂载到 Release
+        if: steps.meta.outputs.attach == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.version }}
+        run: |
+          gh release upload "$TAG" dist/* --clobber
+          echo "已挂载资产:$(gh release view "$TAG" --json assets --jq '[.assets[].name]')"
+
+      - name: 上传 workflow 产物(空跑)
+        if: steps.meta.outputs.attach == 'false'
+        uses: actions/upload-artifact@v7
+        with:
+          name: authhub-${{ steps.meta.outputs.version }}-linux-fdd
+          path: dist/*
+          retention-days: 7

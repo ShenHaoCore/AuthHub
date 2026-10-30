@@ -6,32 +6,21 @@ using AuthHub.Application.DTOs.Consents;
 namespace AuthHub.Api.Pages;
 
 /// <summary>
-/// 服务端渲染的极简 HTML 页面（登录 / 两阶段验证 / 同意授权 / 提示）。
-///
-/// **为什么这几页不用 Razor**（重要，改动前请先读完）：
-/// 它们是 OIDC 协议流程的一环 —— 由 <c>AccountController</c> / <c>OpenIddict</c>
-/// 在流程中间直接返回，页面内容（returnUrl、请求参数、scope 列表）全部来自
-/// 当前这次授权请求。用纯字符串产出 HTML 有三个实际收益：
-///   1) 集成测试可以直接断言页面上出现了哪些参数与 scope，不需要解析视图引擎的产物；
-///   2) 协议页的失败模式是"登录不了"，越少的编译期魔法越好定位；
-///   3) 表单字段名与协议参数一一对应，字符串拼装让这层映射一眼可见。
-///
-/// **管理后台（/admin/*）走的是另一条路**：Razor Pages（见 Pages/Admin/），
-/// 因为那边是大量结构相似的列表 / 表单 / 模态，视图引擎的价值远大于成本。
-/// 两条路共用同一套设计令牌（wwwroot/css/authhub-tokens.css），视觉上是一致的。
-///
-/// 安全上做了三件事：
-///   1) 所有动态内容一律 HTML 编码，避免反射型 XSS；
-///   2) 表单只提交到同源路径（配合 CSP 的 form-action 'self'）；
-///   3) 表单内嵌防伪令牌（__RequestVerificationToken）。
+/// 服务端渲染的极简 HTML 页面（登录 / 两步验证 / 同意授权 / 提示），OIDC 协议流程的一环 ——
+/// 由 <c>AccountController</c> / <c>OpenIddict</c> 在流程中间直接返回，页面内容（returnUrl、请求参数、scope 列表）全部来自当前这次授权请求。
 /// </summary>
+/// <remarks>
+/// - 为什么不用 Razor：集成测试可直接断言页面上出现了哪些参数与 scope；协议页的失败模式是"登录不了"，越少编译期魔法越好定位；表单字段名与协议参数一一对应，字符串拼装让映射一眼可见。管理后台（/admin/*）走 Razor Pages（见 Pages/Admin/），那边结构相似的列表 / 表单 / 模态多，视图引擎价值大于成本；两路共用 wwwroot/css/authhub-tokens.css 设计令牌。
+/// - 安全三件事：动态内容一律 HTML 编码防反射型 XSS；表单只提交到同源路径（配合 CSP form-action 'self'）；表单内嵌防伪令牌。
+/// </remarks>
 public static class HtmlPages
 {
     public static string LoginPage(
         string returnUrl,
         string requestToken,
         string? error = null,
-        string? userName = null)
+        string? userName = null,
+        bool showDevelopmentHint = false)
     {
         var body = new StringBuilder();
 
@@ -64,8 +53,13 @@ public static class HtmlPages
         body.Append("<button class=\"btn-primary\" type=\"submit\">登录</button>");
         body.Append("</form>");
 
-        body.Append("<p class=\"hint\">开发环境内置账号：<code>admin</code> / <code>Admin@12345</code>（管理员），"
-                    + "<code>alice</code> / <code>Alice@12345</code>（普通用户）。生产环境请通过管理接口创建账号。</p>");
+        // 内置演示账号的提示只在 Development 渲染：生产环境把账号密码印在登录页上
+        // 属于直接的信息泄露（即使播种默认关闭，也不该让页面替运维"记住"这组口令）。
+        if (showDevelopmentHint)
+        {
+            body.Append("<p class=\"hint\">开发环境内置账号：<code>admin</code> / <code>Admin@12345</code>（管理员），"
+                        + "<code>alice</code> / <code>Alice@12345</code>（普通用户）。生产环境请通过管理接口创建账号。</p>");
+        }
 
         return Layout("登录 - AuthHub", body.ToString());
     }
@@ -100,9 +94,8 @@ public static class HtmlPages
     }
 
     /// <summary>
-    /// 同意授权页。
-    /// 表单会把原始授权请求的全部参数原样回传（连同 submit.Accept / submit.Deny），
-    /// 因此 POST 回到 /connect/authorize 时 OpenIddict 仍能解析出完整请求。
+    /// 同意授权页。表单把原始授权请求的全部参数原样回传（连同 submit.Accept / submit.Deny），
+    /// POST 回 /connect/authorize 时 OpenIddict 仍能解析出完整请求。
     /// </summary>
     public static string ConsentPage(
         string clientDisplayName,

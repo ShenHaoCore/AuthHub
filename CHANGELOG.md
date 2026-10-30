@@ -8,6 +8,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 | 版本 | 主题 | 日期 | 源码 |
 |---|---|---|---|
+| [v1.6.0](#v160--后台-leptonx-视觉基线与工程质量护栏) | 后台 LeptonX 视觉基线与工程质量护栏 | 2026-10-31 | [`v1.6.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.6.0) |
 | [v1.5.1](#v151--mcp-受众一致性修复) | MCP 受众一致性修复 | 2026-10-25 | [`v1.5.1`](https://github.com/ShenHaoCore/AuthHub/tree/v1.5.1) |
 | [v1.5.0](#v150--管理后台局部刷新交互升级与视觉打磨) | 管理后台局部刷新交互升级与视觉打磨 | 2026-10-25 | [`v1.5.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.5.0) |
 | [v1.4.0](#v140--postgresqlredis-令牌缓存与控制台视觉改版) | PostgreSQL、Redis 令牌缓存与控制台视觉改版 | 2026-10-24 | [`v1.4.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.4.0) |
@@ -23,6 +24,32 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | [v1.0.0](#v100--首次公开版本) | 首次公开版本 | 2026-10-19 | [`v1.0.0`](https://github.com/ShenHaoCore/AuthHub/tree/v1.0.0) |
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
+
+## v1.6.0 —— 后台 LeptonX 视觉基线与工程质量护栏
+
+2026-10-31
+
+| 类型 | 内容 |
+|---|---|
+| feat | **管理后台按 LeptonX Lite 实测度量对齐**：侧栏加宽到 280px、底色 `#161616`，菜单项改 36px 定高直角、选中 `#222` 实底 + 白字，hover 只变色不换底；顶栏改为"深色壳 + 浅色 1em 圆角浮条"结构，内容列用 1px `#e7e9ec` 描边把浮条与内容区包成一张浮起的卡；卡片去描边（8px 圆角、24px 内边距、`0 0 20px rgba(76,87,125,.02)` 阴影）；内容区 42/28/56 内边距、表格 8px 单元格；主色由上一版的 `#4f46e5`（靛蓝）对齐为 LeptonX 的 `#355dff`，登录 / 授权页共用令牌同步生效；组件级度量同步收口：顶栏 64px、面包屑 `.725rem` 且层级分隔改用 1px 竖线（不再用 `/` 字符）、页标题 24px/500、卡片标题 1.25em/500 且卡片头无下边线、按钮与输入框统一 40px 高 / 14px 字号 / 8px 圆角、顶栏头像 24px、徽章 4×7 内边距 / 11px 粗体 / 8px 圆角 / 无描边；**列表单元格字号收口**——`.ah-cell-mono` 不再自带 12.5px 字号，等宽只换字体不换字号（主行统一 14px/600、次行 12px/灰、正文 14px），修掉"用户 / 角色"页主行 14px 而"客户端 / Scope / 资源 / 审计"页 12.5px、行高随之 20/22.4 摆动导致各页列表密度不一的问题 |
+| feat | **后台状态表达统一**：状态色只按语义分配——绿=正常/已完成（正常、已验证、已开启、已配置、已启用、成功）、琥珀=待处理/有风险（已锁定、未验证、未开启、CIMD 自动注册、已不在白名单）、红=不可用/失败（已停用、失败）、灰=分类/计数/非状态说明（客户端类型、授权类型、关联资源、"协议"标记、分组头计数）。据此修正：用户列表 MFA 由"绿字 + 灰字未启用"改为统一的"已开启 / 未开启"徽章；资源"已停用"由琥珀改红、客户端停用措辞由"已禁用"改为"已停用"；Scope / 资源引用数与个人页权限点计数不再用蓝色徽章（表格计数回归正文、为零时灰字"未被引用"）；客户端类型与"协议"标记去蓝；审计动作"启用两步验证"由蓝改绿。规则与用词表写入 `docs/guides/admin-ui.md` |
+| feat | **部署产物通道（CI 构建 → GitHub Release → 下载部署）**：新增 `release-artifacts.yml`，Release 发布后自动从该 tag 构建 framework-dependent 部署包（`authhub-<tag>-linux-fdd.tar.gz` + 同名 `.sha256` 校验和）并挂到 Release；WSL / 新机器部署改为「下载 → 校验 → 解压 → 切软链 → 重启」，不再依赖任何机器上的源码路径与本地构建（发版动作不变，见 branch-management.md 第 2 节）。工作流另支持 workflow_dispatch 空跑验证与对存量版本补挂产物 |
+| fix | **生产安全姿态收紧**：登录页"内置账号 admin / Admin@12345"提示改为仅 Development 渲染——生产把手令印在登录页属于直接的信息泄露，且播种默认关闭时该文案本身就是误导；`X-XSS-Protection` 由 `1; mode=block` 改为 `0`——旧浏览器内置 XSS 过滤器存在可利用旁路（抹掉某段内容即可绕过检查），OWASP / Keycloak / Duende 现行建议均为显式关闭，真正的防线是 CSP + 全量 HTML 编码（本项目两者都有） |
+| perf | **消除热路径同步阻塞**：`RedisCachedTokenStore.TryReadAsync` 移除 `.Result`，改 await 取 `Task.WhenAll` 结果；`EtherealEmailSender` 账号懒加载改为惯用 `Lazy<Task<T>>`，首次发信不再阻塞线程池线程，并发首次发信只调一次 API 的语义保留 |
+| refactor | **服务层时钟收敛与文件拆分**：AccountService / UserAdminService / DataProtectionTwoFactorTicketProtector / OpenIddictTokenAdminService 的 `DateTimeOffset.UtcNow` 全部改由注入的 `IClock` 提供，便于单测操控时间（实体默认值与展示层按既有取舍保留直读）；AuthorizationController（522 行）与 AccountService（665 行）各自拆为 partial class 四文件（主文件 + 按职责分文件），路由与公开契约完全不变 |
+| chore | **工程配置基线**：新增仓库级 `.editorconfig`——换行符策略与 `.gitattributes` 同源（仓库一律 LF，bat/cmd/ps1 例外 CRLF）、csproj/props/yml/json 2 空格、C# 4 空格、`_camel` 私有字段与文件范围命名空间等约定成文，IDE 波浪线与构建口径一致；`Directory.Build.props` 打开 `TreatWarningsAsErrors`——当前 0 警告，此后任何新警告（SDK 升级、新代码疏漏）直接挡构建 |
+| style | **注释规范成文并全仓库瘦身**：CONTRIBUTING 新增「代码注释」一节——注释只写"删掉它读者就会做出错误修改"的内容，类型头一句话 `<summary>` + 短行 `<remarks>`，行内注释 1-2 行只留"为什么"；104 个文件按规范重排，净删 1216 行注释，`git diff` 全量过滤校验改动行 100% 为注释行，PKCE / 防伪 / 受众收窄等安全论断逐条保留 |
+| test | **分层依赖守护测试**：新增 `LayeringTests`，用编译期引用断言（`GetReferencedAssemblies`，零新依赖）锁定架构契约——Domain 不引用外层与 Web 栈（Identity.Stores 例外）、Application 不引用 Infrastructure/Api/EF/Mvc/Http（SignInManager 例外）、Infrastructure 不引用 Api、单元测试项目不引用 Api；分层破坏从评审靠眼变成 CI 即失败。architecture.md 同步修正 Application 取舍的过时描述 |
+| docs | **文档目录按用途归类**：`docs/` 拆为 `guides/`（后台、API、MCP、测试、分支）、`reference/`（架构、配置、安全设计、OpenIddict 与工程笔记）、`operations/`（部署、WSL 环境），特性规格留在 `specs/`，Postman 集合移入 `assets/`；新增 `docs/README.md` 索引，全仓 85 条相对链接已校验可解析；`specs/` 同步整理为"特性一目录 + 中文票名"并加索引 |
+
+## v1.5.1 —— MCP 受众一致性修复
+
+| 类型 | 内容 |
+|---|---|
+| feat | **管理后台按 LeptonX Lite 实测度量对齐**：侧栏加宽到 280px、底色 `#161616`，菜单项改 36px 定高直角、选中 `#222` 实底 + 白字，hover 只变色不换底；顶栏改为"深色壳 + 浅色 1em 圆角浮条"结构，内容列用 1px `#e7e9ec` 描边把浮条与内容区包成一张浮起的卡；卡片去描边（8px 圆角、24px 内边距、`0 0 20px rgba(76,87,125,.02)` 阴影）；内容区 42/28/56 内边距、表格 8px 单元格；主色由上一版的 `#4f46e5`（靛蓝）对齐为 LeptonX 的 `#355dff`，登录 / 授权页共用令牌同步生效；组件级度量同步收口：顶栏 64px、面包屑 `.725rem` 且层级分隔改用 1px 竖线（不再用 `/` 字符）、页标题 24px/500、卡片标题 1.25em/500 且卡片头无下边线、按钮与输入框统一 40px 高 / 14px 字号 / 8px 圆角、顶栏头像 24px、徽章 4×7 内边距 / 11px 粗体 / 8px 圆角 / 无描边；**列表单元格字号收口**——`.ah-cell-mono` 不再自带 12.5px 字号，等宽只换字体不换字号（主行统一 14px/600、次行 12px/灰、正文 14px），修掉"用户 / 角色"页主行 14px 而"客户端 / Scope / 资源 / 审计"页 12.5px、行高随之 20/22.4 摆动导致各页列表密度不一的问题 |
+| feat | **后台状态表达统一**：状态色只按语义分配——绿=正常/已完成（正常、已验证、已开启、已配置、已启用、成功）、琥珀=待处理/有风险（已锁定、未验证、未开启、CIMD 自动注册、已不在白名单）、红=不可用/失败（已停用、失败）、灰=分类/计数/非状态说明（客户端类型、授权类型、关联资源、"协议"标记、分组头计数）。据此修正：用户列表 MFA 由"绿字 + 灰字未启用"改为统一的"已开启 / 未开启"徽章；资源"已停用"由琥珀改红、客户端停用措辞由"已禁用"改为"已停用"；Scope / 资源引用数与个人页权限点计数不再用蓝色徽章（表格计数回归正文、为零时灰字"未被引用"）；客户端类型与"协议"标记去蓝；审计动作"启用两步验证"由蓝改绿。规则与用词表写入 `docs/guides/admin-ui.md` |
+| feat | **部署产物通道（CI 构建 → GitHub Release → 下载部署）**：新增 `release-artifacts.yml`，Release 发布后自动从该 tag 构建 framework-dependent 部署包（`authhub-<tag>-linux-fdd.tar.gz` + 同名 `.sha256` 校验和）并挂到 Release；WSL / 新机器部署改为「下载 → 校验 → 解压 → 切软链 → 重启」，不再依赖任何机器上的源码路径与本地构建（发版动作不变，见 branch-management.md 第 2 节）。工作流另支持 workflow_dispatch 空跑验证与对存量版本补挂产物 |
+| docs | **文档目录按用途归类**：`docs/` 拆为 `guides/`（后台、API、MCP、测试、分支）、`reference/`（架构、配置、安全设计、OpenIddict 与工程笔记）、`operations/`（部署、WSL 环境），特性规格留在 `specs/`，Postman 集合移入 `assets/`；新增 `docs/README.md` 索引，全仓 85 条相对链接已校验可解析；`specs/` 同步整理为"特性一目录 + 中文票名"并加索引 |
 
 ## v1.5.1 —— MCP 受众一致性修复
 
@@ -65,7 +92,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 升级动作：
 
-- **PostgreSQL（可选）**：`Database:Provider=Postgres` + 连接串，建库走 EnsureCreated（PG 专用迁移集未提供，勿跑 `database update`），详见 [deployment.md · PostgreSQL](deployment.md#postgresql)。
+- **PostgreSQL（可选）**：`Database:Provider=Postgres` + 连接串，建库走 EnsureCreated（PG 专用迁移集未提供，勿跑 `database update`），详见 [deployment.md · PostgreSQL](docs/operations/deployment.md#postgresql)。
 - **Redis 令牌缓存（可选）**：`AuthHub:Redis:Enabled=true`，Redis 故障自动降级直查库；开启前先备好 Redis 实例。
 - **BREAKING（沿用自资源库表化）**：持有旧 `Auditor`/自定义角色的部署需把 `resources.manage` 加入 `AuthHub:RolePermissions`。
 - 升级后无需其它迁移：本版本新增的 `CimdRefreshLeases`、`RegisteredResources` 表由启动期 EnsureCreated/Migrate 按既有分流自动建立。
@@ -134,7 +161,7 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | feat | **缓存与降级**：元数据按 TTL（默认 24h）缓存；到期重取失败时继续用过期缓存，只有"从未成功拉过"才拒绝 |
 | feat | **管理后台**：客户端列表标出 `CIMD 自动注册` 与 `已禁用`，操作列可一键禁用 / 恢复。禁用是标记而非删记录 —— 删了下次请求会立刻重新注册回来 |
 | fix | `AuthHub:Resources` 的读取与校验收口到 `AuthHubResourceRegistry`。原来 OpenIddict 注册与 CIMD 授权各读一遍配置，容易演变成"白名单加了资源但自动注册客户端仍被拒" |
-| docs | `docs/mcp-integration.md` 新增第 7 节（CIMD 的选型、元数据要求、SSRF 防护清单、排错表）；README 待办改为 DCR |
+| docs | `docs/guides/mcp-integration.md` 新增第 7 节（CIMD 的选型、元数据要求、SSRF 防护清单、排错表）；README 待办改为 DCR |
 
 测试：单元 227 + 集成 151 = **378 项全绿**，Release 构建 0 警告 0 错误。
 
@@ -147,12 +174,12 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 | feat | **资源指示器（RFC 8707）**：`resource` 参数绑定令牌 `aud`。资源白名单走配置 `AuthHub:Resources`，启动时登记；未登记 → `invalid_target`；客户端需有 `rsrc:<uri>` 权限。`/api/clients` 的创建 / 更新 / 详情增加 `resources` / `allowedResources` |
 | fix | **`resource` 之前被"照收不用"**：`AuthorizationController` 只把 Scope 关联的资源写进 principal，请求里的 `resource` 从不进 `aud`。现在声明了 `resource` 就用它，且不再叠加 Scope 资源（受众收窄） |
 | change | **PKCE 只留 S256**：`CodeChallengeMethods` 收窄后，发现文档不再声明 `plain`，请求用 `plain` 直接 400。无破坏性影响（示例客户端本就用 S256） |
-| docs | 新增 [docs/mcp-integration.md](docs/mcp-integration.md)：三种"支持 MCP"的区别、资源登记、令牌形状、MCP Server 侧校验、排错表 |
+| docs | 新增 [docs/guides/mcp-integration.md](docs/guides/mcp-integration.md)：三种"支持 MCP"的区别、资源登记、令牌形状、MCP Server 侧校验、排错表 |
 | docs | 更正 README / engineering-notes 里"OpenIddict 7.7.2 无 API 能限制 `code_challenge_method`"的结论 —— 属性在 `OpenIddictServerOptions` 上，经 `builder.Configure` 可取 |
 
 **升级动作**：无（不配 `AuthHub:Resources` 时行为与之前完全一致）。
 接入 MCP Server 需要：配置资源 → 重启 → 给客户端加 `resources` → 客户端带 `resource` 与 S256。
-详见 [docs/mcp-integration.md](docs/mcp-integration.md)。
+详见 [docs/guides/mcp-integration.md](docs/guides/mcp-integration.md)。
 
 ---
 
@@ -373,8 +400,8 @@ dotnet ef database update -p src/AuthHub.Infrastructure -s src/AuthHub.Api
 
 ### 文档
 
-README 技术栈与路线图已同步；`docs/engineering-notes.md` 新增 5.x → 7.x 改名对照表；
-`docs/security-design.md`、`docs/openiddict-notes.md` 的版本表述已更正。
+README 技术栈与路线图已同步；`docs/reference/engineering-notes.md` 新增 5.x → 7.x 改名对照表；
+`docs/reference/security-design.md`、`docs/reference/openiddict-notes.md` 的版本表述已更正。
 
 > **PKCE `plain` 待办的更正**：原先预期"升到 OpenIddict 6.x 就能直接配置"，
 > 实测 7.7.2 仍无该 builder API，仍需走事件处理器方案（已在 README 待办中更新）。

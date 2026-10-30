@@ -64,7 +64,7 @@ public static class AuditDisplay
 
     /// <summary>
     /// 全部审计动作，按业务分组（筛选下拉用 <c>&lt;optgroup&gt;</c> 渲染）。
-    /// 显式写出顺序而不是依赖字典的枚举顺序 —— 字典的插入顺序是实现细节，不该被界面依赖。
+    /// 显式写出顺序而不是依赖字典的枚举顺序 —— 插入顺序是实现细节，不该被界面依赖。
     /// </summary>
     public static IReadOnlyList<AuditActionGroup> ActionGroups { get; } = new[]
     {
@@ -135,7 +135,7 @@ public static class AuditDisplay
         {
             AuditActionType.UserLoginSucceeded => "ah-badge--success",
             AuditActionType.UserExternalLoginSucceeded => "ah-badge--success",
-            AuditActionType.TwoFactorEnabled => "ah-badge--info",
+            AuditActionType.TwoFactorEnabled => "ah-badge--success",
             AuditActionType.UserLockedOut => "ah-badge--warning",
             AuditActionType.TokenRevoked => "ah-badge--warning",
             AuditActionType.TwoFactorRecoveryCodeUsed => "ah-badge--warning",

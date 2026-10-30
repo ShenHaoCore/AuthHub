@@ -30,13 +30,10 @@ public sealed record CimdResolution(CimdResolutionStatus Status, string? Error =
     public static CimdResolution Rejected(string error) => new(CimdResolutionStatus.Rejected, error);
 }
 
-/// <summary>
-/// 保证"URL 型 client_id"在进入 OpenIddict 校验链之前已经是一条可用的应用记录。
-///
-/// <para>OpenIddict 的授权请求校验第一步就是按 <c>client_id</c> 查应用，
-/// 查不到直接拒。CIMD 的价值恰恰是"没登记过也能用"，因此必须在它之前把事情做完 ——
-/// 这个接口就是那道前置工序，实现见 <c>CimdClientRegistrar</c>。</para>
-/// </summary>
+/// <summary>保证"URL 型 client_id"在进入 OpenIddict 校验链之前已经是一条可用的应用记录。</summary>
+/// <remarks>
+/// - OpenIddict 的授权请求校验第一步就是按 <c>client_id</c> 查应用，查不到直接拒；CIMD 的价值恰恰是"没登记过也能用"，因此必须在它之前把事情做完。实现见 <c>CimdClientRegistrar</c>。
+/// </remarks>
 public interface ICimdClientRegistrar
 {
     Task<CimdResolution> ResolveAsync(string clientId, CancellationToken cancellationToken = default);
