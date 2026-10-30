@@ -48,6 +48,8 @@ git switch -c feature/<短横线描述>
 | `fix` | 修缺陷 | `fix/refresh-token-replay-window` |
 | `chore` | 依赖升级、CI、构建配置 | `chore/net10-upgrade` |
 | `refactor` | 不改行为的结构调整 | `refactor/split-token-service` |
+| `perf` | 只改性能不改行为 | `perf/remove-sync-blocking` |
+| `style` | 格式与注释整理，零行为变化 | `style/comment-slimming` |
 | `docs` | 纯文档 | `docs/deployment-notes` |
 | `test` | 纯测试补充 | `test/mfa-channel-coverage` |
 
