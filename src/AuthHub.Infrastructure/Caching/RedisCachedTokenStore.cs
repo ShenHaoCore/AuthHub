@@ -232,7 +232,9 @@ internal sealed class RedisCachedTokenStore : IOpenIddictTokenStore<OpenIddictEn
         _inner.FindByAuthorizationIdAsync(identifier, cancellationToken);
 
     public IAsyncEnumerable<OpenIddictEntityFrameworkCoreToken> FindBySubjectAsync(
-        string subject, CancellationToken cancellationToken) => _inner.FindBySubjectAsync(subject, cancellationToken);    public ValueTask<string?> GetApplicationIdAsync(
+        string subject, CancellationToken cancellationToken) => _inner.FindBySubjectAsync(subject, cancellationToken);
+
+    public ValueTask<string?> GetApplicationIdAsync(
         OpenIddictEntityFrameworkCoreToken token, CancellationToken cancellationToken) =>
         _inner.GetApplicationIdAsync(token, cancellationToken);
 
