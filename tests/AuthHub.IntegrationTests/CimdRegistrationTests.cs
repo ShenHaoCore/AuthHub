@@ -17,16 +17,16 @@ namespace AuthHub.IntegrationTests;
 
 /// <summary>
 /// CIMD（Client ID Metadata Document）动态客户端注册的端到端行为。
-///
-/// <para><b>为什么要替换拉取器</b>：真实的 CIMD 拉取要求公网 HTTPS 主机，
-/// 而测试宿主跑在本机 —— 让用例去请求一个外部域名既不可靠，也等于把 CI 变成出站扫描器。
-/// 因此这里注入假拉取器验证"拉到元数据之后怎么注册"，SSRF 防护本身由
-/// <c>CimdAddressPolicyTests</c> 覆盖。两者拼起来才是完整链路。</para>
-///
-/// <para><b>守住的行为</b>：① 未登记的 URL 型 client_id 能直接走通授权码前置校验；
-/// ② 落库的权限同时含 scope 与 rsrc:（少了后者，#5 修好的 aud 绑定会在这里断掉）；
-/// ③ native + 随机端口回调能匹配到"去掉端口"的注册值；④ 元数据不合法 / 被禁用 / 未启用 → 拒。</para>
 /// </summary>
+/// <remarks>
+/// - 注入假拉取器的原因：真实 CIMD 拉取要求公网 HTTPS 主机，测试宿主跑在本机 ——
+///   外部域名请求既不可靠，也等于把 CI 变成出站扫描器。这里验证"拉到元数据之后怎么注册"，
+///   SSRF 防护由 <c>CimdAddressPolicyTests</c> 覆盖，两者拼起来才是完整链路。
+/// - 未登记的 URL 型 client_id 能直接走通授权码前置校验。
+/// - 落库的权限同时含 scope 与 rsrc:（少了后者，#5 修好的 aud 绑定会在这里断掉）。
+/// - native + 随机端口回调能匹配到"去掉端口"的注册值。
+/// - 元数据不合法 / 被禁用 / 未启用 → 拒。
+/// </remarks>
 public class CimdRegistrationTests
 {
     private const string ClientMetadataUrl = "https://client.example.com/oauth/client-metadata.json";
@@ -99,9 +99,8 @@ public class CimdRegistrationTests
         using var host = CreateHost(factory, fetcher: new StubCimdFetcher(NativeMetadata()));
         using var client = CreateClient(host);
 
-        // 元数据里声明的是 http://127.0.0.1:33418/callback，入库时去掉端口；
-        // 请求用的是另一个端口 —— 只有 OpenIddict 的 native relaxed 比较能放行。
-        // 这条用例同时验证了"归一化确实必要"：不归一化则这里必然 400。
+        // 元数据里声明的是 http://127.0.0.1:33418/callback，入库时去掉端口；请求用的是另一个端口 ——
+        // 只有 OpenIddict 的 native relaxed 比较能放行（这条同时验证"归一化确实必要"：不归一化必然 400）。
         const string requestUri = "http://127.0.0.1:52889/callback";
 
         var response = await client.GetAsync(AuthorizeUrl(ClientMetadataUrl, requestUri));
@@ -387,8 +386,8 @@ public class CimdRegistrationTests
         }));
 
     /// <summary>
-    /// 可阻塞的假拉取器：用来把"第一次出站"卡住，制造两个请求真正重叠的窗口。
-    /// 直接返回已完成的 Task 会让两个请求在时间上完全错开，测不到并发路径。
+    /// 可阻塞的假拉取器：把"第一次出站"卡住，制造两个请求真正重叠的窗口 ——
+    /// 直接返回已完成的 Task 会让两个请求完全错开，测不到并发路径。
     /// </summary>
     private sealed class GatedCimdFetcher : ICimdMetadataFetcher
     {

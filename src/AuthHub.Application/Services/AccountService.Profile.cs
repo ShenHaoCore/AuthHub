@@ -52,14 +52,7 @@ public partial class AccountService
 
     // ------------------------------------------------------------------ 忘记密码 / 重置密码
 
-    /// <summary>
-    /// 申请密码重置：按邮箱查找用户，生成 Identity 签名的重置令牌并通过邮件发送重置链接。
-    ///
-    /// <para>
-    /// 无论邮箱是否存在都返回成功 —— 避免通过响应差异枚举系统里有哪些邮箱
-    /// （用户名枚举攻击）。真实的发信只在用户存在时进行。
-    /// </para>
-    /// </summary>
+    /// <summary>申请密码重置：按邮箱查找用户，生成 Identity 签名的重置令牌并发送重置链接。无论邮箱是否存在都返回成功，避免通过响应差异枚举邮箱；真实发信只在用户存在时进行。</summary>
     public async Task<Result> RequestPasswordResetAsync(string email, string? resetLinkBase, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.Trim();
@@ -103,11 +96,7 @@ public partial class AccountService
         return Result.Success();
     }
 
-    /// <summary>
-    /// 用重置令牌改密。令牌由 <c>UserManager.GeneratePasswordResetTokenAsync</c> 产出，
-    /// Identity 用 DataProtection 签名，有效期由 <c>DataProtectionTokenProviderOptions.TokenLifespan</c> 控制（本项目 1 小时）。
-    /// 成功后 <c>ResetPasswordAsync</c> 会更新安全戳，使其他设备上的旧 Cookie 会话失效。
-    /// </summary>
+    /// <summary>用重置令牌改密。令牌由 Identity 产出并用 DataProtection 签名（本项目有效期 1 小时）；成功后安全戳更新，其他设备上的旧 Cookie 会话失效。</summary>
     public async Task<Result> ResetPasswordAsync(string email, string token, string newPassword, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByEmailAsync(email.Trim());
@@ -120,8 +109,7 @@ public partial class AccountService
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
         if (!result.Succeeded)
         {
-            // 密码策略失败（强度不足等）应透出真实原因，方便用户改密重试；
-            // 令牌无效/过期则统一模糊提示，避免泄露校验细节。
+            // 密码策略失败透出真实原因方便改密重试；令牌无效/过期统一模糊提示，避免泄露校验细节
             if (IsPasswordPolicyFailure(result))
             {
                 await _audit.LogAsync(
@@ -183,10 +171,7 @@ public partial class AccountService
         return Result.Success();
     }
 
-    /// <summary>
-    /// 重发邮箱确认邮件。已确认的邮箱不再重发（避免无意义发信）。
-    /// 同样不区分"邮箱不存在"，统一返回成功。
-    /// </summary>
+    /// <summary>重发邮箱确认邮件。已确认的邮箱不再重发；不区分邮箱是否存在，统一返回成功。</summary>
     public async Task<Result> ResendEmailConfirmationAsync(string email, string? confirmationLinkBase, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByEmailAsync(email.Trim());

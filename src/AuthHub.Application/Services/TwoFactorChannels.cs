@@ -3,12 +3,7 @@ using AuthHub.Domain.Entities;
 
 namespace AuthHub.Application.Services;
 
-/// <summary>
-/// MFA 的邮件通道。
-///
-/// 文案刻意带上了「若非本人操作请立即修改密码」——邮件会长期留在收件箱里，
-/// 与短信那种"往下翻就看不见"的媒介不同，多一句提示是有意义的。
-/// </summary>
+/// <summary>MFA 的邮件通道。文案刻意带上「若非本人操作请立即修改密码」—— 邮件会长期留在收件箱里（与短信"往下翻就看不见"不同），多一句提示是有意义的。</summary>
 public sealed class EmailTwoFactorChannel : ITwoFactorChannel
 {
     /// <summary>Identity 的默认邮件 provider 名。</summary>
@@ -31,13 +26,7 @@ public sealed class EmailTwoFactorChannel : ITwoFactorChannel
             cancellationToken);
 }
 
-/// <summary>
-/// MFA 的短信通道。
-///
-/// 与邮件通道的差别不只是 sender：文案更短、没有主题、不带"改密码"的提示。
-/// 这些差异原先散在 <c>AccountService</c> 的 <c>switch</c> 分支里，
-/// 现在跟着通道走 —— 改短信文案不会再碰到业务类。
-/// </summary>
+/// <summary>MFA 的短信通道。与邮件通道的差别是刻意的：文案更短、没有主题、不带"改密码"的提示，改短信文案不会再碰到业务类。</summary>
 public sealed class PhoneTwoFactorChannel : ITwoFactorChannel
 {
     /// <summary>Identity 的默认短信 provider 名。</summary>

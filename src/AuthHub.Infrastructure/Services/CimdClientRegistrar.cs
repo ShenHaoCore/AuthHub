@@ -16,28 +16,15 @@ using Oidc = OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace AuthHub.Infrastructure.Services;
 
-/// <summary>
-/// CIMD 客户端的"懒注册"：首次见到某个 URL 型 <c>client_id</c> 时拉取元数据并落库，
-/// 之后按 TTL 刷新。
-///
-/// <para><b>为什么不每次请求都去拉</b>：授权码流程里同一个 client_id 会出现在授权请求、
-/// 令牌请求（兑换与刷新）等多个环节；每次出站请求既慢又把可用性绑在第三方站点上。
-/// 而**完全不拉**（只在第一次拉）又会让客户端改了回调地址之后永远连不上。
-/// TTL 是这两者之间的折中：默认 24 小时，且拉取失败时降级用缓存。</para>
-///
-/// <para><b>为什么可以降级</b>：CIMD 的元数据由客户端自己托管，第三方站点抖动是常态。
-/// 缓存未过期却因为一次网络失败把用户挡在门外，收益（更早发现地址变更）远小于代价。
-/// 但"从未成功拉过"没有缓存可降级，只能拒。</para>
-///
-/// <para><b>为什么"查记录"走 <see cref="IOpenIddictApplicationStore{TApplication}"/> 而不走
-/// <see cref="IOpenIddictApplicationManager"/> 的 Find*</b>：管理器的所有 Find* 都先过
-/// OpenIddict 的实体缓存装饰器（scoped 的 <c>OpenIddictApplicationCache</c>），而它**把未命中
-/// 的 null 也缓存**且不挂任何失效令牌（<c>CreateEntryAsync</c> 只给非 null 结果加失效信号）。
-/// 本类的探测全是"先查后动"—— 查的那一刻记录不存在，等并发方写完库后再查，走管理器只会
-/// 命中那条永不过期的 null：并发等待永远超时，撞唯一索引后的兜底检查也会误判"没人注册"
-/// 而把成功变 500。原生存储每次直查数据库，没有这层缓存；写路径（Create/Update）仍走管理器，
-/// 由它维护缓存与数据库的一致性。</para>
-/// </summary>
+/// <summary>CIMD 客户端的"懒注册"：首次见到 URL 型 <c>client_id</c> 时拉取元数据并落库，之后按 TTL 刷新。</summary>
+/// <remarks>
+/// - 不每次请求都拉：同一 client_id 会出现在授权与令牌等多个环节，每次出站既慢又把可用性绑在第三方站点；
+///   完全不拉又会让客户端改了回调地址后永远连不上。TTL（默认 24 小时）是折中。
+/// - 拉取失败可降级用缓存：元数据由客户端自托管，第三方抖动是常态；"从未成功拉过"没有缓存可降级，只能拒。
+/// - 查记录走 <see cref="IOpenIddictApplicationStore{TApplication}"/> 而非 <see cref="IOpenIddictApplicationManager"/>
+///   的 Find*：管理器的实体缓存把未命中的 null 也缓存且不挂失效令牌，"先查后动"会命中永不过期的 null，
+///   并发等待永远超时、撞唯一索引后的兜底也会误判。写路径（Create/Update）仍走管理器，由它维护缓存与数据库一致。
+/// </remarks>
 internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 {
     private readonly IOpenIddictApplicationManager _applications;
@@ -74,8 +61,8 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 
     public async Task<CimdResolution> ResolveAsync(string clientId, CancellationToken cancellationToken = default)
     {
-        // 不是 https:443 的绝对地址 → 不是 CIMD，交给 OpenIddict 按普通 client_id 处理。
-        // 这一步也让"攻击者拿任意字符串当 client_id"无法触发任何出站请求。
+        // 不是 https:443 的绝对地址 → 不是 CIMD，交给 OpenIddict 按普通 client_id 处理；
+        // 攻击者拿任意字符串当 client_id 也无法触发任何出站请求。
         if (!Uri.TryCreate(clientId, UriKind.Absolute, out var metadataUri)
             || !CimdAddressPolicy.IsAllowedMetadataUri(metadataUri))
         {
@@ -103,9 +90,8 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             return CimdResolution.Allowed;
         }
 
-        // 到期重取前先取得跨实例租约：缓存到期的同一时刻，所有实例都会走到这里，
-        // 没有这把锁就会一起向同一个第三方站点出站。拿不到锁代表别人正在拉，
-        // 这里既不出站也不报错 —— 见 WaitForConcurrentRefreshAsync。
+        // 到期重取前先取得跨实例租约：没有这把锁，缓存到期的同一时刻所有实例会一起向第三方站点出站。
+        // 拿不到锁代表别人正在拉，这里既不出站也不报错 —— 见 WaitForConcurrentRefreshAsync。
         await using var lease = await _refreshLock.TryAcquireAsync(clientId, cancellationToken);
 
         if (lease is null)
@@ -142,15 +128,9 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     // ------------------------------------------------------------------ 注册与刷新
 
     /// <summary>
-    /// 另一个实例正在刷新元数据时的处理。
-    ///
-    /// <para><b>有缓存</b>：直接继续用（与"拉取失败降级"同义）—— 对方拉完会写库，
-    /// 这次请求不必等，也不该因为别人在刷新而失败。</para>
-    ///
-    /// <para><b>没有缓存</b>（首次注册撞上并发）：没有可降级的旧值，但对方通常几秒内就写完。
-    /// 这里做**有上限**的轮询：等到记录出现就放行；等到超时仍没有，才拒绝并说明原因。
-    /// 直接拒绝会让"两个并发的首个授权请求"里慢的那个莫名失败，用户看到的是需要重试一次的登录页。
-    /// 轮询必须走无缓存的原生存储 —— 见类注释，走管理器会命中本请求早先缓存的 null。</para>
+    /// 另一实例正在刷新元数据时的处理：有缓存直接继续用（对方拉完会写库，本次请求不必等也不该失败）；
+    /// 无缓存（首次注册撞并发）则做有上限的轮询，等到记录出现就放行，超时才拒绝并说明原因。
+    /// 轮询必须走无缓存的原生存储 —— 见类注释，走管理器会命中本请求早先缓存的 null。
     /// </summary>
     private async Task<CimdResolution> WaitForConcurrentRefreshAsync(
         OpenIddictEntityFrameworkCoreApplication? application,
@@ -167,8 +147,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         }
 
         // 轮询次数按拉取超时折算，最多 60 次（6 秒）：等待上限略大于一次拉取的耗时。
-        // 刻意用固定延时而不是读时钟 —— 测试里可以注入假时钟，若用假时钟作截止条件，
-        // 循环会永远不结束。
+        // 刻意用固定延时而不是读时钟 —— 测试注入假时钟作截止条件时循环会永不结束。
         var attempts = Math.Clamp((int)(_options.FetchTimeout.TotalMilliseconds / PollIntervalMs), 1, 60);
 
         for (var attempt = 0; attempt < attempts; attempt++)
@@ -216,8 +195,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // 并发首访：两个请求同时发现"未注册"，一个成功、另一个撞唯一索引。
-            // 这不是错误 —— 只要库里已经有这条记录，本次请求就继续。
+            // 并发首访：另一请求抢先注册、撞唯一索引不是错误 —— 库里已有记录本次就继续。
             // 查原生存储而不是管理器：后者可能还拿着"未注册"的缓存结论（见类注释）。
             if (await _applicationStore.FindByClientIdAsync(metadata.ClientId, cancellationToken) is not null)
             {
@@ -281,13 +259,8 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
     }
 
     /// <summary>
-    /// 构建资源权限的授予清单。
-    ///
-    /// 显式配了 <c>AuthHub:Cimd:AllowedResources</c> 就用配置（语义不变）；
-    /// 否则沿用**当前的**资源白名单（RegisteredResources 表启用中的全集）。
-    /// 刻意每次现查而不是注册时快照：白名单已库表化、运行时可增删，
-    /// 自动注册的客户端授予的 <c>rsrc:</c> 权限应该始终与白名单一致 ——
-    /// 真正的受众收窄发生在令牌的 aud 上，不在这里。
+    /// 构建资源权限的授予清单：显式配了 <c>AuthHub:Cimd:AllowedResources</c> 就用配置，否则沿用当前的资源白名单。
+    /// 刻意每次现查而不是注册时快照：白名单已库表化、运行时可增删，授予的 <c>rsrc:</c> 权限应始终与白名单一致。
     /// </summary>
     private async Task<string[]> ResolveAllowedResourcesAsync(CancellationToken cancellationToken)
     {
@@ -349,9 +322,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 
     // ------------------------------------------------------------------ 降级与判定
 
-    /// <summary>
-    /// 拉取或校验失败时的分岔：有缓存 → 记一条警告继续用；无缓存 → 拒。
-    /// </summary>
+    /// <summary>拉取或校验失败时的分岔：有缓存 → 记警告继续用；无缓存 → 拒。</summary>
     private async Task<CimdResolution> DegradeOrRejectAsync(
         OpenIddictEntityFrameworkCoreApplication? application,
         string clientId,
@@ -416,20 +387,14 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             : null;
     }
 
-    /// <summary>
-    /// 内容摘要：同一 URL 返回了不同内容时，日志里能一眼看出"变了"。
-    /// 缓存投毒本身由 TTL + 摘要记录两条线索兜住（发现问题时能回溯到具体版本）。
-    /// </summary>
+    /// <summary>内容摘要：同一 URL 返回了不同内容时日志一眼可辨，出问题可回溯到具体版本。</summary>
     private static string ComputeDigest(string document) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document))).ToLowerInvariant();
 }
 
 /// <summary>
-/// CIMD 相关属性在 OpenIddict 应用 <c>Properties</c> 里的键名。
-///
-/// <para>收在一处是因为它们同时被三处读写：注册器（写）、解析判定（读）、
-/// 管理后台（展示与禁用）。字符串散落在各处的后果是"禁用按钮点了没反应"，
-/// 而编译期不会有任何提示。</para>
+/// CIMD 属性在 OpenIddict 应用 <c>Properties</c> 里的键名。收在一处是因为三处读写
+/// （注册器写、解析判定读、管理后台展示与禁用），字符串散落拼错时编译期不会有任何提示。
 /// </summary>
 public static class CimdProperties
 {

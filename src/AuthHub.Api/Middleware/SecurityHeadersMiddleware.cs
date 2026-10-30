@@ -13,8 +13,8 @@ public sealed class SecurityHeadersMiddleware : IMiddleware
     private const string ApiDocsPathPrefix = "/scalar";
 
     /// <summary>
-    /// 两套策略共用的指令。除 <c>script-src</c> 外完全一致 ——
-    /// 刻意把公共部分收敛到一处，避免日后只在其中一份上补指令、另一份悄悄退化。
+    /// 两套策略共用的指令（除 <c>script-src</c> 外完全一致）。收敛到一处，
+    /// 避免日后只在其中一份上补指令、另一份悄悄退化。
     /// </summary>
     private const string SharedDirectives =
         "default-src 'self'; " +
@@ -34,27 +34,16 @@ public sealed class SecurityHeadersMiddleware : IMiddleware
 
     /// <summary>
     /// API 文档 UI（Scalar）专用策略：<c>script-src</c> 额外放行内联脚本。
-    ///
-    /// <para><b>为什么必须放宽</b>：Scalar 的页面由包内嵌模板产出，其中包含一段内联的
-    /// <c>&lt;script type="module"&gt;</c>，承载文档源地址与 OAuth2 预填参数
-    /// （形如 <c>initialize('/scalar/v1', false, { authentication: ..., sources: [...] })</c>）。
-    /// 它被拦掉后 <c>initialize()</c> 不会执行，<c>#app</c> 容器永远是空的 ——
-    /// 页面返回 200、HTML 结构完整、资源全部可取，唯独浏览器里一片空白，
-    /// 只看响应码完全发现不了。</para>
-    ///
-    /// <para><b>为什么不用 nonce</b>：nonce 是更优解，但需要把 nonce 写进那两个 script 标签，
-    /// 而 HTML 由 Scalar 的内嵌模板生成，.NET 集成没有提供注入口子
-    /// （Scalar 官方文档里的 nonce 方案只覆盖 Next.js / Express 等 JS 系集成）。
-    /// 拿不到 nonce 就只能放行 inline。</para>
-    ///
-    /// <para><b>为什么可以接受</b>：该响应是不含任何请求可控数据的固定模板
-    /// （标题、favicon、文档源、OAuth2 参数全部是代码常量），不存在可注入的内容，
-    /// 内联脚本的执行体完全由服务端代码决定；且放宽范围被
-    /// <see cref="ApiDocsPathPrefix"/> 限制在这一条路径上，业务页面与 API 仍走基准策略。</para>
-    ///
-    /// <para>集成测试对"基准策略不含 <c>unsafe-inline</c>"与"文档策略含 <c>unsafe-inline</c>"
-    /// 都有断言，防止这份放宽被顺手抄到全局。</para>
     /// </summary>
+    /// <remarks>
+    /// - 必须放宽：Scalar 页面由包内嵌模板产出，含一段内联 script（承载文档源与 OAuth2 预填参数），
+    ///   被 CSP 拦掉后 initialize() 不执行，页面返回 200 但 #app 容器永远空白。
+    /// - 不用 nonce：HTML 由 Scalar 内嵌模板生成，.NET 集成没有注入口子
+    ///   （官方 nonce 方案只覆盖 Next.js / Express 等 JS 系集成）。
+    /// - 可接受：该响应是不含任何请求可控数据的固定模板，不存在可注入内容；
+    ///   放宽范围被 <see cref="ApiDocsPathPrefix"/> 限制在这一条路径上。
+    /// - 集成测试对"基准策略不含 unsafe-inline"与"文档策略含 unsafe-inline"都有断言，防止放宽被抄到全局。
+    /// </remarks>
     private const string ApiDocsContentSecurityPolicy = SharedDirectives + "; script-src 'self' 'unsafe-inline'";
 
     public Task InvokeAsync(HttpContext context, RequestDelegate next)
@@ -72,10 +61,8 @@ public sealed class SecurityHeadersMiddleware : IMiddleware
             headers["X-Content-Type-Options"] = "nosniff";
             headers["X-Frame-Options"] = "DENY";
             headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-            // 显式关闭旧浏览器内置的 XSS 审计器（OWASP Secure Headers / Keycloak / Duende 的现行建议）。
-            // "1; mode=block" 看似更安全，实则该过滤器存在可被利用的旁路（选择性地把页面某段内容
-            // 抹掉即可绕过脚本检查），现代浏览器已移除该功能，旧浏览器保持 "0" 才是正确姿态 ——
-            // 真正的防线是上面的 CSP 与全量 HTML 编码。
+            // 显式关闭旧浏览器内置的 XSS 审计器（OWASP / Keycloak / Duende 的现行建议）：
+            // "1; mode=block" 存在可被利用的旁路，现代浏览器已移除该功能；真正的防线是上面的 CSP 与全量 HTML 编码。
             headers["X-XSS-Protection"] = "0";
             headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
 

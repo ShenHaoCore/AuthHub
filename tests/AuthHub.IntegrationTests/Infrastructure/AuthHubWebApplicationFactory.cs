@@ -5,15 +5,14 @@ namespace AuthHub.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// 集成测试宿主。
-///
-/// 关键点：Program.cs 在 <c>builder.Build()</c> 之前就读取了一批配置
-/// （数据库提供程序、连接串、是否强制 HTTPS、是否播种……）。
-/// WebApplicationFactory 的 <c>ConfigureAppConfiguration</c> 对最小托管（minimal hosting）
-/// 是延迟生效的，来不及影响这些“早期读取”，因此这里改用**环境变量**覆盖
-/// （WebApplication.CreateBuilder 构造时就会读入环境变量）。
-///
-/// 由于环境变量是进程级的，集成测试程序集整体关闭了并行执行，见 AssemblyInfo.cs。
 /// </summary>
+/// <remarks>
+/// - 关键点：Program.cs 在 <c>builder.Build()</c> 之前就读取了一批配置（数据库提供程序、连接串、
+///   是否强制 HTTPS、是否播种……），而 WebApplicationFactory 的 <c>ConfigureAppConfiguration</c>
+///   对最小托管是延迟生效的，来不及影响这些"早期读取" —— 因此改用环境变量覆盖
+///   （WebApplication.CreateBuilder 构造时就会读入环境变量）。
+/// - 环境变量是进程级的，集成测试程序集整体关闭了并行执行，见 AssemblyInfo.cs。
+/// </remarks>
 public class AuthHubWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _databasePath;

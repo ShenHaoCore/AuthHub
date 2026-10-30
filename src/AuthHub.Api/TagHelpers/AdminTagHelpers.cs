@@ -5,10 +5,8 @@ using Microsoft.AspNetCore.Razor.TagHelpers;
 namespace AuthHub.Api.TagHelpers;
 
 /// <summary>
-/// <c>&lt;ah-icon path="…" size="16" /&gt;</c> —— 装饰性线稿图标。
-///
-/// 全站 68 处 <c>&lt;svg&gt;</c> 的唯一画法，见 <see cref="AuthHubTagHelperBase.Icon"/>。
-/// 用法：<c>&lt;ah-icon path="@AdminNav.Icons.Plus" size="15" /&gt;</c>
+/// <c>&lt;ah-icon path="…" size="16" /&gt;</c> —— 装饰性线稿图标，全站 68 处 <c>&lt;svg&gt;</c> 的唯一画法，
+/// 用法如 <c>&lt;ah-icon path="@AdminNav.Icons.Plus" size="15" /&gt;</c>，绘制原语见 <see cref="AuthHubTagHelperBase.Icon"/>。
 /// </summary>
 [HtmlTargetElement("ah-icon", TagStructure = TagStructure.WithoutEndTag)]
 public sealed class IconTagHelper : AuthHubTagHelperBase
@@ -30,12 +28,9 @@ public sealed class IconTagHelper : AuthHubTagHelperBase
 }
 
 /// <summary>
-/// <c>&lt;ah-dialog-body&gt;…&lt;/ah-dialog-body&gt;</c> —— 弹窗的内容区。
-///
-/// 它只做一件事：把子内容套进 <c>&lt;div class="ah-modal-body"&gt;</c>。
-/// 单独留一个标签而不是让 &lt;ah-dialog&gt; 自动包一层，是因为表单
-/// （<c>&lt;form asp-page-handler&gt;</c>）必须留在视图里 ——
-/// Razor 的 FormTagHelper 负责生成 action 与防伪令牌，自己拼容易静默丢掉防伪令牌。
+/// <c>&lt;ah-dialog-body&gt;…&lt;/ah-dialog-body&gt;</c> —— 弹窗的内容区，只把子内容套进 <c>&lt;div class="ah-modal-body"&gt;</c>。
+/// 单独留一个标签而非让 &lt;ah-dialog&gt; 自动包一层：表单必须留在视图里，由 Razor 的 FormTagHelper
+/// 生成 action 与防伪令牌，自己拼容易静默丢掉防伪令牌。
 /// </summary>
 [HtmlTargetElement("ah-dialog-body")]
 public sealed class DialogBodyTagHelper : AuthHubTagHelperBase
@@ -50,13 +45,8 @@ public sealed class DialogBodyTagHelper : AuthHubTagHelperBase
 
 /// <summary>
 /// <c>&lt;ah-dialog-foot dismiss="取消" submit="保存" /&gt;</c> —— 弹窗底部的操作区。
-///
-/// 两种形态：
-///   - 只给 <c>dismiss</c>（如只读弹窗）：按钮靠右，文案就是 dismiss；
-///   - 同时给 <c>submit</c>：dismiss 在左、主按钮在右（<c>ah-modal-foot-end</c> 里）。
-///
-/// 可选的 <c>secondary</c> + <c>secondary-handler</c> 再加一个**次级提交按钮**，
-/// 它提交到同一个表单的另一个 handler（典型用法：「保存」旁边的「恢复默认」）。
+/// 只给 dismiss 时按钮靠右；同时给 submit 时 dismiss 在左、主按钮在右。
+/// 可选的 <c>secondary</c> + <c>secondary-handler</c> 再加一个次级提交按钮，提交到同一表单的另一个 handler（如「保存」旁的「恢复默认」）。
 /// </summary>
 [HtmlTargetElement("ah-dialog-foot", TagStructure = TagStructure.WithoutEndTag)]
 public sealed class DialogFootTagHelper : AuthHubTagHelperBase
@@ -69,16 +59,13 @@ public sealed class DialogFootTagHelper : AuthHubTagHelperBase
     [HtmlAttributeName("submit")]
     public string? Submit { get; set; }
 
-    /// <summary>
-    /// 可选的次级提交按钮文案。必须与 <see cref="SecondaryHandler"/> 同时给，否则不渲染。
-    /// </summary>
+    /// <summary>可选的次级提交按钮文案。必须与 <see cref="SecondaryHandler"/> 同时给，否则不渲染。</summary>
     [HtmlAttributeName("secondary")]
     public string? Secondary { get; set; }
 
     /// <summary>
-    /// 次级提交按钮对应的 Razor Pages 处理器名（如 <c>resetPermissions</c>，对应
-    /// <c>OnPostResetPermissionsAsync</c>）。渲染成 <c>formaction="?handler=…"</c>：
-    /// 相对当前文档地址解析，因此仍落在本页，且**沿用同一个表单** —— 防伪令牌不会丢。
+    /// 次级提交按钮对应的处理器名（如 <c>resetPermissions</c>，对应 <c>OnPostResetPermissionsAsync</c>），渲染成 <c>formaction="?handler=…"</c>：
+    /// 相对当前文档地址解析仍落在本页，且沿用同一个表单 —— 防伪令牌不会丢。
     /// </summary>
     [HtmlAttributeName("secondary-handler")]
     public string? SecondaryHandler { get; set; }
@@ -133,37 +120,21 @@ public sealed class DialogFootTagHelper : AuthHubTagHelperBase
 
 /// <summary>
 /// <c>&lt;ah-dialog id="dlg-create" title="新建用户" auto-open="…" size="lg"&gt;…&lt;/ah-dialog&gt;</c>
-/// —— 弹窗外壳 + 标题栏。
-///
-/// 标题栏（标题 + 关闭按钮）由本类产出，子内容原样透传，因此调用方只需要关心表单字段：
-///
-/// <code>
-/// &lt;ah-dialog id="dlg-create" title="新建用户" auto-open="@(Model.AutoOpenCreate ? "true" : "false")"&gt;
-///   &lt;form method="post" asp-page-handler="create"&gt;
-///     &lt;input type="hidden" name="ReturnUrl" value="@Model.CurrentUrl" /&gt;
-///     &lt;ah-dialog-body&gt; …字段… &lt;/ah-dialog-body&gt;
-///     &lt;ah-dialog-foot submit="创建用户" /&gt;
-///   &lt;/form&gt;
-/// &lt;/ah-dialog&gt;
-/// </code>
-///
-/// <c>auto-open</c> 有两个必须守住的约束（<c>AdminUiTests</c> 盯着）：
-///   1. 取值只能是显式的小写字面量 "true" / "false" —— 直接把它绑成 <c>bool</c> 属性，
-///      Razor 会渲染成 "True"/"False"，而前端按值判断，契约随即失效；
-///   2. 不传时**整条属性都不输出**（只读弹窗就是这样），而不是输出 "false"。
-/// 因此这里把它收成字符串按原样透传，由调用方决定写什么。
+/// —— 弹窗外壳 + 标题栏（标题 + 关闭按钮由本类产出，子内容原样透传）。
 /// </summary>
+/// <remarks>
+/// - <c>auto-open</c> 只能取显式小写 "true"/"false"：绑成 bool 会被 Razor 渲染成 "True"/"False"，前端按值判断，契约随即失效（<c>AdminUiTests</c> 盯着）。
+/// - 不传 auto-open 时整条属性都不输出（只读弹窗如此），而不是输出 "false" —— 因此收成字符串按原样透传。
+/// </remarks>
 [HtmlTargetElement("ah-dialog")]
 public sealed class DialogTagHelper : AuthHubTagHelperBase
 {
-    /// <summary>关闭按钮的无障碍名称。</summary>
     private const string CloseLabel = "关闭";
 
     /// <summary>弹窗 id。标题栏的 <c>&lt;h2&gt;</c> 取 <c>{id}-title</c>，与 <c>aria-labelledby</c> 对齐。</summary>
     [HtmlAttributeName("id")]
     public string? Id { get; set; }
 
-    /// <summary>标题栏文案。</summary>
     [HtmlAttributeName("title")]
     public string? Title { get; set; }
 
@@ -219,10 +190,6 @@ public sealed class DialogTagHelper : AuthHubTagHelperBase
         return head;
     }
 
-    /// <summary>
-    /// 关闭按钮的叉号。两个子路径各自是一条直线（<c>M18 6 L6 18</c> 与 <c>M6 6 l12 12</c>），
-    /// 因此 <c>stroke-linejoin</c> 对它没有任何视觉效果 —— 它原先没写这个属性，
-    /// 交给统一的 Icon() 画之后会带上，属于等价改写。
-    /// </summary>
+    /// <summary>关闭按钮的叉号：两个子路径各是一条直线，<c>stroke-linejoin</c> 对它没有视觉效果（统一 Icon() 会带上该属性，等价改写）。</summary>
     private const string ClosePath = "M18 6L6 18M6 6l12 12";
 }

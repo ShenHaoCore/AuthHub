@@ -23,15 +23,10 @@ public interface IClientAdminService
 
     Task<Result> DeleteAsync(string clientId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 禁用 / 恢复一个**自动注册**（CIMD）的客户端。
-    ///
-    /// <para>为什么不是删除：删除之后同一个 <c>client_id</c> 下次请求会立刻被重新注册回来 ——
-    /// 删除对自动注册的客户端没有"封禁"效果。禁用标记会保留在记录上，刷新元数据也不会清掉它。</para>
-    ///
-    /// <para>手工登记的客户端不支持这个操作：它们本来就只有管理员能创建，
-    /// 要收回权限直接改配置或删除更直接。</para>
-    /// </summary>
+    /// <summary>禁用 / 恢复一个**自动注册**（CIMD）的客户端。手工登记的客户端不支持此操作（它们本来就只有管理员能创建，收回权限直接改配置或删除）。</summary>
+    /// <remarks>
+    /// - 为什么不是删除：删除之后同一个 <c>client_id</c> 下次请求会立刻被重新注册回来，没有"封禁"效果；禁用标记保留在记录上，刷新元数据也不会清掉它。
+    /// </remarks>
     Task<Result> SetAutoRegisteredDisabledAsync(
         string clientId,
         bool disabled,

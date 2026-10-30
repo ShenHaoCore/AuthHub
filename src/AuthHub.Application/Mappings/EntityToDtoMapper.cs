@@ -5,20 +5,11 @@ using AuthHub.Domain.Entities;
 
 namespace AuthHub.Application.Mappings;
 
-/// <summary>
-/// 实体 → DTO 的映射。手写扩展方法，不再依赖 AutoMapper。
-///
-/// 为什么移除：AutoMapper 13.0.1 存在已知高危漏洞 CVE-2026-32933（深层嵌套对象图
-/// 触发不可捕获的 StackOverflowException，进程直接崩溃），且 13.x 线没有补丁——
-/// 修复版本 15.1.1+ 已改为 RPL-1.5 / 商业双许可。本项目的映射只有三张表、
-/// 全是扁平字段，手写的成本低于"为一个映射库引入 copyleft 许可与 CVE"。
-///
-/// 与原 AutoMapper 配置的约定一致（调用方依赖此约定，别改）：
-///  - <see cref="ToDto(ApplicationUser)"/> 不填 <c>Roles</c> / <c>LockedOut</c>，
-///    它们分别来自角色表与锁定期判定，由调用方在映射后补齐；
-///  - <see cref="ToDto(ApplicationRole)"/> 不填 <c>Permissions</c> / <c>UserCount</c>，
-///    分别来自 RolePermissionMap 与关联计数，同样由调用方补齐。
-/// </summary>
+/// <summary>实体 → DTO 的映射。手写扩展方法，不再依赖 AutoMapper。</summary>
+/// <remarks>
+/// - 移除 AutoMapper 的原因：13.0.1 存在已知高危漏洞 CVE-2026-32933（深层嵌套对象图触发不可捕获的 StackOverflowException，进程直接崩溃），13.x 线没有补丁，修复版本 15.1.1+ 已改为 RPL-1.5 / 商业双许可；本项目映射只有三张表、全是扁平字段，手写成本低于"为一个映射库引入 copyleft 许可与 CVE"。
+/// - 与原 AutoMapper 配置的约定一致（调用方依赖此约定，别改）：<see cref="ToDto(ApplicationUser)"/> 不填 <c>Roles</c> / <c>LockedOut</c>（来自角色表与锁定期判定），<see cref="ToDto(ApplicationRole)"/> 不填 <c>Permissions</c> / <c>UserCount</c>（来自 RolePermissionMap 与关联计数），由调用方补齐。
+/// </remarks>
 public static class EntityToDtoMapper
 {
     /// <summary>用户实体 → DTO。Roles / LockedOut 留空，由调用方补齐。</summary>

@@ -5,23 +5,17 @@ using Xunit;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 随包发布的配置文件本身的两条契约。
-///
-/// <para><b>为什么需要这组用例</b>：配置文件是**唯一一类改坏了不会在编译期被发现**的产物 ——
-/// 少个逗号、注释符写错位置，编译照过、单元测试照跑，只有真的起进程才炸。
-/// 而这份仓库里没有任何一步会解析它们（CI 不解析、Dockerfile 只是复制），
-/// 于是"配置文件写坏了"可以一路走到部署。</para>
-///
-/// <para>另一条盯的是注释的<b>写法</b>：说明文字只能用 <c>//</c>，不能用
-/// <c>"_comment_xxx": "..."</c> 那种伪键。理由见
-/// <see cref="Shipped_config_files_should_not_use_pseudo_comment_keys"/>。</para>
+/// 随包发布的配置文件本身的两条契约。配置文件是唯一一类改坏了不会在编译期被发现的产物 ——
+/// 少个逗号编译照过、单元测试照跑；而仓库里没有任何一步会解析它们（CI 不解析、Dockerfile 只是复制），
+/// "写坏了"可以一路走到部署。
 /// </summary>
+/// <remarks>
+/// - 说明文字只能用 <c>//</c>，不能用 <c>"_comment_xxx": "..."</c> 那种伪键（理由见
+///   <see cref="Shipped_config_files_should_not_use_pseudo_comment_keys"/>）。
+/// </remarks>
 public class ShippedConfigurationFilesTests
 {
-    /// <summary>
-    /// 库存里所有「随包发布」的配置文件。
-    ///
-    /// </summary>
+    /// <summary>库存里所有「随包发布」的配置文件。</summary>
     private static readonly string[] ShippedFiles =
     [
         "src/AuthHub.Api/appsettings.json",
@@ -51,8 +45,7 @@ public class ShippedConfigurationFilesTests
     [MemberData(nameof(ShippedFileNames))]
     public void Shipped_config_files_should_not_use_pseudo_comment_keys(string relativePath)
     {
-        // 伪键是"把注释写成配置项"：JSON 官方不支持注释，于是在对象里塞一个 "_comment_xxx": "说明"。
-        // 它看着像注释，实际是真实配置项 —— 会进配置树、能被环境变量覆盖、
+        // 伪键是"把注释写成配置项"：看着像注释，实际是真实配置项 —— 会进配置树、能被环境变量覆盖、
         // 将来一旦对某一节改用强类型绑定（ErrorOnUnknownConfiguration）就会让进程起不来。
         // 而 .NET 的 JSON 配置提供程序本来就支持真注释，没有理由付这个代价。
         var configuration = new ConfigurationBuilder()
@@ -85,9 +78,7 @@ public class ShippedConfigurationFilesTests
 
     /// <summary>
     /// 从测试输出目录逐级向上找到仓库里的源文件（与 RolePermissionConfigurationTests 同法）。
-    ///
-    /// 必须对着**源文件**断言：这里要验的是"随包发布的那份文本"，
-    /// 而不是某个已经被宿主解析过的结果。
+    /// 必须对着源文件断言：这里要验的是"随包发布的那份文本"，而不是某个已被宿主解析过的结果。
     /// </summary>
     private static string FindRepositoryFile(string relativePath)
     {

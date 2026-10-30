@@ -13,23 +13,14 @@ using OpenIddict.Server.AspNetCore;
 namespace AuthHub.Api.Controllers;
 
 /// <summary>
-/// OIDC 协议端点。
-///
-/// 分工：
-///   - <c>/connect/token</c>、<c>/connect/introspect</c>、<c>/connect/revoke</c>
-///     由 OpenIddict 内置处理器完成（本控制器只在 OpenIddict 无法处理时兜底，例如 password 流程）；
-///   - <c>/connect/authorize</c>、<c>/connect/logout</c>、<c>/connect/userinfo</c>
-///     需要业务参与（登录、同意、返回用户信息），因此在这里实现。
-///
-/// 该控制器不加 [ApiController]：它需要返回 HTML（登录/同意页）与 302 重定向，
-/// 而不是 ProblemDetails JSON。
-///
-/// 本类按职责拆为 partial class 多个文件（路由与公开契约完全不变）：
-///   - AuthorizationController.cs             主文件：字段、构造函数、共享辅助方法
-///   - AuthorizationController.Authorize.cs   /connect/authorize 授权端点
-///   - AuthorizationController.Exchange.cs    /connect/token 令牌端点（含三种 grant）
-///   - AuthorizationController.UserInfo.cs    /connect/userinfo 与 /connect/logout
+/// OIDC 协议端点（partial 按端点拆分：Authorize / Exchange / UserInfo）。
 /// </summary>
+/// <remarks>
+/// - 分工：<c>/connect/authorize</c>、<c>/connect/logout</c>、<c>/connect/userinfo</c> 需要业务参与（登录、同意、
+///   返回用户信息），在此实现；<c>/connect/token</c>、<c>/connect/introspect</c>、<c>/connect/revoke</c> 由
+///   OpenIddict 内置处理器完成，本控制器只在 OpenIddict 无法处理时兜底（如 password 流程）。
+/// - 不加 [ApiController]：需要返回 HTML（登录/同意页）与 302 重定向，而不是 ProblemDetails JSON。
+/// </remarks>
 [Tags("OIDC 协议")]
 public partial class AuthorizationController : Controller
 {
@@ -70,12 +61,7 @@ public partial class AuthorizationController : Controller
 
     // ------------------------------------------------------------------ 内部辅助（被各 partial 文件共用）
 
-    /// <summary>
-    /// 以指定 scope 为用户签发授权码 / 令牌。
-    ///
-    /// 每次都用 <see cref="SignInManager{TUser}.CreateUserPrincipalAsync"/> 重新构造主体，
-    /// 而不是复用旧声明 —— 这样角色与权限的变更会立即体现在新令牌里。
-    /// </summary>
+    /// <summary>以指定 scope 为用户签发授权码 / 令牌；每次重建主体而不复用旧声明，角色 / 权限变更立即体现到新令牌。</summary>
     private async Task<IActionResult> SignInWithUserAsync(
         ApplicationUser user,
         IEnumerable<string> scopes,
@@ -89,19 +75,11 @@ public partial class AuthorizationController : Controller
         return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    /// <summary>
-    /// 把 Scope / 资源挂到 principal 上，并为每条声明标注"进入哪个令牌"。
-    /// 不标注目标的声明不会出现在任何令牌里（OpenIddict 的默认安全策略）。
-    /// </summary>
+    /// <summary>把 Scope / 资源挂到 principal 上，并为每条声明标注"进入哪个令牌"；不标注目标的声明不会出现在任何令牌里（OpenIddict 默认安全策略）。</summary>
     /// <remarks>
-    /// <c>resources</c>（RFC 8707）**非空时只认它**，不再回头叠加 Scope 关联的资源。
-    ///
-    /// 这个"二选一"是有意的：MCP 这类场景下，客户端声明 <c>resource=https://mcp.example.com/mcp</c>
-    /// 是在说"这张票只给那个服务器用"。如果这时还顺手把 Scope 的 <c>authhub-api</c> 塞进 aud，
-    /// 令牌就同时是 AuthHub API 的通行证 —— MCP Server 一旦被攻破，攻击者可以拿用户的票
-    /// 直接调 AuthHub 的管理接口。受众收窄才是 resource 参数存在的意义。
-    ///
-    /// 为空时退回旧行为（按 Scope 关联资源算 aud），既有客户端不受影响。
+    /// - <c>resources</c>（RFC 8707）非空时只认它，不叠加 Scope 关联的资源：MCP 场景下 resource 意为「这张票只给该服务器用」，
+    ///   受众收窄正是该参数的意义 —— 否则令牌同时是 AuthHub API 的通行证，MCP Server 一旦被攻破即可拿用户的票调 AuthHub 管理接口。
+    /// - 为空时退回旧行为（按 Scope 关联资源算 aud），既有客户端不受影响。
     /// </remarks>
     private async Task AttachScopesAndDestinationsAsync(
         ClaimsPrincipal principal,
@@ -147,11 +125,8 @@ public partial class AuthorizationController : Controller
     }
 
     /// <summary>
-    /// OAuth 2.0 规范的错误响应体：<c>{"error": "...", "error_description": "..."}</c>。
-    ///
-    /// 刻意**不**用 RFC 7807 的 ProblemDetails：这两个字段是规范要求的形状，调用方按
-    /// <c>error</c> 的取值分支（ProblemDetails 只服务 <c>/api/*</c> 那套内部约定）。
-    /// 收在一个工厂里，避免 5 处匿名对象各自漂移。
+    /// OAuth 2.0 规范的错误响应体（<c>error</c> / <c>error_description</c>）。刻意不用 RFC 7807 的 ProblemDetails：
+    /// 调用方按 <c>error</c> 取值分支（ProblemDetails 只服务 <c>/api/*</c> 的内部约定）；收在一个工厂里避免各处漂移。
     /// </summary>
     private static IActionResult OAuthError(string error, string description)
         => new BadRequestObjectResult(new { error, error_description = description });

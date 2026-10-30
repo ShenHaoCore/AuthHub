@@ -9,21 +9,15 @@ using Microsoft.Extensions.Options;
 
 namespace AuthHub.Infrastructure.Services;
 
-/// <summary>
-/// <see cref="ICimdRefreshLock"/> 的数据库租约实现（表：<c>CimdRefreshLeases</c>）。
-///
-/// <para><b>为什么用数据库而不是进程内锁或 Redis</b>：进程内锁在多副本部署下等于没锁；
-/// 引入 Redis 只是为了一把 5 秒的短锁，代价远大于收益。数据库本来就是共享存储，
-/// 一行「主键 + 到期时间 + 持有者令牌」就够用，SQL Server 与 SQLite 行为一致。</para>
-///
-/// <para><b>两种取得路径</b>：
-/// ① 还没有记录 → 插入（主键冲突即说明别人先到）；
-/// ② 记录已过期（持有者崩了）→ 用带 <c>WHERE ExpiresAt &lt; now</c> 的原子更新接管，
-///    只有一行被改到才算取得。两条路都把"谁赢"交给数据库的唯一约束，不做先查后写。</para>
-///
-/// <para><b>租约时长 = 拉取超时 + 15 秒缓冲</b>：必须严格长于一次拉取，否则同一实例会与
-/// 自己接管打架；也不能太长，否则持有者崩溃后其他实例要干等那么久。</para>
-/// </summary>
+/// <summary><see cref="ICimdRefreshLock"/> 的数据库租约实现（表：<c>CimdRefreshLeases</c>）。</summary>
+/// <remarks>
+/// - 用数据库而非进程内锁/Redis：进程内锁在多副本下等于没锁，为一把 5 秒短锁引入 Redis 不值；
+///   一行「主键 + 到期时间 + 持有者令牌」就够用，SQL Server 与 SQLite 行为一致。
+/// - 两条取得路径：无记录 → 插入（主键冲突即别人先到）；记录已过期 → 带 <c>WHERE ExpiresAt &lt; now</c> 的原子更新接管。
+///   "谁赢"交给数据库唯一约束，不做先查后写。
+/// - 租约时长 = 拉取超时 + 15 秒缓冲：必须严格长于一次拉取（否则同一实例会与自己接管打架），也不能太长
+///   （否则持有者崩溃后其他实例干等）。
+/// </remarks>
 internal sealed class CimdRefreshLock : ICimdRefreshLock
 {
     private static readonly TimeSpan LeaseBuffer = TimeSpan.FromSeconds(15);
@@ -68,8 +62,7 @@ internal sealed class CimdRefreshLock : ICimdRefreshLock
         }
         catch (DbUpdateException)
         {
-            // 主键冲突＝另一个实例先插入了。把失败的实体摘出去，否则后续查询会
-            // 继续把它当作待插入的 Added 实体，下一次 SaveChanges 再次撞主键。
+            // 主键冲突＝另一实例先插入。把失败实体摘出跟踪器，否则下一次 SaveChanges 会拿它再次撞主键。
             _dbContext.Entry(lease).State = EntityState.Detached;
         }
 
@@ -95,9 +88,7 @@ internal sealed class CimdRefreshLock : ICimdRefreshLock
     }
 
     /// <summary>
-    /// 释放租约。失败只记日志、不抛 —— 释放发生在请求的收尾阶段，
-    /// 元数据已经注册成功，不该因为一次清理失败把成功的请求变成 500。
-    /// 最坏情况是租约自然过期。
+    /// 释放租约；失败只记日志不抛 —— 释放发生在请求收尾阶段，不该因清理失败把成功的请求变成 500，最坏等租约自然过期。
     /// </summary>
     private async ValueTask ReleaseAsync(string clientId, string holderToken)
     {

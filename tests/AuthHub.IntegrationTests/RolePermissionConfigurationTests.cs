@@ -9,12 +9,9 @@ using Xunit;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 「角色 → 权限」归属的配置契约。
-///
-/// 映射从代码搬到配置之后，多出两类新风险，这组用例分别盯住它们：
-///   1. **代码默认与随包 appsettings 漂移** —— 运维照着 appsettings 改会得到意外结果，
-///      因为他以为"未列出的角色"走的是当前这份默认；
-///   2. **配错了却静默生效** —— 权限名写错不会当场报错，只会让某个角色拿不到权限。
+/// 「角色 → 权限」归属的配置契约。映射从代码搬到配置之后，两类新风险各由用例盯住：
+/// ① 代码默认与随包 appsettings 漂移 —— 运维照着 appsettings 改会得到意外结果；
+/// ② 配错了却静默生效 —— 权限名写错不会当场报错，只会让某个角色拿不到权限。
 /// </summary>
 public class RolePermissionConfigurationTests
 {
@@ -51,10 +48,8 @@ public class RolePermissionConfigurationTests
     }
 
     /// <summary>
-    /// 配置里出现未声明的权限名时，宿主必须**起不来**。
-    ///
-    /// 这条用例守的是"静默失效"这个最贵的故障模式：权限名写错不会当场报错，
-    /// 只会让该角色拿不到权限 —— 现象是菜单消失、接口 403，
+    /// 配置里出现未声明的权限名时，宿主必须起不来 —— 守的是"静默失效"这个最贵的故障模式：
+    /// 权限名写错不会当场报错，只会让该角色拿不到权限（菜单消失、接口 403），
     /// 而排查方向通常会被带偏到策略注册或缓存上。
     /// </summary>
     [Fact]
@@ -87,9 +82,8 @@ public class RolePermissionConfigurationTests
     }
 
     /// <summary>
-    /// 改配置就能改归属 —— 这正是把这一层搬出代码的目的所在。
-    ///
-    /// 这里验的是整条链：环境变量 → 配置 → Options 绑定 → <see cref="IRolePermissionMap"/>。
+    /// 改配置就能改归属 —— 这正是把这一层搬出代码的目的所在。验的是整条链：
+    /// 环境变量 → 配置 → Options 绑定 → <see cref="IRolePermissionMap"/>；
     /// 页面上的呈现（权限矩阵是否跟着变）由管理后台那组用例覆盖。
     /// </summary>
     [Fact]
@@ -119,10 +113,8 @@ public class RolePermissionConfigurationTests
     }
 
     /// <summary>
-    /// 从测试输出目录逐级向上找到仓库里的文件。
-    ///
-    /// 这条契约必须对着**源文件**断言：走 HTTP 取到的是宿主解析后的结果，
-    /// 而这里要验的恰恰是"随包发布的那份文本"。
+    /// 从测试输出目录逐级向上找到仓库里的文件。必须对着源文件断言：
+    /// 走 HTTP 取到的是宿主解析后的结果，而这里要验的恰恰是"随包发布的那份文本"。
     /// </summary>
     private static string FindRepositoryFile(string relativePath)
     {

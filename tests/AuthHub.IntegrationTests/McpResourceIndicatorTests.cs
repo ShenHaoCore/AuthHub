@@ -12,17 +12,15 @@ namespace AuthHub.IntegrationTests;
 
 /// <summary>
 /// RFC 8707 资源指示器 + PKCE 只留 S256 —— MCP 授权（OAuth 2.1）的两条硬要求。
-///
-/// 这组用例用**独立宿主**：资源集合是启动时快照的，配置必须在 host 构建前就位；
-/// 需要的客户端也只在测试库里现造，不去改种子数据。
-///
-/// 守住的行为：
-/// ① 登记过且客户端有权限的 resource → 令牌 aud **只**是它（不给多余的受众）；
-/// ② 没登记的 resource → invalid_target，不能悄悄退化成"忽略这个参数"；
-/// ③ 客户端没有该资源的权限 → invalid_request（登记只说明资源存在，授权看客户端权限）；
-/// ④ 不带 resource 的老客户端 → aud 仍是 authhub-api，行为不变；
-/// ⑤ 发现文档只声明 S256，授权请求用 plain 直接拒。
 /// </summary>
+/// <remarks>
+/// - 用独立宿主：资源集合是启动时快照的，配置必须在 host 构建前就位；客户端在测试库里现造，不改种子数据。
+/// - 登记过且有权限的 resource → 令牌 aud 只含它（不给多余的受众）。
+/// - 没登记的 resource → invalid_target，不能悄悄退化成"忽略这个参数"；
+///   客户端无该资源权限 → invalid_request（登记只说明资源存在，授权看客户端权限）。
+/// - 不带 resource 的老客户端 → aud 仍是 authhub-api，行为不变。
+/// - 发现文档只声明 S256，授权请求用 plain 直接拒。
+/// </remarks>
 public class McpResourceIndicatorTests
 {
     private const string McpResource = "https://mcp.example.com/mcp";
@@ -66,9 +64,8 @@ public class McpResourceIndicatorTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var audiences = ReadAudiences(await AuthHubFixture.ReadAccessTokenAsync(response));
 
-        // 注意是"只有它"：scope api:read 本身关联 authhub-api，
-        // 如果实现里把 scope 资源一起塞进 aud，这张发给 MCP Server 的票
-        // 就能回头调 AuthHub 的 API —— 施害者只需要攻破 MCP Server。
+        // 注意是"只有它"：scope api:read 本身关联 authhub-api，若把 scope 资源一起塞进 aud，
+        // 这张发给 MCP Server 的票就能回头调 AuthHub 的 API —— 施害者只需要攻破 MCP Server。
         audiences.Should().BeEquivalentTo(new[] { McpResource });
     }
 
@@ -176,8 +173,7 @@ public class McpResourceIndicatorTests
 
         var response = await client.GetAsync(AuthorizeUrl("S256", challenge));
 
-        // 通过协议校验后才会走到业务分支（未登录 → 跳登录页）。
-        // 只要到了这一步，就说明 S256 没被误杀。
+        // 通过协议校验后才会走到业务分支（未登录 → 跳登录页）：到了这一步就说明 S256 没被误杀。
         response.StatusCode.Should().Be(HttpStatusCode.Redirect);
         response.Headers.Location!.OriginalString.Should().Contain("/account/login");
     }
@@ -185,9 +181,8 @@ public class McpResourceIndicatorTests
     // ------------------------------------------------------------------ ⑧ 刷新时变更受众被拒
 
     /// <summary>
-    /// RFC 8707 §5：刷新只允许**收窄**受众。一个同时持有两个资源权限的客户端，
-    /// 用为 A 签发的刷新令牌去请求 B 的令牌，必须被拒 —— 否则受众可以事后拓宽，
-    /// 「发给 MCP Server 的票只能进 MCP Server」这条保证就出现回退。
+    /// RFC 8707 §5：刷新只允许收窄受众 —— 为 A 签发的刷新令牌去请求 B 的令牌必须被拒，
+    /// 否则受众可以事后拓宽，「发给 MCP Server 的票只能进 MCP Server」这条保证就出现回退。
     /// </summary>
     [Fact]
     public async Task Refreshing_with_a_different_resource_should_be_rejected()
@@ -215,8 +210,8 @@ public class McpResourceIndicatorTests
     // ------------------------------------------------------------------ ⑨ 刷新时带原受众照常通过
 
     /// <summary>
-    /// 对照组：MCP 客户端按规范在刷新请求里**重复**授权时的 resource 参数，
-    /// 必须照常通过且新令牌受众不变 —— 收紧受众校验不能误伤规范内的正常刷新。
+    /// 对照组：刷新请求里重复授权时的 resource 参数（MCP 规范要求的常规写法）
+    /// 必须照常通过且受众不变 —— 收紧受众校验不能误伤规范内的正常刷新。
     /// </summary>
     [Fact]
     public async Task Refreshing_with_the_same_resource_should_keep_the_audience()

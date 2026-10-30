@@ -9,17 +9,11 @@ using Microsoft.Extensions.Logging;
 
 namespace AuthHub.Application.Services;
 
-/// <summary>
-/// 账号业务：注册、两阶段登录（密码 + MFA）、改密、MFA 生命周期管理。
-/// 只依赖 Identity 的抽象（UserManager / SignInManager），不依赖 HTTP，
-/// 因此可以被单元测试直接驱动。
-///
-/// 本类按职责拆为 partial class 多个文件（接口与公开契约完全不变）：
-///   - AccountService.cs           主文件：字段、构造函数、共享辅助方法
-///   - AccountService.Login.cs     注册与登录（两阶段）及登出
-///   - AccountService.TwoFactor.cs MFA 生命周期（开启 / 关闭 / 验证码通道）
-///   - AccountService.Profile.cs   档案、密码（改密 / 重置）与邮箱确认
-/// </summary>
+/// <summary>账号业务：注册、两阶段登录（密码 + MFA）、改密、MFA 生命周期管理。</summary>
+/// <remarks>
+/// - 只依赖 Identity 的抽象（UserManager / SignInManager），不依赖 HTTP，可被单元测试直接驱动。
+/// - 按职责拆为 partial 文件（接口与公开契约完全不变）：本文件是字段/构造函数/共享辅助，Login 是注册与两阶段登录及登出，TwoFactor 是 MFA 生命周期，Profile 是档案、密码与邮箱确认。
+/// </remarks>
 public sealed partial class AccountService : IAccountService
 {
     private const int RecoveryCodeCount = 10;
@@ -52,8 +46,7 @@ public sealed partial class AccountService : IAccountService
         _audit = audit;
         _tickets = tickets;
         _emailSender = emailSender;
-        // 按通道名索引。重名直接炸在启动期 —— 否则运行期会静默用后注册的那个覆盖先注册的，
-        // 表现为"某个通道的验证码发到了另一个通道的文案里"，很难查。
+        // 按通道名索引。重名直接炸在启动期 —— 否则运行期会静默地一个通道覆盖另一个。
         _twoFactorChannels = twoFactorChannels.ToDictionary(
             channel => channel.Provider,
             StringComparer.Ordinal);

@@ -8,17 +8,16 @@ using FluentAssertions;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 后台「角色与权限」页的**可编辑**契约 —— 权限归属从只读展示改成落库可改之后新增的一组用例。
-///
-/// 盯住四件事：
-///   1) 权限弹窗渲染成可提交的复选框（而不是 <c>disabled</c> 的只读展示）；
-///   2) 提交后**真的生效**（回读页面能看到勾选状态变了）并**落了审计**；
-///   3) 「恢复默认」能把数据库里的覆盖行删掉、回落到配置 / 出厂默认；
-///   4) 两道服务端护栏：未声明的权限名、以及"删掉最后一个 roles.manage 持有者"都会被拒。
-///
-/// 这些用例共用同一个宿主（同一个 SQLite 库），因此凡是对状态有写入的用例都用 try/finally
-/// 把角色复位 —— 否则后面的用例会在"上一条留下的权限"上做出错误判断。
+/// 后台「角色与权限」页的可编辑契约 —— 权限归属从只读展示改成落库可改之后新增的一组用例。
 /// </summary>
+/// <remarks>
+/// - 权限弹窗渲染成可提交的复选框（而不是 <c>disabled</c> 的只读展示）；提交后真的生效
+///   （回读页面能看到勾选状态变了）并落审计。
+/// - 「恢复默认」能把数据库里的覆盖行删掉、回落到配置 / 出厂默认。
+/// - 两道服务端护栏：未声明的权限名、以及"删掉最后一个 roles.manage 持有者"都会被拒。
+/// - 用例共用同一宿主（同一 SQLite 库），有写入的用例都用 try/finally 把角色复位 ——
+///   否则后面的用例会在"上一条留下的权限"上做出错误判断。
+/// </remarks>
 [Collection(AuthHubFixture.CollectionName)]
 public class RolePermissionEditingTests
 {
@@ -280,8 +279,8 @@ public class RolePermissionEditingTests
         });
 
     /// <summary>
-    /// 截取某个弹窗的 HTML 片段（从它的 id 属性到闭合标签）。
-    /// 页面里每个角色都有一个权限弹窗，靠整体 Contains 断言会串台到别的角色上。
+    /// 截取某个弹窗的 HTML 片段（从它的 id 属性到闭合标签）：页面里每个角色都有一个权限弹窗，
+    /// 靠整体 Contains 断言会串台到别的角色上。
     /// </summary>
     private static string DialogBlock(string html, string dialogId)
     {
@@ -294,7 +293,7 @@ public class RolePermissionEditingTests
         return html[start..end];
     }
 
-    /// <summary>弹窗的**开标签**部分（含 <c>class</c> 之后的 <c>data-dialog-autoopen</c> 等属性）。</summary>
+    /// <summary>弹窗的开标签部分（含 <c>class</c> 之后的 <c>data-dialog-autoopen</c> 等属性）。</summary>
     private static string DialogHeader(string html, string dialogId)
     {
         var block = DialogBlock(html, dialogId);

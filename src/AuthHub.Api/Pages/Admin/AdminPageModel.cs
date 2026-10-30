@@ -7,44 +7,24 @@ namespace AuthHub.Api.Pages.Admin;
 /// <summary>
 /// 后台管理页面的公共基类：把用户 / 角色 / 客户端 / Scope 四个 CRUD 页面逐字重复的
 /// 「PRG + 弹窗重开 + 回跳」样板收在一处。
-///
-/// 交互契约（与 <c>wwwroot/js/authhub.js</c> 配合）：
-///   - POST 成功 → <see cref="RedirectBackWithSuccess"/> 写一条一次性提示后 302 回列表，
-///     刷新页面不会重复提交；
-///   - POST 失败 → <see cref="FailAsync"/> 原地重渲染，并把 **哪个弹窗出的错** 记进
-///     <see cref="OpenDialog"/>，视图据此把 <c>data-dialog-autoopen</c> 渲染成显式的小写
-///     "true"，用户填过的值不会丢。
-///
-/// 局部刷新分支（<see cref="IsPartial"/>）：前端 authhub.js 对带 <c>data-ajax</c> 的表单
-/// 改走 fetch，请求头带 <c>X-AH-Partial: 1</c>。此时页面视图把 <c>Layout</c> 置空，
-/// <c>Page()</c> 渲染出的就是 #ah-content 内容片段本身 —— 因此 <see cref="FailAsync"/>
-/// 无需分支；成功路径用 <see cref="RedirectBackWithSuccessAsync"/> 替代 302：
-/// 重载列表数据 + 把提示写进 <c>X-AH-Toast</c> 响应头后原地返回片段。
-/// 不带该头的请求（无 JS、集成测试、CSRF 重放）走原有整页流程，行为不变。
-///
-/// 两条硬约束（都有契约测试守着，见 <c>AdminUiTests</c>）：
-///   1. 视图里**不要**把 <see cref="AutoOpenCreate"/> 直接插值进属性 ——
-///      <c>data-dialog-autoopen="@Model.AutoOpenCreate"</c> 会渲染成 "False"，而属性**照样存在**，
-///      前端一旦按「属性是否存在」判断就会所有弹窗一起弹。必须写
-///      <c>@(Model.AutoOpenCreate ? "true" : "false")</c>。
-///   2. 失败重渲染前必须重新载入列表数据（<see cref="LoadDataAsync"/>），
-///      否则用户看到的是一个「弹窗开着、背后列表全空」的页面。
 /// </summary>
+/// <remarks>
+/// - 交互契约（与 <c>wwwroot/js/authhub.js</c> 配合）：POST 成功 → <see cref="RedirectBackWithSuccess"/> 写一条一次性提示后 302 回列表；POST 失败 → <see cref="FailAsync"/> 原地重渲染，把哪个弹窗出错记进 <see cref="OpenDialog"/>，视图据此把 <c>data-dialog-autoopen</c> 渲染成显式小写 "true"，用户填过的值不丢。
+/// - 局部刷新（<see cref="IsPartial"/>，authhub.js 的 data-ajax 请求带 <c>X-AH-Partial: 1</c>）：视图把 Layout 置空后 <see cref="Page()"/> 产出的就是 #ah-content 片段本身，失败路径无需分支；成功用 <see cref="RedirectBackWithSuccessAsync"/> 重载列表 + <c>X-AH-Toast</c> 头原地返回。不带该头的请求（无 JS、集成测试、CSRF 重放）走原有整页流程。
+/// - 视图里不要把 <see cref="AutoOpenCreate"/> 直接插值进属性 —— <c>data-dialog-autoopen="@Model.AutoOpenCreate"</c> 渲染成 "False" 但属性照样存在，前端按「属性是否存在」判断会所有弹窗一起弹；必须写 <c>@(Model.AutoOpenCreate ? "true" : "false")</c>。
+/// - 失败重渲染前必须重新载入列表数据（<see cref="LoadDataAsync"/>），否则是「弹窗开着、背后列表全空」的页面。
+/// - 两条约束都有契约测试守着（<c>AdminUiTests</c>）。
+/// </remarks>
 public abstract class AdminPageModel : PageModel
 {
-    /// <summary>新建弹窗的标识（<see cref="OpenDialog"/> 取值之一）。</summary>
     protected const string CreateDialog = "create";
 
-    /// <summary>编辑弹窗的标识（<see cref="OpenDialog"/> 取值之一）。</summary>
     protected const string EditDialog = "edit";
 
     /// <summary>成功提示的 TempData 键，由 <c>Pages/Shared/_AdminLayout.cshtml</c> 读取并展示。</summary>
     private const string SuccessTempDataKey = "Success";
 
-    /// <summary>
-    /// 本次请求是否来自前端局部刷新层（authhub.js 的 data-ajax 表单 / data-ajax-link 链接）。
-    /// 页面视图据此把 Layout 置空，<see cref="Page()"/> 即产出 #ah-content 内容片段。
-    /// </summary>
+    /// <summary>本次请求是否来自前端局部刷新层（authhub.js 的 data-ajax 表单 / data-ajax-link 链接）；视图据此把 Layout 置空，<see cref="Page()"/> 即产出 #ah-content 内容片段。</summary>
     public bool IsPartial =>
         Request.Headers.TryGetValue("X-AH-Partial", out var values)
         && values.Count > 0;
@@ -74,20 +54,12 @@ public abstract class AdminPageModel : PageModel
     /// <summary>比较编辑标识的策略。角色名等按名称查找的场景不区分大小写。</summary>
     protected virtual StringComparison EditingIdComparison => StringComparison.Ordinal;
 
-    /// <summary>
-    /// 载入本页列表数据。GET 与 POST 失败时都要调用 —— 失败重渲染不能是空白页。
-    /// </summary>
+    /// <summary>载入本页列表数据。GET 与 POST 失败时都要调用 —— 失败重渲染不能是空白页。</summary>
     protected abstract Task LoadDataAsync(CancellationToken cancellationToken);
 
-    /// <summary>该行的编辑弹窗是否需要自动打开。</summary>
     public bool IsEditFailure(string id) => IsDialogFailure(EditDialog, id);
 
-    /// <summary>
-    /// 指定弹窗是否因上一次提交失败而需要自动打开。
-    ///
-    /// 给"同一行上有多个表单弹窗"的页面用（如角色页除了编辑说明，还有一个权限归属弹窗），
-    /// 它们共用 <see cref="EditingId"/> 定位到同一行，靠 <paramref name="dialog"/> 区分是哪一个。
-    /// </summary>
+    /// <summary>指定弹窗是否因上一次提交失败而需要自动打开。给同一行上有多个表单弹窗的页面用（共用 <see cref="EditingId"/> 定位到同一行，靠 <paramref name="dialog"/> 区分）。</summary>
     public bool IsDialogFailure(string dialog, string? id)
         => string.Equals(OpenDialog, dialog, StringComparison.Ordinal)
            && !string.IsNullOrEmpty(id)
@@ -108,10 +80,7 @@ public abstract class AdminPageModel : PageModel
     protected IActionResult RedirectBack()
         => Redirect(!string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl : ListPath);
 
-    /// <summary>
-    /// <see cref="RedirectBack"/> 的局部刷新版：局部请求时不做 302 ——
-    /// 重载列表数据后原地返回内容片段（片段里没有 302 可跟，前端也不会跟着跳）。
-    /// </summary>
+    /// <summary><see cref="RedirectBack"/> 的局部刷新版：局部请求时不做 302，重载列表数据后原地返回内容片段（片段里没有 302 可跟）。</summary>
     protected async Task<IActionResult> RedirectBackAsync(CancellationToken cancellationToken)
     {
         if (!IsPartial)
@@ -133,11 +102,7 @@ public abstract class AdminPageModel : PageModel
         return RedirectBack();
     }
 
-    /// <summary>
-    /// <see cref="RedirectBackWithSuccess"/> 的局部刷新版：提示不再走
-    /// 「TempData + 整页渲染」，而是写进 <c>X-AH-Toast</c> 响应头
-    /// （<see cref="SetPartialToast"/>），由 authhub.js 渲染成轻提示。
-    /// </summary>
+    /// <summary><see cref="RedirectBackWithSuccess"/> 的局部刷新版：提示不走 TempData + 整页渲染，改写进 <c>X-AH-Toast</c> 响应头（<see cref="SetPartialToast"/>），由 authhub.js 渲染成轻提示。</summary>
     protected async Task<IActionResult> RedirectBackWithSuccessAsync(string message, CancellationToken cancellationToken)
     {
         if (!IsPartial)
@@ -150,10 +115,7 @@ public abstract class AdminPageModel : PageModel
         return Page();
     }
 
-    /// <summary>
-    /// 局部刷新动作的反馈提示：URI 编码后的 {"t":类型,"m":文案} JSON。
-    /// HTTP 头只允许 ASCII（中文文案必须整体转义），前端 decodeURIComponent 还原。
-    /// </summary>
+    /// <summary>局部刷新动作的反馈提示：URI 编码后的 {"t":类型,"m":文案} JSON（HTTP 头只允许 ASCII，中文文案整体转义，前端 decodeURIComponent 还原）。</summary>
     protected void SetPartialToast(string type, string message)
     {
         var payload = System.Text.Json.JsonSerializer.Serialize(new { t = type, m = message });
@@ -162,8 +124,7 @@ public abstract class AdminPageModel : PageModel
 
     /// <summary>
     /// 空白串归一为 null，其余去掉首尾空白。
-    ///
-    /// 注意它**不等于**业务上的「清空」：本项目的更新请求统一是「null 表示不修改」语义，
+    /// 注意不等于业务上的「清空」：本项目更新请求统一是「null 表示不修改」语义，
     /// 需要表达"清空"的字段（如用户手机号）要另按空串传递，见 <c>UsersModel.OnPostSaveAsync</c>。
     /// </summary>
     protected static string? TrimToNull(string? value)
