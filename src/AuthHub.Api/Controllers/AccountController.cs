@@ -42,17 +42,20 @@ public class AccountController : Controller
     private readonly IAccountService _accountService;
     private readonly IAntiforgery _antiforgery;
     private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         IAccountService accountService,
         IAntiforgery antiforgery,
         IConfiguration configuration,
+        IHostEnvironment environment,
         ILogger<AccountController> logger)
     {
         _accountService = accountService;
         _antiforgery = antiforgery;
         _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -64,7 +67,7 @@ public class AccountController : Controller
     public IActionResult Login([FromQuery] string? returnUrl = null, [FromQuery] string? error = null)
     {
         var safeReturnUrl = SafeReturnUrl(returnUrl);
-        return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), error));
+        return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), error, showDevelopmentHint: _environment.IsDevelopment()));
     }
 
     [EndpointSummary("提交登录")]
@@ -83,7 +86,7 @@ public class AccountController : Controller
 
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
-            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), "请输入用户名和密码。", username));
+            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), "请输入用户名和密码。", username, _environment.IsDevelopment()));
         }
 
         var result = await _accountService.LoginAsync(new LoginRequest(username, password, rememberMe), cancellationToken);
@@ -91,7 +94,7 @@ public class AccountController : Controller
         if (result.IsFailure)
         {
             _logger.LogInformation("登录页登录失败：{Reason}", result.Error.Message);
-            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), result.Error.Message, username));
+            return Html(HtmlPages.LoginPage(safeReturnUrl, IssueAntiforgeryToken(), result.Error.Message, username, _environment.IsDevelopment()));
         }
 
         var login = result.Value;

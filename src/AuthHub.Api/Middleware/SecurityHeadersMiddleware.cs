@@ -72,7 +72,11 @@ public sealed class SecurityHeadersMiddleware : IMiddleware
             headers["X-Content-Type-Options"] = "nosniff";
             headers["X-Frame-Options"] = "DENY";
             headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-            headers["X-XSS-Protection"] = "1; mode=block";
+            // 显式关闭旧浏览器内置的 XSS 审计器（OWASP Secure Headers / Keycloak / Duende 的现行建议）。
+            // "1; mode=block" 看似更安全，实则该过滤器存在可被利用的旁路（选择性地把页面某段内容
+            // 抹掉即可绕过脚本检查），现代浏览器已移除该功能，旧浏览器保持 "0" 才是正确姿态 ——
+            // 真正的防线是上面的 CSP 与全量 HTML 编码。
+            headers["X-XSS-Protection"] = "0";
             headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
 
             // 登录 / 同意页是服务端渲染的 HTML，需要 CSP；对 JSON 响应同样无害

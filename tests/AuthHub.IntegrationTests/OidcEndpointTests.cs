@@ -192,6 +192,10 @@ public class OidcEndpointTests
         html.Should().Contain("brand-name\">AuthHub");
         AuthHubFixture.ExtractAntiforgeryToken(html).Should().NotBeNullOrWhiteSpace();
 
+        // 内置演示账号的提示只在 Development 渲染；集成测试宿主是 Testing 环境，
+        // 因此页面上不应出现这组口令（生产环境同理，且更不该出现）。
+        html.Should().NotContain("Admin@12345");
+
         // 会话 Cookie 必须是 HttpOnly + SameSite=Lax
         var setCookie = response.Headers.TryGetValues("Set-Cookie", out var values)
             ? string.Join(";", values)
@@ -209,6 +213,9 @@ public class OidcEndpointTests
 
         response.Headers.GetValues("X-Content-Type-Options").Should().ContainSingle().Which.Should().Be("nosniff");
         response.Headers.GetValues("X-Frame-Options").Should().ContainSingle().Which.Should().Be("DENY");
+
+        // 旧浏览器的 XSS 审计器显式关闭（现代建议；"1; mode=block" 反而有可利用旁路）
+        response.Headers.GetValues("X-XSS-Protection").Should().ContainSingle().Which.Should().Be("0");
 
         var csp = string.Join(" ", response.Headers.GetValues("Content-Security-Policy"));
         csp.Should().Contain("frame-ancestors 'none'").And.Contain("form-action 'self'");

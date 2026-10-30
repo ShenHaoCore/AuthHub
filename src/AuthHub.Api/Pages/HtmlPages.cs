@@ -31,7 +31,8 @@ public static class HtmlPages
         string returnUrl,
         string requestToken,
         string? error = null,
-        string? userName = null)
+        string? userName = null,
+        bool showDevelopmentHint = false)
     {
         var body = new StringBuilder();
 
@@ -64,8 +65,13 @@ public static class HtmlPages
         body.Append("<button class=\"btn-primary\" type=\"submit\">登录</button>");
         body.Append("</form>");
 
-        body.Append("<p class=\"hint\">开发环境内置账号：<code>admin</code> / <code>Admin@12345</code>（管理员），"
-                    + "<code>alice</code> / <code>Alice@12345</code>（普通用户）。生产环境请通过管理接口创建账号。</p>");
+        // 内置演示账号的提示只在 Development 渲染：生产环境把账号密码印在登录页上
+        // 属于直接的信息泄露（即使播种默认关闭，也不该让页面替运维"记住"这组口令）。
+        if (showDevelopmentHint)
+        {
+            body.Append("<p class=\"hint\">开发环境内置账号：<code>admin</code> / <code>Admin@12345</code>（管理员），"
+                        + "<code>alice</code> / <code>Alice@12345</code>（普通用户）。生产环境请通过管理接口创建账号。</p>");
+        }
 
         return Layout("登录 - AuthHub", body.ToString());
     }
