@@ -8,6 +8,7 @@ using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
 using AuthHub.Infrastructure.Services;
 using AuthHub.UnitTests.Fakes;
+using SystemClock = AuthHub.Infrastructure.Time.SystemClock;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -102,6 +103,7 @@ public class AccountServiceTests
             Options.Create(new RolePermissionOptions()),
             new FakeRolePermissionOverrideStore(),
             NullLogger<LayeredRolePermissionMap>.Instance),
+        new SystemClock(),
         NullLogger<AccountService>.Instance);
 
     // ------------------------------------------------------------------ 登录

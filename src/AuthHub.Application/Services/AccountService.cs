@@ -5,6 +5,7 @@ using AuthHub.Application.Interfaces;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
+using AuthHub.Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
@@ -28,6 +29,7 @@ public sealed class AccountService : IAccountService
     private readonly IReadOnlyDictionary<string, ITwoFactorChannel> _twoFactorChannels;
     private readonly ICurrentUser _currentUser;
     private readonly IRolePermissionMap _rolePermissions;
+    private readonly IClock _clock;
     private readonly ILogger<AccountService> _logger;
 
     public AccountService(
@@ -39,6 +41,7 @@ public sealed class AccountService : IAccountService
         IEnumerable<ITwoFactorChannel> twoFactorChannels,
         ICurrentUser currentUser,
         IRolePermissionMap rolePermissions,
+        IClock clock,
         ILogger<AccountService> logger)
     {
         _userManager = userManager;
@@ -53,6 +56,7 @@ public sealed class AccountService : IAccountService
             StringComparer.Ordinal);
         _currentUser = currentUser;
         _rolePermissions = rolePermissions;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -72,7 +76,7 @@ public sealed class AccountService : IAccountService
             // 开发环境不会因未确认邮箱而拒绝登录（IdentityOptions.SignIn.RequireConfirmedEmail = false）。
             EmailConfirmed = false,
             IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _clock.UtcNow
         };
 
         var createResult = await _userManager.CreateAsync(user, request.Password);
@@ -214,7 +218,7 @@ public sealed class AccountService : IAccountService
             return Result.Failure<LoginResponse>(Error.Unauthorized("验证码不正确或已过期。"));
         }
 
-        user.LastLoginAt = DateTimeOffset.UtcNow;
+        user.LastLoginAt = _clock.UtcNow;
         user.LastLoginIp = _currentUser.IpAddress;
         await _userManager.UpdateAsync(user);
 
@@ -422,7 +426,7 @@ public sealed class AccountService : IAccountService
     {
         await _signInManager.SignInAsync(user, isPersistent, authenticationMethod);
 
-        user.LastLoginAt = DateTimeOffset.UtcNow;
+        user.LastLoginAt = _clock.UtcNow;
         user.LastLoginIp = _currentUser.IpAddress;
 
         var update = await _userManager.UpdateAsync(user);

@@ -5,6 +5,7 @@ using AuthHub.Application.Mappings;
 using AuthHub.Domain.Constants;
 using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
+using AuthHub.Domain.Interfaces;
 using AuthHub.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -24,17 +25,20 @@ public sealed class UserAdminService : IUserAdminService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
     private readonly IAuditLogService _audit;
+    private readonly IClock _clock;
 
     public UserAdminService(
         AuthHubDbContext dbContext,
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
-        IAuditLogService audit)
+        IAuditLogService audit,
+        IClock clock)
     {
         _dbContext = dbContext;
         _userManager = userManager;
         _roleManager = roleManager;
         _audit = audit;
+        _clock = clock;
     }
 
     public async Task<PagedResult<UserDto>> QueryAsync(UserQuery query, CancellationToken cancellationToken = default)
@@ -79,7 +83,7 @@ public sealed class UserAdminService : IUserAdminService
             .ToListAsync(cancellationToken);
 
         var roleLookup = await LoadRoleLookupAsync(page.Select(u => u.Id).ToArray(), cancellationToken);
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.UtcNow;
 
         var items = page.Select(user => user.ToDto() with
         {
