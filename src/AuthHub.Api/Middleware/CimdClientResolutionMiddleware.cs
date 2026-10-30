@@ -7,18 +7,14 @@ namespace AuthHub.Api.Middleware;
 
 /// <summary>
 /// 把 URL 型 <c>client_id</c> 在进入 OpenIddict 校验链之前变成一条可用的应用记录（CIMD 懒注册）。
-///
-/// <para><b>为什么是中间件而不是 OpenIddict 的处理器</b>：OpenIddict 的授权请求校验第一步
-/// 就是 <c>FindByClientIdAsync</c>，查不到直接 <c>invalid_client</c>。它的处理器链虽然可以插入
-/// 自定义环节，但"在哪个内置处理器之前"取决于 OpenIddict 的内部排序常量 —— 那个顺序在
-/// 小版本升级里都可能变。中间件挂在认证中间件之前是**管道层面**的先后关系，
-/// 与库的内部实现解耦（OpenIddict 的端点由认证中间件处理，见
-/// <c>WebApplicationExtensions.UseAuthHubPipeline</c> 的注释）。</para>
-///
-/// <para><b>为什么只拦授权端点</b>：令牌端点（兑换、刷新）里的 client_id 一定在授权阶段
-/// 已经注册过；client_credentials 与 CIMD 无关（自动注册的客户端一律是 public，
-/// 拿不到密钥）。多拦一处只会多一次出站请求。</para>
 /// </summary>
+/// <remarks>
+/// - 为什么是中间件而不是 OpenIddict 的处理器：授权请求校验第一步就是 <c>FindByClientIdAsync</c>，
+///   查不到直接 <c>invalid_client</c>；插在"哪个内置处理器之前"取决于库的内部排序常量，小版本升级可能变。
+///   挂在认证中间件之前是管道层面的先后关系，与库内部实现解耦。
+/// - 为什么只拦授权端点：令牌端点（兑换、刷新）的 client_id 在授权阶段必已注册；
+///   client_credentials 与 CIMD 无关（自动注册的客户端一律 public，拿不到密钥）。多拦只会多一次出站请求。
+/// </remarks>
 public sealed class CimdClientResolutionMiddleware
 {
     private readonly RequestDelegate _next;
@@ -71,11 +67,9 @@ public sealed class CimdClientResolutionMiddleware
         request.Path.Equals("/connect/authorize", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 取 <c>client_id</c>。POST 是同意页的表单回传，此时 client_id 在表单里；
-    /// GET 在查询串里。
-    ///
-    /// <para>这里读表单不会影响后续读取：ASP.NET Core 的 <c>FormFeature</c> 会缓存解析结果，
-    /// OpenIddict 之后取 <c>Request.Form</c> 拿到的是同一份缓存，不会因为 body 已被消费而变空。</para>
+    /// 取 <c>client_id</c>：POST（同意页的表单回传）读表单，GET 读查询串。
+    /// 这里读表单不影响后续读取：<c>FormFeature</c> 会缓存解析结果，
+    /// OpenIddict 之后拿到的是同一份缓存，不会因 body 已被消费而变空。
     /// </summary>
     private static async Task<string?> ReadClientIdAsync(HttpContext context)
     {
@@ -98,9 +92,7 @@ public sealed class CimdClientResolutionMiddleware
 
     /// <summary>
     /// 拒绝时的响应形状与 <c>AuthorizationController.OAuthError</c> 保持一致。
-    ///
-    /// <para>这里**不能**重定向回 <c>redirect_uri</c>：那个地址尚未经过白名单校验，
-    /// 重定向等于把本服务变成一个开放重定向器。</para>
+    /// 不能重定向回 <c>redirect_uri</c>：那个地址尚未经过白名单校验，重定向等于开放重定向器。
     /// </summary>
     private static Task WriteInvalidClientAsync(HttpContext context, string description)
     {

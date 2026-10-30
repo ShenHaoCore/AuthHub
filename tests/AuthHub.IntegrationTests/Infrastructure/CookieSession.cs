@@ -6,20 +6,15 @@ namespace AuthHub.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// 极简的 Cookie 会话容器（测试专用）—— 每个实例就是一个"独立浏览器"。
-///
-/// **为什么不能用 <c>WebApplicationFactory.CreateClient()</c>**：
-/// 同一个 factory 产出的 HttpClient 可能共用底层处理器与 Cookie 容器，
-/// 而 <see cref="AuthHubFixture"/> 上那个共享 Client 被其它用例用来断言"未登录"
-/// （例如 <c>ApiAuthorizationTests</c> 里那几条 401 / 403）。
-/// 一旦后台 UI 的用例拿它登录，会话 Cookie 会残留下来污染全局状态，
-/// 故障表现是"某个不相干的用例随机失败"，极难定位。
-///
-/// 因此这里从 <c>TestServer.CreateHandler()</c> 取一个干净的传输处理器，
-/// 自己在内存里维护 Cookie jar —— 与共享 Client 完全隔离。
-///
-/// 关于重定向：TestServer 的处理器**不会**自动跟随 302，
-/// 所以调用方要自己决定是断言 302、还是显式再发一次请求（这正是我们想要的）。
 /// </summary>
+/// <remarks>
+/// - 不能用 <c>WebApplicationFactory.CreateClient()</c>：同一 factory 产出的 HttpClient 可能共用底层处理器与
+///   Cookie 容器，而 <see cref="AuthHubFixture"/> 上的共享 Client 被其它用例用来断言"未登录"
+///   （例如 <c>ApiAuthorizationTests</c> 里那几条 401 / 403）。一旦后台 UI 的用例拿它登录，会话 Cookie
+///   会残留下来污染全局状态，故障表现是"某个不相干的用例随机失败"，极难定位。
+/// - 这里从 <c>TestServer.CreateHandler()</c> 取干净的传输处理器、自维护内存 Cookie jar，与共享 Client 完全隔离。
+/// - TestServer 的处理器不会自动跟随 302：调用方自己决定是断言 302 还是显式再发一次请求（正是想要的）。
+/// </remarks>
 internal sealed class CookieSession : IDisposable
 {
     private readonly CookieHandler _handler;
@@ -60,8 +55,8 @@ internal sealed class CookieSession : IDisposable
 
     /// <summary>
     /// 提交表单。参数类型是 <see cref="IEnumerable{T}"/> 而不是字典 —— 复选框组
-    /// （如角色权限弹窗里的 <c>SelectedPermissions</c>）需要**重复的字段名**，
-    /// 字典表达不了，而 <see cref="FormUrlEncodedContent"/> 本来就是按序列编码的。
+    /// （如角色权限弹窗里的 <c>SelectedPermissions</c>）需要重复的字段名，字典表达不了；
+    /// <see cref="FormUrlEncodedContent"/> 本来就是按序列编码的。
     /// </summary>
     public Task<HttpResponseMessage> PostFormAsync(string path, IEnumerable<KeyValuePair<string, string>> fields)
         => _client.SendAsync(new HttpRequestMessage(HttpMethod.Post, path)

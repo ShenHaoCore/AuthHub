@@ -8,6 +8,7 @@ using AuthHub.Domain.Entities;
 using AuthHub.Domain.Enums;
 using AuthHub.Infrastructure.Services;
 using AuthHub.UnitTests.Fakes;
+using SystemClock = AuthHub.Infrastructure.Time.SystemClock;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -20,11 +21,9 @@ using Xunit;
 namespace AuthHub.UnitTests.Application;
 
 /// <summary>
-/// AccountService 登录/注册流程测试。
-///
-/// UserManager / SignInManager 是 Identity 的具体类，这里用 Moq 直接替掉它们的方法
-/// （构造参数用最小可用的桩），从而把测试聚焦在「业务判定分支」上：
-/// 用户不存在、账号停用、锁定、需要 MFA、密码错误、成功。
+/// AccountService 登录/注册流程测试：UserManager / SignInManager 是 Identity 的具体类，
+/// 用 Moq 直接替掉它们的方法（构造参数用最小可用的桩），把测试聚焦在「业务判定分支」上
+/// —— 用户不存在、账号停用、锁定、需要 MFA、密码错误、成功。
 /// </summary>
 public class AccountServiceTests
 {
@@ -102,6 +101,7 @@ public class AccountServiceTests
             Options.Create(new RolePermissionOptions()),
             new FakeRolePermissionOverrideStore(),
             NullLogger<LayeredRolePermissionMap>.Instance),
+        new SystemClock(),
         NullLogger<AccountService>.Instance);
 
     // ------------------------------------------------------------------ 登录
@@ -322,9 +322,9 @@ public class AccountServiceTests
     private sealed record SentSms(string To, string Message);
 
     /// <summary>
-    /// 通道名必须与 Identity 的 TwoFactorTokenProvider 名逐字一致（内置的是 "Email" / "Phone"）。
-    /// 对不上时 <c>UserManager.GenerateTwoFactorTokenAsync</c> 找不到 provider，
-    /// 用户看到的是"验证码发不出去"，而在代码里这两个字符串看起来毫无关系。
+    /// 通道名必须与 Identity 的 TwoFactorTokenProvider 名逐字一致（内置的是 "Email" / "Phone"）：
+    /// 对不上时 <c>UserManager.GenerateTwoFactorTokenAsync</c> 找不到 provider，验证码发不出去 ——
+    /// 而这两个字符串在代码里毫无关联，改错毫无征兆。
     /// </summary>
     [Fact]
     public void Channel_names_should_match_identitys_built_in_provider_names()
@@ -374,8 +374,8 @@ public class AccountServiceTests
     }
 
     /// <summary>
-    /// 「有没有留联系方式」由通道自己判定，不再散在业务类的 switch 守卫里。
-    /// 两条通道都要各自守住 —— 这正是原先最容易只补一半的地方。
+    /// 「有没有留联系方式」由通道自己判定（原先散在业务类 switch 守卫里），
+    /// 两条通道都要各自守住 —— 这正是最容易只补一半的地方。
     /// </summary>
     [Theory]
     [InlineData("Email")]

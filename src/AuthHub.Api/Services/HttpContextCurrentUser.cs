@@ -7,11 +7,11 @@ namespace AuthHub.Api.Services;
 
 /// <summary>
 /// 从 HttpContext 提取当前调用者信息（用户、客户端、IP、UA）。
-///
-/// 说明：本服务同时接受 Bearer 令牌与 Identity Cookie 两种身份，
-/// 授权中间件会按策略里声明的认证方案填充 <c>HttpContext.User</c>，
-/// 因此这里直接读取即可；匿名端点（例如登录页 POST）则为未登录状态。
 /// </summary>
+/// <remarks>
+/// - 同时接受 Bearer 令牌与 Identity Cookie 两种身份：授权中间件按策略里声明的方案填充
+///   <c>HttpContext.User</c>，这里直接读取即可；匿名端点（例如登录页 POST）为未登录状态。
+/// </remarks>
 public sealed class HttpContextCurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _accessor;
@@ -32,13 +32,10 @@ public sealed class HttpContextCurrentUser : ICurrentUser
            ?? Principal?.FindFirst(OpenIddictConstants.Claims.Subject)?.Value;
 
     /// <summary>
-    /// 用户名。三个候选类型缺一不可：
-    ///   · <see cref="ClaimTypes.Name"/> —— 默认的 Identity 声明类型；
-    ///   · <c>OpenIddictConstants.Claims.Name</c>（<c>"name"</c>）—— **本项目实际用的就是这个**：
-    ///     IdentityExtensions 把 <c>ClaimsIdentity.UserNameClaimType</c> 对齐到了 OpenIddict 的
-    ///     <c>"name"</c>。少了这一条，会话 Cookie 的 <c>UserName</c> 会恒为 null，
-    ///     表现是审计日志里"谁干的"一栏全空（UserId 还在，所以不容易被注意到）。
-    ///   · <c>preferred_username</c> —— Bearer 令牌侧的等价声明。
+    /// 用户名。三个候选缺一不可：本项目实际用的是 OpenIddict 的 <c>"name"</c>
+    /// （IdentityExtensions 把 UserNameClaimType 对齐到了它），少了这条会话 Cookie 的
+    /// <c>UserName</c> 恒为 null，表现是审计日志"谁干的"一栏全空；
+    /// <see cref="ClaimTypes.Name"/> 是 Identity 的默认声明类型，<c>preferred_username</c> 是 Bearer 侧等价声明。
     /// </summary>
     public string? UserName
         => Principal?.FindFirst(ClaimTypes.Name)?.Value

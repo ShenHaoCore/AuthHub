@@ -7,18 +7,14 @@ namespace AuthHub.IntegrationTests;
 
 /// <summary>
 /// 管理后台（Razor Pages，/admin/*）的端到端契约测试。
-///
-/// 这里盯住四类"改一行就可能悄悄坏掉"的地方：
-///
-/// 1) **后台页面的认证方案只能是会话 Cookie**。Program.cs 把
-///    DefaultChallengeScheme 指向 OpenIddict Validation（为的是 /api 返回 401 而不是 302）。
-///    一旦 UI 策略忘了显式挂 Cookie 方案，浏览器访问 /admin 会拿到 401 + WWW-Authenticate，
-///    用户看到一片空白而不是登录页 —— 这条断言就是防这个回归的。
-/// 2) **页面必须完全自给**：CSP 是 script-src 'self'，任何 CDN 引用都会被拦掉，
-///    表现为"样式丢了/按钮点了没反应"。所以在测试里直接禁止外链。
-/// 3) **协议页与后台共用同一份设计令牌**（authhub-tokens.css），不许各自内联一份 CSS。
-/// 4) **列表页的表单真的能提交**（以 Scope 页为样本走一遍创建 → 展示 → 删除）。
 /// </summary>
+/// <remarks>
+/// - 后台页面的认证方案只能是会话 Cookie：默认 Challenge 指向 OpenIddict Validation（/api 返回 401 用），
+///   UI 策略忘了显式挂 Cookie 方案时，浏览器拿到 401 + WWW-Authenticate 而不是登录页。
+/// - 页面必须完全自给：CSP 是 script-src 'self'，任何 CDN 引用都会被拦掉，测试里直接禁止外链。
+/// - 协议页与后台共用同一份设计令牌（authhub-tokens.css），不许各自内联一份 CSS。
+/// - 列表页的表单真的能提交（以 Scope 页为样本走一遍创建 → 展示 → 删除）。
+/// </remarks>
 [Collection(AuthHubFixture.CollectionName)]
 public class AdminUiTests
 {
@@ -171,15 +167,8 @@ public class AdminUiTests
     // ==================================================================== 弹窗自动开合
 
     /// <summary>
-    /// 默认进入页面时，任何弹窗都不允许带"自动打开"标记，且标记的取值只能是显式下写字面量。
-    ///
-    /// 这是一条防回归断言，起因是一个真实故障：服务端曾写成
-    /// <c>data-dialog-autoopen="@Model.AutoOpenCreate"</c>，Razor 把 bool 插值渲染成
-    /// <c>"True"</c>/<c>"False"</c> 字面量 —— <b>属性照样存在</b>，于是前端按值判断失效，
-    /// 每个弹窗都被 showModal()：表现就是用户看到的"点菜单进入任一页面，全部弹窗一起弹出来"。
-    ///
-    /// 因此约定两条，缺一不可：值必须是 <c>"true"</c>/<c>"false"</c> 小写；
-    /// 默认状态下必须全是 <c>"false"</c>。
+    /// 防回归：data-dialog-autoopen 的取值必须是显式小写字面量（写成 @bool 会渲染成 "True"/"False"，
+    /// 属性照样存在，前端按值判断失效，全部弹窗一起弹出来）；默认状态下必须全是 <c>"false"</c>。
     /// </summary>
     [Theory]
     [InlineData("/admin/users")]
@@ -203,10 +192,7 @@ public class AdminUiTests
             because: "取值必须是显式小写字面量；写成 @bool 会渲染成 \"True\"/\"False\"，前端契约随即失效");
     }
 
-    /// <summary>
-    /// 上面那条的反面：提交失败时必须把出问题的那个弹窗**真的**重新打开，
-    /// 否则用户刚填的内容就白填了（PRG 的失败分支就是靠这个特性保住输入的）。
-    /// </summary>
+    /// <summary>上面那条的反面：提交失败时必须真的重新打开出问题的弹窗，否则用户刚填的内容就丢了（PRG 失败分支靠它保住输入）。</summary>
     [Fact]
     public async Task Failed_validation_should_auto_open_the_offending_dialog()
     {
@@ -240,17 +226,11 @@ public class AdminUiTests
     // ==================================================================== 视图组件契约
 
     /// <summary>
-    /// 弹窗外壳与标题栏现在由 <c>&lt;ah-dialog&gt;</c>（见 TagHelpers/AdminTagHelpers.cs）统一生成，
-    /// 标题栏的 <c>&lt;h2 id&gt;</c> 与 <c>aria-labelledby</c> 都取自同一个 <c>{id}-title</c> 表达式。
-    ///
-    /// 这条用例盯住三件"生成器一改就静默坏掉"的事：
-    ///
-    /// 1. **无障碍名称不能丢**。两者一旦脱钩，弹窗就没有无障碍名称，读屏只会念"对话框"。
-    ///    历史上这里差点出问题：某个弹窗的 id 是 <c>dlg-perm-{roleName}</c>，
-    ///    而手写的标题 id 是老格式 <c>dlg-perm-title-{roleName}</c>，与统一的 <c>{id}-title</c> 规则对不上。
-    /// 2. **关闭按钮必须是 <c>type="button"</c>**。底部的"取消"按钮位于 <c>&lt;form&gt;</c> 内部，
-    ///    默认类型是 <c>submit</c> —— 少了这个属性，点"取消"会提交表单（并触发校验失败）。
-    /// 3. 每个弹窗都要有标题栏，且外面套着 <c>ah-modal</c>（否则 authhub.css 的模态框样式不生效）。
+    /// 弹窗外壳与标题栏由 <c>&lt;ah-dialog&gt;</c>（见 TagHelpers/AdminTagHelpers.cs）统一生成，标题 id 与
+    /// aria-labelledby 都取自 <c>{id}-title</c> 表达式。盯住三件生成器一改就静默坏掉的事：
+    /// ① 无障碍名称不能丢（脱钩后读屏只会念"对话框"）；② 关闭按钮必须 <c>type="button"</c>
+    /// （"取消"在 <c>&lt;form&gt;</c> 内默认是 submit，点了会提交表单）；③ 弹窗要有标题栏且套着
+    /// <c>ah-modal</c>（否则 authhub.css 的模态框样式不生效）。
     /// </summary>
     [Theory]
     [InlineData("/admin/users")]
@@ -299,11 +279,9 @@ public class AdminUiTests
     }
 
     /// <summary>
-    /// 全站 68 处图标现在统一由 <c>&lt;ah-icon&gt;</c> 生成，画法只此一份。
-    ///
-    /// 断言的是"每一个 svg 都长得一样"：装饰性图标必须 <c>aria-hidden</c>，
-    /// 描边参数必须齐全（缺 <c>stroke</c> 图标会变成黑色实心块，缺 <c>viewBox</c> 会被裁掉）。
-    /// 这条用例等于把"别在视图里手写 &lt;svg&gt;"的约定钉死 —— 手写的那份必然少一两项。
+    /// 全站图标统一由 <c>&lt;ah-icon&gt;</c> 生成，画法只此一份 —— 钉死"别在视图里手写 svg"的约定。
+    /// 断言每个 svg 契约一致：装饰性图标必须 <c>aria-hidden</c>，描边参数必须齐全
+    /// （缺 <c>stroke</c> 图标会变成黑色实心块，缺 <c>viewBox</c> 会被裁掉）。
     /// </summary>
     [Theory]
     [InlineData("/admin")]
@@ -358,11 +336,8 @@ public class AdminUiTests
     }
 
     /// <summary>
-    /// 静态资源必须显式要求重新验证。
-    ///
-    /// 响应里没有 Cache-Control 时，浏览器按启发式规则自己决定缓存期（RFC 9111 建议取
-    /// 距 Last-Modified 的 10%）。于是改了 authhub.js 之后按 F5 也可能拿不到新文件 ——
-    /// 用户看到的是"修复没生效"，非得 Ctrl+F5 才行。这条用例把它钉住。
+    /// 静态资源必须显式要求重新验证：没有 Cache-Control 时浏览器按启发式自行决定缓存期，
+    /// 改了 authhub.js 之后按 F5 也拿不到新文件，用户看到的是"修复没生效"。
     /// </summary>
     [Fact]
     public async Task Static_assets_should_require_revalidation()
@@ -376,10 +351,8 @@ public class AdminUiTests
     }
 
     /// <summary>
-    /// 页面引用静态资源时要带内容指纹（<c>asp-append-version</c> 追加的 <c>?v=</c>）。
-    ///
-    /// 与上一条互补：no-cache 让浏览器每次回来验证，指纹则把"内容变了"直接体现到 URL 上 ——
-    /// 连验证都不必，旧副本不可能被复用。
+    /// 页面引用静态资源时要带内容指纹（<c>asp-append-version</c> 的 <c>?v=</c>）：
+    /// 与上一条的 no-cache 互补，把"内容变了"直接体现到 URL 上，旧副本不可能被复用。
     /// </summary>
     [Fact]
     public async Task Static_assets_should_be_referenced_with_a_content_fingerprint()
@@ -419,8 +392,8 @@ public class AdminUiTests
 
     // ==================================================================== 版式与令牌契约
     //
-    // 后台的度量集中在一份令牌与一份后台样式表里。这里断言的是"声明值"而不是计算样式：
-    // 缝只能看到标记与静态资源，像素度量在发布验证阶段用固定视口实测（见 spec 的分工）。
+    // 断言的是"声明值"而不是计算样式：这里只能看到标记与静态资源，
+    // 像素度量在发布验证阶段用固定视口实测（见 spec 的分工）。
 
     [Fact]
     public async Task Tokens_should_pin_the_leptonx_layout_metrics()
@@ -489,9 +462,8 @@ public class AdminUiTests
 
     // ==================================================================== 列表文字层级
     //
-    // 三档：主行 14px/600、次行 12px/次要文字色、正文 14px。
-    // 等宽类只换字族 —— 它被直接用在单元格与主行上，自带字号会造成"同列不同尺寸"，
-    // 这也正是"用户/角色页 14px、客户端/Scope/审计页 12.5px"的根因。
+    // 三档：主行 14px/600、次行 12px/次要文字色、正文 14px。等宽类只换字族 ——
+    // 它被直接用在单元格与主行上，自带字号会造成"同列不同尺寸"。
 
     [Fact]
     public async Task List_pages_should_use_the_shared_cell_levels()
@@ -525,8 +497,7 @@ public class AdminUiTests
 
         var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin"));
 
-        // 「最近事件」表的用户列此前是普通正文，比其它列表的主行轻一档。
-        // 绑定到单元格里的 span，而不是页面上任意出现的类名。
+        // 绑定到单元格里的 span，而不是页面上任意出现的类名（该列此前比其它列表主行轻一档）
         html.Should().Contain("<span class=\"ah-cell-main\">", because: "仪表盘列表的主行与其他列表同层级");
         html.Should().Contain("<span class=\"ah-cell-sub\">—", because: "空值同样走次要说明层级");
     }
@@ -595,9 +566,8 @@ public class AdminUiTests
 
     // ==================================================================== 状态语义
     //
-    // 一张"语义 → 色调/措辞"的对照表：绿＝正常/已完成，琥珀＝待处理/有风险，
-    // 红＝不可用/失败，灰＝分类/计数/说明，蓝只给身份标签（角色名、"内置"）。
-    // 同一含义在不同页面不得换色、换词、换载体。
+    // "语义 → 色调/措辞"对照表：绿＝正常/已完成，琥珀＝待处理/有风险，红＝不可用/失败，
+    // 灰＝分类/计数/说明，蓝只给身份标签；同一含义在不同页面不得换色、换词、换载体。
 
     [Fact]
     public async Task List_pages_should_not_use_info_tone_or_legacy_wording()
@@ -757,8 +727,7 @@ public class AdminUiTests
 
         var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/audit-logs"));
 
-        // 审计条目的动作名由 C# 侧查表渲染，Razor 会把非 ASCII 编码成 &#x...;
-        // 先解码再断言，否则匹配的是实体而不是文案。
+        // 动作名由 C# 侧查表渲染，非 ASCII 会被 Razor 编码成 &#x...; —— 先解码再断言
         var text = System.Net.WebUtility.HtmlDecode(html);
 
         // 刚刚这次登录本身就是一条成功审计（标签与徽章之间有换行，按空白容忍匹配）
@@ -790,13 +759,10 @@ public class AdminUiTests
     // ==================================================================== 页内锚点
 
     /// <summary>
-    /// 右上角「修改密码」是指向 <c>/admin/profile#password</c> 的**同文档锚点**。
-    /// 用户已经停在「我的账户」页时点它，浏览器只改 hash、不会重新加载页面，
-    /// authhub.js 的初始化也就不会重跑 —— 少了 hashchange 监听，表现就是「点了没反应」。
-    ///
-    /// 这条断言检查三样必须同时成立的东西：链接指向一个真实存在的标签，且脚本会响应 hash 变化。
-    /// 切换效果本身在真实渲染的页面上用 jsdom 验证过（前端刻意零 npm、零构建，
-    /// 仓库里没有 JS 测试运行器，因此这里只能做静态检查）。
+    /// 右上角「修改密码」是指向 <c>/admin/profile#password</c> 的同文档锚点：已在本页时浏览器只改 hash
+    /// 不重载页面，必须靠 authhub.js 的 hashchange 监听接管（否则表现是「点了没反应」）。
+    /// 断言链接与对应标签真实存在、脚本响应 hash 变化；切换效果已在渲染页面上用 jsdom 验证过
+    /// （前端零 npm、零构建，这里只能做静态检查）。
     /// </summary>
     [Fact]
     public async Task In_page_anchor_should_switch_tabs_through_a_hashchange_listener()
@@ -818,15 +784,10 @@ public class AdminUiTests
     // ==================================================================== 卡片布局
 
     /// <summary>
-    /// <c>.ah-card + .ah-card { margin-top: 18px }</c> 只该服务普通文档流里的相邻卡片。
-    /// 卡片一旦成为 flex（<c>.ah-stack</c>）或 grid（<c>.ah-grid</c>）容器的直接子项，
-    /// 间距已由容器的 gap 负责，这条外边距会叠加出两种毛病：
-    /// ① sidebar 网格右列的卡片被在自己格子里整体下推 18px，头部与左列错位
-    ///   （「我的账户」的「会话」「为什么要刷新安全戳」、仪表盘的「协议端点」都中过招）；
-    /// ② stack 里相邻卡片的间距变成 14 + 18 = 32px，比设计节奏宽了一倍。
-    ///
-    /// 渲染层面的几何（headerTop 是否相等）在集成测试里量不了（无浏览器），
-    /// 故退而钉住 CSS 里必须存在的归零规则 —— 真实效果已用浏览器在渲染页面上量过。
+    /// <c>.ah-card + .ah-card</c> 流式外边距只该服务普通文档流里的相邻卡片：成为 flex（ah-stack）/
+    /// grid（ah-grid）直接子项后间距由容器 gap 负责，外边距会叠加出「grid 右列卡片下推错位」
+    /// 与「stack 间距变 32px」两种毛病。渲染几何在集成测试里量不了（无浏览器），
+    /// 故钉住 CSS 里必须存在的归零规则 —— 真实效果已用浏览器在渲染页面上量过。
     /// </summary>
     [Fact]
     public async Task Adjacent_cards_inside_flex_or_grid_containers_should_not_inherit_the_flow_margin()
@@ -846,10 +807,9 @@ public class AdminUiTests
     [Fact]
     public async Task Audit_page_should_filter_by_date_range_on_every_provider()
     {
-        // 回归护栏：SQLite 没有原生 DateTimeOffset，EF Core 能翻译它的排序却翻译不了比较，
-        // 于是 `CreatedAt >= from` 会抛 "could not be translated" —— 表现为按时间筛选审计日志时 500。
-        // 修复方式是在 DbContext 里对 SQLite 改用 UtcTicks 存储（见 AuthHubDbContext）。
-        // 这条用例确保两种提供程序下时间区间筛选都真的能跑。
+        // 回归护栏：SQLite 没有 DateTimeOffset 原生类型，EF Core 能翻译它的排序却翻译不了比较
+        // （`CreatedAt >= from` 抛 "could not be translated"，筛选审计日志 500），
+        // 修复是对 SQLite 改用 UtcTicks 存储（见 AuthHubDbContext）—— 这条确保两种提供程序都能筛。
         using var session = NewSession();
         await LoginAsync(session, "admin", "Admin@12345");
 
@@ -863,10 +823,9 @@ public class AdminUiTests
     [Fact]
     public async Task Audit_page_should_use_text_date_inputs_with_our_own_format_placeholder()
     {
-        // 日期筛选框曾用 <input type="date">，其占位文字（年/月/日、yyyy/mm/dd、yyyy/mm/日…）
-        // 由浏览器按自身语言环境绘制，HTML/CSS 控制不了，不同浏览器里长相不一致 ——
-        // 用户看到的 "yyyy/mm/日" 就是这么来的。现在改为普通文本框（placeholder 归我们写）
-        // + 点击弹原生日历（authhub.js 的 data-date-picker）。这条测试把"不再用原生控件"钉住。
+        // 原生 <input type="date"> 的占位文字由浏览器语言环境绘制，HTML/CSS 控制不了 ——
+        // 改为文本框（placeholder 归我们写）+ 点击弹原生日历（authhub.js 的 data-date-picker），
+        // 这条把"不再用原生控件"钉住。
         using var session = NewSession();
         await LoginAsync(session, "admin", "Admin@12345");
 
@@ -940,8 +899,8 @@ public class AdminUiTests
     [Fact]
     public async Task Resource_page_should_round_trip_a_registration()
     {
-        // 与 Scope 页那条冒烟同一目的：确认表单字段名与 PageModel 真的对上了。
-        // 只覆盖 GET 渲染的断言看不出「表单提交后静默什么都没发生」这类问题。
+        // 与 Scope 页那条冒烟同一目的：确认表单字段名与 PageModel 真的对上了 ——
+        // 只覆盖 GET 渲染的断言看不出「表单提交后静默什么都没发生」。
         using var session = NewSession();
         await LoginAsync(session, "admin", "Admin@12345");
 
@@ -1005,11 +964,7 @@ public class AdminUiTests
 
     // ================================================================ 入口与回跳
 
-    /// <summary>
-    /// 根路径必须把人送到后台入口，而不是 404。
-    /// 这是任何人第一次访问站点时最自然的入口；没有这条跳转时，
-    /// 打开 <c>https://host:port/</c> 只会看到 404，无从判断该往哪走。
-    /// </summary>
+    /// <summary>根路径必须把人送到后台入口而不是 404 —— 这是站点最自然的入口，缺了跳转用户无从判断该往哪走。</summary>
     [Fact]
     public async Task Root_path_should_lead_to_the_admin_entry()
     {
@@ -1022,11 +977,8 @@ public class AdminUiTests
     }
 
     /// <summary>
-    /// 登录成功后必须回到用户原本要去的页面（returnUrl）。
-    ///
-    /// 这不是可有可无的礼貌：<c>/admin</c> 与 <c>/connect/authorize</c> 都会把未登录用户
-    /// 302 到 <c>/account/login?ReturnUrl=...</c>，回跳一旦失效，用户登录完就落到 <c>/</c> ——
-    /// 那条路以前是 404，看起来像"登录之后站点坏了"。
+    /// 登录成功后必须回到用户原本要去的页面（returnUrl）：<c>/admin</c> 与 <c>/connect/authorize</c>
+    /// 都会把未登录用户 302 到登录页，回跳失效就会落到根路径 —— 以前是 404，看起来像"登录之后站点坏了"。
     /// </summary>
     [Fact]
     public async Task Login_should_redirect_back_to_the_requested_returnUrl()
@@ -1081,9 +1033,8 @@ public class AdminUiTests
     }
 
     /// <summary>
-    /// 取出某条选择器的规则体（含选择器与花括号）。
-    /// 整份样式表里做 <c>Contain</c> 会让"值还在、但挂到了别的选择器上"照样通过，
-    /// 所以度量断言一律绑定到所属规则。
+    /// 取出某条选择器的规则体（含选择器与花括号）：整份样式表里 Contain 会让"值还在、
+    /// 但挂到了别的选择器上"照样通过，度量断言一律绑定到所属规则。
     /// </summary>
     private static string CssRule(string css, string selector)
     {

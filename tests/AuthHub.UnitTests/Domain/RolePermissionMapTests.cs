@@ -10,12 +10,11 @@ using Xunit;
 namespace AuthHub.UnitTests.Domain;
 
 /// <summary>
-/// 「角色 → 权限」归属的规则测试 —— 也就是 <c>LayeredRolePermissionMap</c> 的**叠加语义**。
-///
-/// 三层来源：出厂默认 ← 配置 ← 运行时覆盖（数据库）。这里把后两层都做成可控输入：
-///   · 配置层用 <see cref="RolePermissionOptions"/> 直接给（等价于部署时 appsettings 写了什么）；
-///   · 覆盖层用 <see cref="FakeRolePermissionOverrideStore"/>（等价于后台界面上改了什么）。
-/// 两者都不写就等价于"老部署、既没配过也没改过"——升级前后行为必须逐字一致的基线。
+/// 「角色 → 权限」归属的规则测试 —— 也就是 <c>LayeredRolePermissionMap</c> 的叠加语义。
+/// 三层来源：出厂默认 ← 配置 ← 运行时覆盖（数据库），后两层都做成可控输入：
+/// 配置层用 <see cref="RolePermissionOptions"/>（等价于部署时 appsettings 写了什么），
+/// 覆盖层用 <see cref="FakeRolePermissionOverrideStore"/>（等价于后台界面上改了什么）；
+/// 两者都不写就等价于"老部署、既没配过也没改过" —— 升级前后行为必须逐字一致的基线。
 /// </summary>
 public class RolePermissionMapTests
 {

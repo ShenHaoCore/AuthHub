@@ -7,11 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 只在容器 / 反向代理部署下才会暴露的两类配置。
-///
-/// 共同点是**配错了不会报错**：密钥环换个位置只是让所有人被登出、
-/// 信任范围漏配只是让转发头被静默丢弃。因此这里的用例不是"验证功能"，
-/// 而是把"这两种静默失效"钉成可执行的断言。
+/// 只在容器 / 反向代理部署下才会暴露的两类配置。共同点是配错了不会报错：
+/// 密钥环换个位置只是让所有人被登出、信任范围漏配只是让转发头被静默丢弃 ——
+/// 用例不是"验证功能"，而是把这两种静默失效钉成可执行的断言。
 /// </summary>
 public class DeploymentSafetyTests
 {
@@ -53,9 +51,8 @@ public class DeploymentSafetyTests
     [Fact]
     public void Two_instances_sharing_the_key_directory_should_decrypt_each_others_payloads()
     {
-        // 这条用例模拟的是多实例 / 滚动更新的真实场景：
-        // A 实例签发的会话 Cookie 必须能被 B 实例解开，否则用户在负载均衡后面会被反复登出。
-        // 它同时钉住 SetApplicationName 的常量值 —— 默认隔离键由内容根路径派生，
+        // 模拟多实例 / 滚动更新：A 实例签发的会话 Cookie 必须能被 B 实例解开，否则用户在负载均衡后面会被反复登出。
+        // 同时钉住 SetApplicationName 的常量值 —— 默认隔离键由内容根路径派生，
         // 两个实例只要从不同路径启动就认不到同一个环，共享密钥目录也救不回来。
         var keysPath = Path.Combine(Path.GetTempPath(), $"authhub-dp-{Guid.NewGuid():N}");
 
@@ -111,9 +108,8 @@ public class DeploymentSafetyTests
     [Fact]
     public void Malformed_trust_range_should_fail_startup_instead_of_silently_trusting_nothing()
     {
-        // 关键取舍：解析失败**不**降级成"空信任范围继续跑"。
-        // 那样会退化成"转发头全被忽略"这个最难排查的症状 ——
-        // 审计日志里的 IP 全变成网关地址，而没有任何一处日志说明原因。
+        // 关键取舍：解析失败不降级成"空信任范围继续跑" —— 那样会退化成"转发头全被忽略"这个最难排查的症状
+        // （审计日志里的 IP 全变成网关地址，而没有任何一处日志说明原因）。
         using var factory = new AuthHubWebApplicationFactory(new Dictionary<string, string>
         {
             ["AuthHub__Security__TrustForwardedHeaders"] = "true",

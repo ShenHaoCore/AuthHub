@@ -53,13 +53,10 @@ public class OidcEndpointTests
     }
 
     /// <summary>
-    /// 下游服务"不回源也能校验令牌"这个承诺，必须真的成立。
-    ///
-    /// 这里用公钥集里的 n / e 现场还原 RSA 公钥，再对 Access Token 的签名做一次真实的
-    /// 密码学验签 —— 也就是说，任何拿到发现文档的服务都能独立完成校验，不需要 introspection。
-    ///
-    /// 这条之所以重要：如果令牌被加密成 JWE（OpenIddict 的默认行为），第三方根本读不出
-    /// claims，这个测试会直接失败，从而守住 <c>DisableAccessTokenEncryption()</c> 这个决定。
+    /// 下游服务"不回源也能校验令牌"这个承诺，必须真的成立：用公钥集里的 n / e 现场还原 RSA 公钥，
+    /// 对 Access Token 的签名做一次真实验签 —— 任何拿到发现文档的服务都能独立完成校验，不需要 introspection。
+    /// 若令牌被加密成 JWE（OpenIddict 默认行为），第三方读不出 claims，这条会直接失败，
+    /// 从而守住 <c>DisableAccessTokenEncryption()</c> 这个决定。
     /// </summary>
     [Fact]
     public async Task Access_token_should_be_verifiable_offline_with_the_published_jwks()
@@ -192,6 +189,10 @@ public class OidcEndpointTests
         html.Should().Contain("brand-name\">AuthHub");
         AuthHubFixture.ExtractAntiforgeryToken(html).Should().NotBeNullOrWhiteSpace();
 
+        // 内置演示账号的提示只在 Development 渲染；集成测试宿主是 Testing 环境，
+        // 因此页面上不应出现这组口令（生产环境同理，且更不该出现）。
+        html.Should().NotContain("Admin@12345");
+
         // 会话 Cookie 必须是 HttpOnly + SameSite=Lax
         var setCookie = response.Headers.TryGetValues("Set-Cookie", out var values)
             ? string.Join(";", values)
@@ -209,6 +210,9 @@ public class OidcEndpointTests
 
         response.Headers.GetValues("X-Content-Type-Options").Should().ContainSingle().Which.Should().Be("nosniff");
         response.Headers.GetValues("X-Frame-Options").Should().ContainSingle().Which.Should().Be("DENY");
+
+        // 旧浏览器的 XSS 审计器显式关闭（现代建议；"1; mode=block" 反而有可利用旁路）
+        response.Headers.GetValues("X-XSS-Protection").Should().ContainSingle().Which.Should().Be("0");
 
         var csp = string.Join(" ", response.Headers.GetValues("Content-Security-Policy"));
         csp.Should().Contain("frame-ancestors 'none'").And.Contain("form-action 'self'");

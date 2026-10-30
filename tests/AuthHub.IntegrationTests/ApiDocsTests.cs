@@ -6,19 +6,14 @@ using System.Text.Json;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// API 文档（OpenAPI JSON + Scalar UI）的集成测试。
-///
-/// 文档默认关闭（<c>AuthHub:Features:EnableApiDocs</c> 为 false），
+/// API 文档（OpenAPI JSON + Scalar UI）的集成测试。文档默认关闭（<c>AuthHub:Features:EnableApiDocs</c>），
 /// 因此这里单独构造一个打开它的宿主。
-///
-/// 重点守住两件容易在升级时被悄悄破坏的事：
-/// <list type="number">
-///   <item>Swashbuckle 输出文档的路径与 Scalar 读取文档的路径必须一致，
-///         任一侧被改动都会让 UI 打开后取不到文档；</item>
-///   <item>Scalar 的前端资源必须由本地提供 —— 一旦退回 CDN，离线/内网环境会白屏，
-///         本站的 CSP（<c>script-src 'self'</c>）也会直接拦掉脚本。</item>
-/// </list>
 /// </summary>
+/// <remarks>
+/// - Swashbuckle 输出文档的路径与 Scalar 读取文档的路径必须一致：任一侧被改动，UI 打开后取不到文档。
+/// - Scalar 的前端资源必须由本地提供：退回 CDN 时离线/内网环境会白屏，
+///   本站的 CSP（<c>script-src 'self'</c>）也会直接拦掉脚本。
+/// </remarks>
 public class ApiDocsTests
 {
     private static AuthHubWebApplicationFactory CreateApiDocsFactory() =>
@@ -54,11 +49,8 @@ public class ApiDocsTests
     }
 
     /// <summary>
-    /// 文档里每个操作都必须有分组、摘要与描述。
-    ///
-    /// 这是把 <c>[Tags]</c> / <c>[EndpointSummary]</c> / <c>[EndpointDescription]</c>
-    /// 用起来之后立下的契约，防回归：新增端点忘了标注就会掉进以程序集名命名的默认分组
-    /// （"AuthHub.Api"），在 Scalar 侧边栏里与中文分组格格不入。
+    /// 文档里每个操作都必须有分组、摘要与描述 —— 用起 <c>[Tags]</c>/<c>[EndpointSummary]</c>/<c>[EndpointDescription]</c>
+    /// 之后立下的防回归契约：新增端点忘了标注就会掉进以程序集名命名的默认分组（"AuthHub.Api"）。
     /// </summary>
     [Fact]
     public async Task Every_operation_should_declare_group_summary_and_description()
@@ -95,13 +87,10 @@ public class ApiDocsTests
     }
 
     /// <summary>
-    /// 文档必须覆盖**故意不加 <c>[ApiController]</c> 的 OIDC 协议控制器**。
-    ///
-    /// 为什么值得单独写一条测试：MVC 默认只把 <c>[ApiController]</c> 控制器交给 ApiExplorer，
-    /// 而文档生成器只认 ApiExplorer 里「可见」的端点。以前这件事由 Swashbuckle 的
-    /// <c>SwaggerApplicationConvention</c> 隐式兜着，换成框架内置生成器后必须自己显式声明
-    /// （见 <c>OpenApiExtensions.AddAuthHubOpenApi</c>）。丢掉那个约定的症状是
-    /// <c>/connect/*</c> 整组消失（14 个端点，含 token / userinfo），而其余断言全都照样通过。
+    /// 文档必须覆盖故意不加 <c>[ApiController]</c> 的 OIDC 协议控制器：MVC 默认只把 [ApiController]
+    /// 控制器交给 ApiExplorer，以前靠 Swashbuckle 的 <c>SwaggerApplicationConvention</c> 隐式兜着，
+    /// 换内置生成器后须自己显式声明（见 <c>OpenApiExtensions.AddAuthHubOpenApi</c>）——
+    /// 丢掉约定的症状是 <c>/connect/*</c> 整组消失（14 个端点，含 token / userinfo），其余断言照样通过。
     /// </summary>
     [Fact]
     public async Task OpenApi_document_should_cover_non_api_controllers_too()
@@ -129,13 +118,9 @@ public class ApiDocsTests
     }
 
     /// <summary>
-    /// 文档只收录面向调用方的接口，**不得**收录浏览器页面。
-    ///
-    /// 页面型端点在文档里是有害的：它们需要会话与防伪令牌，无法从 Scalar 直接发起，
-    /// 点一下只会误导调用方；同时「登录与提示页」这种分组出现在接口清单里本身就不像接口文档。
-    /// 因此 <c>AccountController</c> 显式 <c>IgnoreApi</c>、根路径显式
-    /// <c>ExcludeFromDescription()</c> —— 这条测试同时守住「页面别混进来」和
-    /// 「OIDC 协议别被顺手一起关掉」两侧。
+    /// 文档只收录面向调用方的接口，不得收录浏览器页面：页面端点需要会话与防伪令牌，无法从 Scalar 发起，
+    /// 点一下只会误导调用方。因此 <c>AccountController</c> 显式 <c>IgnoreApi</c>、根路径显式
+    /// <c>ExcludeFromDescription()</c> —— 这条测试同时守住「页面别混进来」和「OIDC 协议别被顺手一起关掉」两侧。
     /// </summary>
     [Fact]
     public async Task Page_endpoints_should_stay_out_of_the_document()
@@ -169,10 +154,8 @@ public class ApiDocsTests
     }
 
     /// <summary>
-    /// 每个分组都必须带描述（Scalar 侧边栏里显示在分组标题下）。
-    ///
-    /// 分组描述来自控制器类上的 XML <c>&lt;summary&gt;</c>，而框架内置的文档生成器
-    /// **不读 XML 注释**（.NET 10 才随源生成器提供），得由
+    /// 每个分组都必须带描述（Scalar 侧边栏里显示在分组标题下）：描述来自控制器类上的 XML <c>&lt;summary&gt;</c>，
+    /// 而框架内置的文档生成器不读 XML 注释（.NET 10 才随源生成器提供），得由
     /// <c>OpenApiExtensions.ApplyTagDescriptions</c> 自己补 —— 这条测试就是它的护栏。
     /// </summary>
     [Fact]
@@ -247,10 +230,9 @@ public class ApiDocsTests
     // ------------------------------------------------------------------ CSP
 
     /// <summary>
-    /// Scalar 的页面模板里有一段**内联**的 <c>&lt;script type="module"&gt;</c> 初始化脚本
-    /// （承载文档源与 OAuth2 预填参数），本站的基准 CSP（<c>script-src 'self'</c>）会拦掉它，
-    /// 症状是页面 200、资源全通、但浏览器里一片空白 —— 纯接口断言根本发现不了。
-    /// 因此文档 UI 路径的 CSP 必须放行内联脚本（.NET 集成拿不到 nonce，见中间件注释）。
+    /// Scalar 的页面模板里有一段内联的 <c>&lt;script type="module"&gt;</c>（承载文档源与 OAuth2 预填参数），
+    /// 基准 CSP（<c>script-src 'self'</c>）会拦掉它，症状是页面 200、资源全通、但浏览器里一片空白 ——
+    /// 纯接口断言根本发现不了。因此文档 UI 路径的 CSP 必须放行内联脚本（.NET 集成拿不到 nonce）。
     /// </summary>
     [Fact]
     public async Task Scalar_page_csp_should_allow_inline_scripts()
@@ -267,10 +249,9 @@ public class ApiDocsTests
     }
 
     /// <summary>
-    /// 上面那条放宽的护栏：放行内联脚本只允许发生在 <c>/scalar</c> 之下。
-    /// 登录页与 API 响应必须维持基准策略 —— 防止有人"修不好就全局放宽"。
-    /// 注意 style-src 一直含 <c>'unsafe-inline'</c>（行内样式），因此必须按
-    /// <c>script-src</c> 指令段断言，不能对整条策略做字符串包含判断。
+    /// 上面那条放宽的护栏：放行内联脚本只允许发生在 <c>/scalar</c> 之下，登录页与 API 响应维持基准策略
+    /// —— 防止有人"修不好就全局放宽"。注意 style-src 一直含 <c>'unsafe-inline'</c>（行内样式），
+    /// 因此必须按 <c>script-src</c> 指令段断言，不能对整条策略做字符串包含判断。
     /// </summary>
     [Fact]
     public async Task Strict_csp_should_stay_in_effect_outside_the_docs_ui()
