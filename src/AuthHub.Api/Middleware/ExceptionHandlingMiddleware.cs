@@ -35,7 +35,7 @@ public sealed class ExceptionHandlingMiddleware : IMiddleware
             _logger.LogError(
                 exception,
                 "未处理异常：{Method} {Path}（traceId={TraceId}）",
-                context.Request.Method,
+                LogSanitizer.Sanitize(context.Request.Method),
                 LogSanitizer.Sanitize(context.Request.Path.Value),
                 context.TraceIdentifier);
 
