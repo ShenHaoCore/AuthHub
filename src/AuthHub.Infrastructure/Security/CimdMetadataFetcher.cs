@@ -1,3 +1,4 @@
+using AuthHub.Application.Common;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
@@ -96,7 +97,7 @@ public sealed class CimdMetadataFetcher : ICimdMetadataFetcher, IDisposable
                         return CimdFetchResult.Failure($"重定向目标 {next} 不被允许。");
                     }
 
-                    _logger.LogDebug("CIMD 元数据重定向 | 从={From} | 到={To}", current, next);
+                    _logger.LogDebug("CIMD 元数据重定向 | 从={From} | 到={To}", LogSanitizer.Sanitize(current.ToString()), LogSanitizer.Sanitize(next.ToString()));
                     current = next;
                     continue;
                 }

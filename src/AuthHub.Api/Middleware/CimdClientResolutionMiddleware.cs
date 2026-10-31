@@ -1,3 +1,4 @@
+using AuthHub.Application.Common;
 using System.Text.Json;
 using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
@@ -53,8 +54,8 @@ public sealed class CimdClientResolutionMiddleware
         {
             _logger.LogInformation(
                 "CIMD 授权请求被拒 | ClientId={ClientId} | 原因={Reason}",
-                clientId,
-                resolution.Error);
+                LogSanitizer.Sanitize(clientId),
+                LogSanitizer.Sanitize(resolution.Error));
 
             await WriteInvalidClientAsync(context, resolution.Error ?? "客户端注册无效。");
             return;

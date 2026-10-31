@@ -38,20 +38,56 @@ internal sealed class CookieSession : IDisposable
         => _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
 
     /// <summary>提交 JSON(PUT/PATCH 之外的便捷入口是 PostFormAsync,JSON 用于 /api/* 控制器)。</summary>
-    public Task<HttpResponseMessage> PostJsonAsync(string path, object payload)
-        => SendJsonAsync(HttpMethod.Post, path, payload);
+    /// <remarks>
+    /// Cookie 认证的变更端点经 ApiAntiforgeryConvention 要求防伪令牌，
+    /// 这里自动先取令牌再带 X-CSRF-TOKEN 头 —— 测试代码不必逐处手工附加。
+    /// </remarks>
+    public async Task<HttpResponseMessage> PostJsonAsync(string path, object payload)
+        => await SendJsonAsync(HttpMethod.Post, path, payload);
 
-    public Task<HttpResponseMessage> PutJsonAsync(string path, object payload)
-        => SendJsonAsync(HttpMethod.Put, path, payload);
+    public async Task<HttpResponseMessage> PutJsonAsync(string path, object payload)
+        => await SendJsonAsync(HttpMethod.Put, path, payload);
 
-    public Task<HttpResponseMessage> DeleteAsync(string path)
-        => _client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, path));
+    public async Task<HttpResponseMessage> DeleteAsync(string path)
+    {
+        var token = await GetAntiforgeryTokenAsync();
+        var request = new HttpRequestMessage(HttpMethod.Delete, path);
+        request.Headers.Add("X-CSRF-TOKEN", token);
+        return await _client.SendAsync(request);
+    }
 
-    private Task<HttpResponseMessage> SendJsonAsync(HttpMethod method, string path, object payload)
-        => _client.SendAsync(new HttpRequestMessage(method, path)
+    /// <summary>测试诊断透传：直接发一个已构造好的请求。</summary>
+    public Task<HttpResponseMessage> SendRawAsync(HttpRequestMessage request)
+        => _client.SendAsync(request);
+
+    /// <summary>不带防伪令牌直接提交 JSON —— 专供"缺令牌被拒"的反例用例。</summary>
+    public Task<HttpResponseMessage> PostJsonWithoutAntiforgeryAsync(string path, object payload)
+        => _client.SendAsync(new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = JsonContent.Create(payload)
         });
+
+    private async Task<HttpResponseMessage> SendJsonAsync(HttpMethod method, string path, object payload)
+    {
+        var token = await GetAntiforgeryTokenAsync();
+        var request = new HttpRequestMessage(method, path)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Add("X-CSRF-TOKEN", token);
+        return await _client.SendAsync(request);
+    }
+
+    /// <summary>从 /api/antiforgery/token 取一枚请求令牌（同时下发配对的 antiforgery Cookie）。</summary>
+    private async Task<string> GetAntiforgeryTokenAsync()
+    {
+        var response = await _client.GetAsync("/api/antiforgery/token");
+        response.EnsureSuccessStatusCode();
+        var payload = await response.Content.ReadFromJsonAsync<TokenResponse>();
+        return payload?.Token ?? throw new InvalidOperationException("防伪令牌响应缺少 token 字段。");
+    }
+
+    private sealed record TokenResponse(string Token);
 
     /// <summary>
     /// 提交表单。参数类型是 <see cref="IEnumerable{T}"/> 而不是字典 —— 复选框组
@@ -93,7 +129,6 @@ internal sealed class CookieSession : IDisposable
                     "Cookie",
                     string.Join("; ", _cookies.Select(pair => $"{pair.Key}={pair.Value}")));
             }
-
             var response = await base.SendAsync(request, cancellationToken);
 
             if (response.Headers.TryGetValues("Set-Cookie", out var headers))

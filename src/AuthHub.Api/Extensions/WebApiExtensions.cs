@@ -3,6 +3,7 @@ using AuthHub.Api.Middleware;
 using AuthHub.Api.Models;
 using AuthHub.Api.Services;
 using AuthHub.Application.Interfaces;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AuthHub.Api.Extensions;
 
@@ -41,6 +42,11 @@ internal static class WebApiExtensions
             // 枚举以字符串输出，便于前端与日志阅读
             options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         });
+
+        // /api 的防伪约定：Cookie 认证的变更端点（POST/PUT/DELETE/PATCH）自动要求防伪令牌，
+        // 未来新增控制器无需记得手动挂 [ValidateAntiForgeryToken]。匿名端点豁免（没有可被
+        // CSRF 滥用的 ambient 凭证，JSON body 也挡掉跨站表单伪造），GET 按约定不产生副作用。
+        services.Configure<MvcOptions>(options => options.Conventions.Add(new ApiAntiforgeryConvention()));
 
         // 管理后台（Razor Pages）：页面多、表格与表单密集，继续手写 HTML 会产生数千行字符串拼接。
         // 协议页（登录 / 两步验证 / 同意授权）保持字符串产出、零视图依赖，不受影响。

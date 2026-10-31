@@ -1,3 +1,4 @@
+using AuthHub.Application.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Mail;
@@ -66,7 +67,7 @@ public sealed class EtherealEmailSender : IEmailSender
         };
 
         await client.SendMailAsync(message, cancellationToken);
-        _logger.LogInformation("邮件已发送到 Ethereal：收件人={To} 主题={Subject}", to, subject);
+        _logger.LogInformation("邮件已发送到 Ethereal：收件人={To} 主题={Subject}", LogSanitizer.Sanitize(to), LogSanitizer.Sanitize(subject));
     }
 
     /// <summary>调 Ethereal API 创建一组测试账号。失败时抛异常，由调用方捕获。</summary>

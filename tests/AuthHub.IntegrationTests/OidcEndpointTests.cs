@@ -193,13 +193,16 @@ public class OidcEndpointTests
         // 因此页面上不应出现这组口令（生产环境同理，且更不该出现）。
         html.Should().NotContain("Admin@12345");
 
-        // 会话 Cookie 必须是 HttpOnly + SameSite=Lax
+        // 登录页此时只下发 antiforgery Cookie。它刻意不带 HttpOnly：脚本类消费方要读它
+        // 换请求令牌（GET /api/antiforgery/token 的 SPA 模式）—— 但它必须与请求令牌配对
+        // 才有效，单独拿到不构成会话凭证；真正的会话 Cookie（authhub.session）是
+        // HttpOnly 的，见 IdentityExtensions 的配置注释。
         var setCookie = response.Headers.TryGetValues("Set-Cookie", out var values)
             ? string.Join(";", values)
             : string.Empty;
         // FluentAssertions 的 Contain 在字符串上没有 OccurrenceConstraint 重载，
         // 直接数出现次数，语义更直白。
-        Regex.Count(setCookie, "httponly", RegexOptions.IgnoreCase).Should().Be(1);
+        Regex.Count(setCookie, "httponly", RegexOptions.IgnoreCase).Should().Be(0);
     }
 
     /// <summary>安全响应头应由中间件统一注入（含 CSP、HSTS、防嗅探）。</summary>
