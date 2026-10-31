@@ -129,17 +129,7 @@ internal sealed class CookieSession : IDisposable
                     "Cookie",
                     string.Join("; ", _cookies.Select(pair => $"{pair.Key}={pair.Value}")));
             }
-            var jarDump = string.Join("; ", _cookies.Select(pair => pair.Key + "=" + pair.Value));
-            System.IO.File.AppendAllText(@"C:/Users/Administrator/.zcode/tmp/af-jar.log",
-                "REQ " + request.Method + " " + request.RequestUri + " jar=[" + jarDump + "]" + Environment.NewLine);
-
             var response = await base.SendAsync(request, cancellationToken);
-            var setCookieDump = response.Headers.TryGetValues("Set-Cookie", out var sc)
-                ? string.Join(" | ", sc.Select(h => h))
-                : "(none)";
-            System.IO.File.AppendAllText(@"C:/Users/Administrator/.zcode/tmp/af-jar.log",
-                "RESP " + (int)response.StatusCode + " " + request.RequestUri + " setcookie=" + setCookieDump + Environment.NewLine);
-
 
             if (response.Headers.TryGetValues("Set-Cookie", out var headers))
             {
