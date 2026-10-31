@@ -21,20 +21,80 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "https://localhost:5001", "type": "string" },
-    { "key": "m2mClientId", "value": "m2m-service", "type": "string" },
-    { "key": "m2mClientSecret", "value": "m2m-secret", "type": "secret" },
-    { "key": "spaClientId", "value": "spa-client", "type": "string" },
-    { "key": "redirectUri", "value": "https://localhost:3000/callback", "type": "string" },
-    { "key": "postmanCallback", "value": "https://oauth.pstmn.io/v1/callback", "type": "string" },
-    { "key": "demoUsername", "value": "alice", "type": "string" },
-    { "key": "demoPassword", "value": "Alice@12345", "type": "secret" },
-    { "key": "adminUsername", "value": "admin", "type": "string" },
-    { "key": "adminPassword", "value": "Admin@12345", "type": "secret" },
-    { "key": "accessToken", "value": "", "type": "secret" },
-    { "key": "refreshToken", "value": "", "type": "secret" },
-    { "key": "adminToken", "value": "", "type": "secret" },
-    { "key": "subject", "value": "", "type": "string" }
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "m2mClientId",
+      "value": "m2m-service",
+      "type": "string"
+    },
+    {
+      "key": "m2mClientSecret",
+      "value": "m2m-secret",
+      "type": "secret"
+    },
+    {
+      "key": "spaClientId",
+      "value": "spa-client",
+      "type": "string"
+    },
+    {
+      "key": "redirectUri",
+      "value": "https://localhost:3000/callback",
+      "type": "string"
+    },
+    {
+      "key": "postmanCallback",
+      "value": "https://oauth.pstmn.io/v1/callback",
+      "type": "string"
+    },
+    {
+      "key": "demoUsername",
+      "value": "alice",
+      "type": "string"
+    },
+    {
+      "key": "demoPassword",
+      "value": "Alice@12345",
+      "type": "secret"
+    },
+    {
+      "key": "adminUsername",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin@12345",
+      "type": "secret"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "subject",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "antiforgeryToken",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -58,8 +118,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "最轻量的存活探测。返回 Healthy 表示进程已就绪。"
           },
@@ -117,8 +181,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/.well-known/openid-configuration",
-              "host": ["{{baseUrl}}"],
-              "path": [".well-known", "openid-configuration"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "openid-configuration"
+              ]
             },
             "description": "下游应用接入的第一步。注意 `issuer` 必须与令牌里的 `iss` 完全一致，做反向代理时要显式配置 `AuthHub:Issuer`。"
           },
@@ -153,8 +222,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/.well-known/jwks",
-              "host": ["{{baseUrl}}"],
-              "path": [".well-known", "jwks"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "jwks"
+              ]
             },
             "description": "**分布式令牌验证的关键**。下游服务缓存这套公钥即可在本地校验 Access Token 的签名，无需每个请求都回源 introspect。\n\n服务端为此关闭了令牌加密（`DisableAccessTokenEncryption`），产出的是 JWS 而非 JWE —— 加密的令牌第三方读不了。"
           },
@@ -207,21 +281,45 @@
             },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
             ],
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "client_credentials", "type": "text" },
-                { "key": "client_id", "value": "{{m2mClientId}}", "type": "text" },
-                { "key": "client_secret", "value": "{{m2mClientSecret}}", "type": "text" },
-                { "key": "scope", "value": "api:read api:write", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{m2mClientId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{m2mClientSecret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "api:read api:write",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{baseUrl}}/connect/token",
-              "host": ["{{baseUrl}}"],
-              "path": ["connect", "token"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connect",
+                "token"
+              ]
             },
             "description": "后端服务之间的调用凭证。**注意请求体是 `application/x-www-form-urlencoded`，不是 JSON** —— OAuth 令牌端点只认表单编码。\n\n密钥以 HTTP Basic 或表单字段提交均可，这里用表单字段，观察起来更直观。"
           },
@@ -253,14 +351,25 @@
           "request": {
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/profile",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "profile"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
             },
             "description": "策略 `AuthHub.ApiAccess` 要求 `api:read` 或 `api:write`。\n\n**不带令牌时返回 401 + `application/problem+json`**（而不是 302 跳登录页）—— 对脚本和网关来说，重定向到 HTML 登录页是最难排查的失败模式。"
           },
@@ -297,21 +406,40 @@
           "request": {
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"message\": \"hello from postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/profile/echo",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "profile", "echo"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "echo"
+              ]
             },
             "description": "演示**基于 scope 的细粒度门禁**：同一个接口，只读令牌被拒、读写令牌放行。"
           },
@@ -350,8 +478,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
             },
             "description": "这是**多认证方案**的回归用例。管理类策略同时挂了会话 Cookie 与 Bearer 两个方案，ASP.NET Core 会依次对每个方案执行 Challenge —— 如果某个方案在 Challenge 里写出响应体，排在后面的方案再设状态码就会抛 `The status code cannot be set, the response has already started`。\n\n正确的做法是各方案只补响应头、由统一出口写 ProblemDetails，因此这里无论方案顺序如何都应当稳定返回 401。"
           },
@@ -405,24 +538,73 @@
             },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"userNameOrEmail\": \"{{demoUsername}}\",\n  \"password\": \"{{demoPassword}}\",\n  \"rememberMe\": true\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/account/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "account", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "account",
+                "login"
+              ]
             },
             "description": "面向 SPA 的 JSON 登录接口，**用会话 Cookie 而不是 Bearer 令牌** —— 因为要在浏览器里保持登录态。\n\n浏览器页面的表单登录走的是 `POST /account/login`（带防伪令牌 + 302 跳转），两者是两个不同的端点。\n\n注意：这个端点和 HTML 登录页一样挂了**登录限流**（默认 10 次 / 5 分钟），连点会拿到 429。"
           },
           "response": []
         },
         {
-          "name": "⑥ 查询当前登录用户",
+          "name": "⑥ 获取防伪令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('返回一次性令牌', () => pm.expect(body.token).to.be.a('string').and.not.empty);",
+                  "",
+                  "// 与响应下发的 authhub.antiforgery Cookie 配对；Postman 的 cookie jar 自动持有后者",
+                  "pm.collectionVariables.set('antiforgeryToken', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/antiforgery/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "antiforgery",
+                "token"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "⑦ 查询当前登录用户",
           "event": [
             {
               "listen": "test",
@@ -454,15 +636,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/account/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "account", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "account",
+                "me"
+              ]
             },
             "description": "`/api/account` 整组都要求会话 Cookie（`[Authorize(AuthenticationSchemes = Cookie)]`）。\n\n未登录时会返回 **401 + problem+json**，而不是 302 —— 这是刻意按路径分流的结果。"
           },
           "response": []
         },
         {
-          "name": "⑦ 登出（结束会话）",
+          "name": "⑧ 登出（结束会话）",
           "event": [
             {
               "listen": "test",
@@ -479,11 +667,22 @@
               "type": "noauth"
             },
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{antiforgeryToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/account/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "account", "logout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "account",
+                "logout"
+              ]
             },
             "description": "只结束本机会话（清 Cookie）。\n\n要让**已经签发出去的令牌**立即失效，走「4. 刷新令牌与撤销」里的 `POST /api/tokens/revoke` —— 两者是不同的语义，一个是会话层、一个是令牌层。"
           },
@@ -495,7 +694,7 @@
       "name": "3. 授权码 + PKCE",
       "item": [
         {
-          "name": "⑧ 为 spa-client 放行 Postman 回调地址",
+          "name": "⑨ 为 spa-client 放行 Postman 回调地址",
           "event": [
             {
               "listen": "test",
@@ -516,28 +715,51 @@
           "request": {
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{antiforgeryToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"redirectUris\": [\n    \"{{redirectUri}}\",\n    \"{{postmanCallback}}\"\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/clients/{{spaClientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "clients", "{{spaClientId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "clients",
+                "{{spaClientId}}"
+              ]
             },
             "description": "**先跑这一步，下面的 OAuth2 助手才能用。**\n\n`spa-client` 的重定向白名单原本只有 `https://localhost:3000/callback`，而 Postman 的 OAuth2 助手回调是 `https://oauth.pstmn.io/v1/callback`。授权码只能回跳到已登记的白名单地址（这是防授权码被劫持的核心机制），所以必须先在客户端上登记。\n\n本请求需要 `clients.manage` 权限，因此要用 `adminToken`。第一次跑时 `adminToken` 还是空的 —— 请先手动用 `admin` 账号登录浏览器、或者按下面「⑨」的说明先用别的方式拿一个管理员令牌；也可以直接把 Bearer 令牌换成手动粘贴的管理员 Access Token。\n\n> 这正好演示了一个安全特性：重定向白名单是**精确匹配**的，想加就得到管理接口上显式登记，客户端自己改不了。"
           },
           "response": []
         },
         {
-          "name": "⑨ 授权码 + PKCE 获取用户令牌",
+          "name": "⑩ 授权码 + PKCE 获取用户令牌",
           "event": [
             {
               "listen": "test",
@@ -579,31 +801,77 @@
             "auth": {
               "type": "oauth2",
               "oauth2": [
-                { "key": "grant_type", "value": "authorization_code", "type": "string" },
-                { "key": "authUrl", "value": "{{baseUrl}}/connect/authorize", "type": "string" },
-                { "key": "accessTokenUrl", "value": "{{baseUrl}}/connect/token", "type": "string" },
-                { "key": "clientId", "value": "{{spaClientId}}", "type": "string" },
-                { "key": "scope", "value": "openid profile email roles api:read offline_access", "type": "string" },
-                { "key": "redirect_uri", "value": "{{postmanCallback}}", "type": "string" },
-                { "key": "usePkce", "value": true, "type": "boolean" },
-                { "key": "tokenName", "value": "AuthHub 用户令牌", "type": "string" },
-                { "key": "client_authentication", "value": "body", "type": "string" },
-                { "key": "addTokenTo", "value": "header", "type": "string" }
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code",
+                  "type": "string"
+                },
+                {
+                  "key": "authUrl",
+                  "value": "{{baseUrl}}/connect/authorize",
+                  "type": "string"
+                },
+                {
+                  "key": "accessTokenUrl",
+                  "value": "{{baseUrl}}/connect/token",
+                  "type": "string"
+                },
+                {
+                  "key": "clientId",
+                  "value": "{{spaClientId}}",
+                  "type": "string"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid profile email roles api:read offline_access",
+                  "type": "string"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{postmanCallback}}",
+                  "type": "string"
+                },
+                {
+                  "key": "usePkce",
+                  "value": true,
+                  "type": "boolean"
+                },
+                {
+                  "key": "tokenName",
+                  "value": "AuthHub 用户令牌",
+                  "type": "string"
+                },
+                {
+                  "key": "client_authentication",
+                  "value": "body",
+                  "type": "string"
+                },
+                {
+                  "key": "addTokenTo",
+                  "value": "header",
+                  "type": "string"
+                }
               ]
             },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/account/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "account", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "account",
+                "me"
+              ]
             },
             "description": "**这是浏览器侧的标准流程**，Postman 会代你完成：跳转到授权端点 → 用 `admin` / `Admin@12345` 登录 → 确认同意 → 拿着回调里的授权码回来换令牌。\n\n操作：Authorization 标签页 → Type 选 *OAuth 2.0* → 点 **Get New Access Token** → 在弹出的浏览器窗口里登录并同意 → Use Token。\n\n要点：\n- 已勾选 **PKCE**（`code_challenge_method=S256`）。服务端对本流程强制 PKCE，客户端如果不带就会被拒 —— 这是防授权码被拦截后直接兑换的关键。\n- `spa-client` 是 **public 客户端**（没有密钥），安全边界完全由 PKCE 承担，所以这里不填 Client Secret。\n- 已在上面第 ⑧ 步登记了 Postman 的回调地址，否则这里会报 `invalid_redirect_uri`。\n- 登录 `admin` 拿到的令牌里会带全部 6 项 `authhub:permission`，下面两步正好验证。\n\n换到令牌后会写进 `adminToken`，供第 ⑧ 步和后面的管理接口复用。"
           },
           "response": []
         },
         {
-          "name": "⑩ 管理员令牌可访问管理接口",
+          "name": "⑪ 管理员令牌可访问管理接口",
           "event": [
             {
               "listen": "test",
@@ -635,17 +903,34 @@
           "request": {
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/users?page=1&pageSize=10",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "users"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "pageSize", "value": "10" }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
               ]
             },
             "description": "策略 `AuthHub.Permission.users.manage` 要求令牌里有 `authhub:permission=users.manage`。\n\n这个声明是**服务端在签发时按角色展开**写进令牌的，不是信任客户端传来的角色 —— 否则客户端只要自称 Administrator 就能提权。角色/权限变更会在下一次签发令牌时生效；会话侧还有 5 分钟的安全戳校验兜底。"
@@ -658,7 +943,7 @@
       "name": "4. 刷新令牌与撤销",
       "item": [
         {
-          "name": "⑪ 刷新令牌（含旋转）",
+          "name": "⑫ 刷新令牌（含旋转）",
           "event": [
             {
               "listen": "test",
@@ -693,27 +978,47 @@
             },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
             ],
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "refresh_token", "type": "text" },
-                { "key": "refresh_token", "value": "{{refreshToken}}", "type": "text" },
-                { "key": "client_id", "value": "{{spaClientId}}", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token",
+                  "type": "text"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refreshToken}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{spaClientId}}",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{baseUrl}}/connect/token",
-              "host": ["{{baseUrl}}"],
-              "path": ["connect", "token"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connect",
+                "token"
+              ]
             },
             "description": "依赖第 ⑨ 步拿到的 `refreshToken`（scope 里有 `offline_access` 才会签发刷新令牌）。\n\n**想验证重放防护**：连点两次这个请求。第二次会失败，因为第一次返回时旧的 `refresh_token` 已经作废；而且服务端会把该授权下的**所有**令牌一并撤销，所以你手上那个还没过期的 access_token 也会立刻失效 —— 这正是主动应对令牌泄露的设计。"
           },
           "response": []
         },
         {
-          "name": "⑫ 撤销某用户的全部令牌",
+          "name": "⑬ 撤销某用户的全部令牌",
           "event": [
             {
               "listen": "test",
@@ -734,28 +1039,47 @@
           "request": {
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"subject\": \"{{subject}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/tokens/revoke",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "tokens", "revoke"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tokens",
+                "revoke"
+              ]
             },
             "description": "「把某个用户强制下线」的运维入口，需要 `tokens.revoke` 权限。\n\n`subject` 来自第 ⑤ 步登录时记下的 `userId`。\n\n> 这条路走完，第 ③ 步那个还没过期的 access_token 会立刻失效 —— 继续看下一条。"
           },
           "response": []
         },
         {
-          "name": "⑬ 撤销后：未过期令牌立即失效（预期 401）",
+          "name": "⑭ 撤销后：未过期令牌立即失效（预期 401）",
           "event": [
             {
               "listen": "test",
@@ -782,14 +1106,25 @@
           "request": {
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/profile",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "profile"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
             },
             "description": "验证**令牌黑名单**：JWT 是无状态的，默认情况下签发出去就管不了了（只能等它过期）。\n\n服务端开启了 `EnableTokenEntryValidation()`，每次校验都回查令牌表状态。代价是每次校验多一次查询 —— 高并发下应当把令牌状态缓存到 Redis，并把撤销事件广播给各实例（见 README 的扩展方向）。"
           },
