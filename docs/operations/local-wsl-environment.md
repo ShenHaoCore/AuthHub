@@ -128,9 +128,13 @@ Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转�
 > pam_systemd 竞争性重签用户管理器(WSL 2.4.10 在多次重启周期后 cgroup attach 报
 > Permission denied),两个 `systemd --user` 互相击杀对方的服务,表现为
 > `systemctl --user status authhub` 的 Active 时间每隔一两分钟归零。
-> **只用浏览器访问不会触发**(不开 wsl 会话就只有一个管理器,服务稳定);
-> 调试 WSL 服务时尽量把多条检查合并进一个会话,或在 Windows 侧重启 WSL 后
-> 等服务稳定再连续操作。 Windows 侧重启(重启整机)可彻底清掉这类状态。
+> **后续定性(同日)**:该竞争循环比最初判断更顽固——跨 WSL 版本(2.4.10 → 3.0.3)、
+> 跨网络模式(NAT/mirrored)均复现,且**不依赖 wsl 会话**(静置数分钟后服务仍被弹,
+> Active 时间归零;`ps -eo args | grep -c "[s]ystemd --user"` 大于 1 即两个管理器在互杀)。
+> 竞争间隙内服务可用;Kestrel 已改绑 0.0.0.0(`/etc/authhub/authhub.env` 的
+> `Kestrel__Endpoints__*__Url`),`https://<WSL_IP>:5001` 的 IP 直连兜底不受 localhost
+> 转发影响(开发证书只含 localhost,浏览器会有证书名警告)。**Windows 整机重启**
+> 是已验证的唯一彻底清场手段;若重启后复发,属 WSL 平台层缺陷,向 WSL 上游反馈。
 
 ## 5. HTTPS 开发证书
 
