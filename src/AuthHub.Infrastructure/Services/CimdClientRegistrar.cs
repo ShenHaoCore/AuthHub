@@ -141,7 +141,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         {
             _logger.LogDebug(
                 "CIMD 元数据由其他实例刷新中，本次继续使用缓存 | ClientId={ClientId}",
-                clientId);
+                LogSanitizer.Sanitize(clientId));
 
             return CimdResolution.Allowed;
         }
@@ -158,7 +158,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
             {
                 _logger.LogDebug(
                     "等待期间 CIMD 客户端已由其他实例注册完成 | ClientId={ClientId}",
-                    clientId);
+                    LogSanitizer.Sanitize(clientId));
 
                 return CimdResolution.Allowed;
             }
@@ -174,7 +174,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
 
         _logger.LogWarning(
             "CIMD 客户端等待并发注册超时 | ClientId={ClientId}",
-            clientId);
+            LogSanitizer.Sanitize(clientId));
 
         return CimdResolution.Rejected("该客户端的元数据正在注册中，请稍后重试。");
     }
@@ -333,8 +333,8 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
         {
             _logger.LogWarning(
                 "CIMD 元数据刷新失败，继续使用缓存 | ClientId={ClientId} | 原因={Reason}",
-                clientId,
-                reason);
+                LogSanitizer.Sanitize(clientId),
+                LogSanitizer.Sanitize(reason));
 
             return CimdResolution.Allowed;
         }
@@ -347,7 +347,7 @@ internal sealed class CimdClientRegistrar : ICimdClientRegistrar
                 Details: $"CIMD 自动注册被拒：{reason}"),
             cancellationToken);
 
-        _logger.LogWarning("CIMD 客户端注册被拒 | ClientId={ClientId} | 原因={Reason}", clientId, reason);
+        _logger.LogWarning("CIMD 客户端注册被拒 | ClientId={ClientId} | 原因={Reason}", LogSanitizer.Sanitize(clientId), LogSanitizer.Sanitize(reason));
 
         return CimdResolution.Rejected(reason);
     }
