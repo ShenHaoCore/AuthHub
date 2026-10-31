@@ -25,6 +25,14 @@ GitHub Releases 只保留当前版本，历史版本的完整说明以本文为�
 
 `源码` 列指向对应 tag 的完整代码快照，可用于对比或回溯任意历史版本。
 
+## 未发布
+
+| 类型 | 内容 |
+|---|---|
+| feat | **/api 防伪令牌通道（BREAKING）**：Cookie 认证的变更端点（账号 API 与管理 API 的 POST/PUT/DELETE/PATCH，匿名端点除外）现在要求 `X-CSRF-TOKEN` 头——由 `ApiAntiforgeryConvention` 统一挂方案感知过滤器（仅对会话 Cookie 认证的请求校验，Bearer 调用方不受影响）；新增 `GET /api/antiforgery/token` 发放与身份绑定的一次性令牌对。升级动作：浏览器/SPA 调用方在变更请求前取令牌并带头（测试基建 CookieSession 已内置该流程）；纯 Bearer 脚本无需任何改动 |
+| fix | **日志伪造净化与兜底邮件脱敏**：新增 `LogSanitizer`，外部输入（clientId、URL、邮箱、审计明细等）进日志前压平换行与控制字符，25 处 CodeQL cs/log-forging 告警点全部修复；`LoggingEmailSender`（email provider 未配置时的兜底）在受保护环境只记收件人/主题/正文长度——正文含一次性重置链接，不再落日志（Development 保留完整正文供自测） |
+| test | **分层守护增强**：`Api_should_touch_infrastructure_only_in_composition` 以源码白名单（组合根 + Development 调试通道）锁定"Api → Infrastructure 仅用于 DI 注册"；守护测试 4 条 → 5 条，全量 242 单测 + 194 集成 |
+
 ## v1.6.0 —— 后台 LeptonX 视觉基线与工程质量护栏
 
 2026-10-31

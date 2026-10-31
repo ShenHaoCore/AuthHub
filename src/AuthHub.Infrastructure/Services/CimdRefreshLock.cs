@@ -1,3 +1,4 @@
+using AuthHub.Application.Common;
 using AuthHub.Application.Interfaces;
 using AuthHub.Application.Options;
 using AuthHub.Infrastructure.Data;
@@ -82,7 +83,7 @@ internal sealed class CimdRefreshLock : ICimdRefreshLock
 
         _logger.LogDebug(
             "CIMD 刷新租约已被其他实例持有 | ClientId={ClientId}",
-            clientId);
+            LogSanitizer.Sanitize(clientId));
 
         return null;
     }

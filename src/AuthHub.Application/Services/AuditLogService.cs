@@ -54,13 +54,15 @@ public sealed class AuditLogService : IAuditLogService
         {
             _logger.LogInformation(
                 "审计事件 {Action} | 用户={UserId} | 客户端={ClientId} | IP={IpAddress} | 明细={Details}",
-                log.Action, log.UserId, log.ClientId, log.IpAddress, log.Details);
+                log.Action, LogSanitizer.Sanitize(log.UserId), LogSanitizer.Sanitize(log.ClientId),
+                LogSanitizer.Sanitize(log.IpAddress), LogSanitizer.Sanitize(log.Details));
         }
         else
         {
             _logger.LogWarning(
                 "审计事件（失败） {Action} | 用户={UserId} | 客户端={ClientId} | IP={IpAddress} | 明细={Details}",
-                log.Action, log.UserId, log.ClientId, log.IpAddress, log.Details);
+                log.Action, LogSanitizer.Sanitize(log.UserId), LogSanitizer.Sanitize(log.ClientId),
+                LogSanitizer.Sanitize(log.IpAddress), LogSanitizer.Sanitize(log.Details));
         }
     }
 

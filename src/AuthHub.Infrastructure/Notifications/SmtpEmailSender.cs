@@ -1,3 +1,4 @@
+using AuthHub.Application.Common;
 using System.Net;
 using System.Net.Mail;
 using AuthHub.Application.Interfaces;
@@ -49,6 +50,6 @@ public sealed class SmtpEmailSender : IEmailSender
 
         // 异常向上抛：调用方（AccountService）统一捕获并落审计/日志，不让邮件失败拖垮主流程。
         await client.SendMailAsync(message, cancellationToken);
-        _logger.LogInformation("邮件已发送：收件人={To} 主题={Subject}", to, subject);
+        _logger.LogInformation("邮件已发送：收件人={To} 主题={Subject}", LogSanitizer.Sanitize(to), LogSanitizer.Sanitize(subject));
     }
 }

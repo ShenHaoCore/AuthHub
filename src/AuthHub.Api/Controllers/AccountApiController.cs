@@ -16,6 +16,9 @@ namespace AuthHub.Api.Controllers;
 [Route("api/account")]
 [Authorize(AuthenticationSchemes = AuthHubSchemes.Cookie)]
 [Produces("application/json")]
+// 本控制器是纯 Cookie 认证：变更端点逐个挂 [ValidateAntiForgeryToken]（匿名端点豁免），
+// 不走 ApiAntiforgeryConvention 的方案感知过滤器 —— 防伪语义完全一致，但源内标注对
+// 静态安全扫描（CodeQL cs/web/missing-token-validation）可见。
 public class AccountApiController : ApiControllerBase
 {
     private readonly IAccountService _accountService;
@@ -105,6 +108,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("退出登录")]
     [EndpointDescription("清除当前 Cookie 会话。")]
     [HttpPost("logout")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
         await _accountService.SignOutAsync(HttpContext.RequestAborted);
@@ -122,6 +126,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("修改密码")]
     [EndpointDescription("成功后其他设备的会话会失效（安全戳变更）。")]
     [HttpPost("password")]
+    [ValidateAntiForgeryToken]
     public Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         => ExecuteAsync(async () =>
         {
@@ -140,6 +145,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("开始绑定 Authenticator")]
     [EndpointDescription("返回共享密钥、otpauth URI 与恢复码。")]
     [HttpPost("2fa/setup")]
+    [ValidateAntiForgeryToken]
     public Task<IActionResult> BeginTwoFactorSetup()
         => ExecuteAsync(() => _accountService.BeginTwoFactorSetupAsync(HttpContext.RequestAborted));
 
@@ -147,6 +153,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("启用 MFA")]
     [EndpointDescription("用 Authenticator 的 6 位验证码确认，返回新的恢复码。")]
     [HttpPost("2fa/enable")]
+    [ValidateAntiForgeryToken]
     public Task<IActionResult> EnableTwoFactor([FromBody] EnableTwoFactorRequest request)
         => ExecuteAsync(() => _accountService.EnableTwoFactorAsync(request.Code, HttpContext.RequestAborted));
 
@@ -154,6 +161,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("关闭 MFA")]
     [EndpointDescription("关闭两步验证，并重置 Authenticator 密钥。")]
     [HttpPost("2fa/disable")]
+    [ValidateAntiForgeryToken]
     public Task<IActionResult> DisableTwoFactor()
         => ExecuteAsync(() => _accountService.DisableTwoFactorAsync(HttpContext.RequestAborted));
 
@@ -161,6 +169,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("发送一次性验证码")]
     [EndpointDescription("支持 Email 与 Phone 通道。")]
     [HttpPost("2fa/send-code")]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting(RateLimitingExtensions.LoginPolicy)]
     public Task<IActionResult> SendTwoFactorCode([FromBody] SendTwoFactorCodeRequest request)
         => ExecuteAsync(() => _accountService.SendTwoFactorCodeAsync(request.Provider, HttpContext.RequestAborted));
@@ -186,6 +195,7 @@ public class AccountApiController : ApiControllerBase
     [EndpointSummary("解除应用授权")]
     [EndpointDescription("同时撤销该授权的全部令牌。")]
     [HttpDelete("consents/{authorizationId}")]
+    [ValidateAntiForgeryToken]
     public Task<IActionResult> RevokeConsent(string authorizationId)
         => ExecuteAsync(() => _consentService.RevokeAsync(authorizationId, HttpContext.RequestAborted));
 

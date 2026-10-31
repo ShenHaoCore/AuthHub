@@ -72,6 +72,41 @@ public sealed class LayeringTests
         forbidden.Should().BeEmpty("单元测试引用 Api 会瓦解「判定逻辑不落在 Api 层」的可测性约束");
     }
 
+    [Fact]
+    public void Api_should_touch_infrastructure_only_in_composition_code()
+    {
+        // architecture.md「依赖方向」：Api → Infrastructure 仅用于 DI 注册，不直接使用其类型。
+        // 程序集引用层面无法区分"注册"与"使用"，这里以源码白名单落成可执行契约：
+        // 允许出现 Infrastructure using 的只有组合根（Program / Extensions）与
+        // Development 专用的调试通道（DevSmsController，读 Infrastructure 的开发短信收件箱）。
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Program.cs",
+            "DevSmsController.cs"
+        };
+
+        var violations = Directory
+            .EnumerateFiles(Path.Combine(RepoRoot(), "src", "AuthHub.Api"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains("using AuthHub.Infrastructure", StringComparison.Ordinal))
+            .Select(file => Path.GetFileName(file)!)
+            .Where(name => !allowed.Contains(name) && !name.EndsWith("Extensions.cs", StringComparison.Ordinal))
+            .ToArray();
+
+        violations.Should().BeEmpty("Api 直接使用 Infrastructure 类型的位置超出了组合根白名单：{0}", string.Join(", ", violations));
+    }
+
+    /// <summary>从测试输出目录向上走，定位含 Directory.Build.props 的仓库根。</summary>
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Directory.Build.props")))
+        {
+            dir = dir.Parent!;
+        }
+
+        return dir?.FullName ?? throw new InvalidOperationException("未找到仓库根（Directory.Build.props）。");
+    }
+
     private static IReadOnlyCollection<string> ReferencesOf(Assembly assembly) =>
         assembly.GetReferencedAssemblies()
             .Select(name => name.Name ?? string.Empty)

@@ -78,12 +78,14 @@ internal static class IdentityExtensions
         services.Configure<SecurityStampValidatorOptions>(options =>
             options.ValidationInterval = TimeSpan.FromMinutes(5));
 
-        // 防伪令牌（登录 / 同意表单）
+        // 防伪令牌（登录 / 同意表单 + /api 的 Cookie 认证变更端点）
         services.AddAntiforgery(options =>
         {
             options.HeaderName = "X-CSRF-TOKEN";
             options.Cookie.Name = "authhub.antiforgery";
-            options.Cookie.HttpOnly = true;
+            // HttpOnly=false 是刻意的：脚本类消费方要读它换请求令牌（GET /api/antiforgery/token）。
+            // 该 Cookie 单独拿到并不能通过校验 —— 必须与请求令牌配对，不是会话凭证。
+            options.Cookie.HttpOnly = false;
             options.Cookie.SameSite = SameSiteMode.Lax;
             options.Cookie.SecurePolicy = requireHttps ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
         });
