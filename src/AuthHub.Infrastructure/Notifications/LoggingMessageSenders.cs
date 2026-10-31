@@ -32,7 +32,7 @@ public sealed class LoggingEmailSender : IEmailSender
         if (_isDevelopment)
         {
             _logger.LogWarning("[开发环境邮件] 收件人={To} 主题={Subject} 正文={Body}",
-                LogSanitizer.Sanitize(to), LogSanitizer.Sanitize(subject), body);
+                LogSanitizer.Sanitize(to), LogSanitizer.Sanitize(subject), LogSanitizer.Sanitize(body));
         }
         else
         {
