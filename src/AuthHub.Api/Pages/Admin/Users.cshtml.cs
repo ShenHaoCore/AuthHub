@@ -1,4 +1,5 @@
 using AuthHub.Application.Common;
+using AuthHub.Application.DTOs.AuditLogs;
 using AuthHub.Application.DTOs.Roles;
 using AuthHub.Application.DTOs.Users;
 using AuthHub.Application.Interfaces;
@@ -26,12 +27,18 @@ public class UsersModel : AdminPageModel
     private readonly IUserAdminService _users;
     private readonly IRoleAdminService _roles;
     private readonly ITokenAdminService _tokens;
+    private readonly IAuditLogService _audit;
 
-    public UsersModel(IUserAdminService users, IRoleAdminService roles, ITokenAdminService tokens)
+    public UsersModel(
+        IUserAdminService users,
+        IRoleAdminService roles,
+        ITokenAdminService tokens,
+        IAuditLogService audit)
     {
         _users = users;
         _roles = roles;
         _tokens = tokens;
+        _audit = audit;
     }
 
     // ------------------------------------------------------------------ 查询条件（GET）
@@ -86,6 +93,10 @@ public class UsersModel : AdminPageModel
 
     /// <summary>全部角色（用于筛选下拉与编辑弹窗的角色勾选）。</summary>
     public IReadOnlyCollection<RoleDto> AllRoles { get; private set; } = Array.Empty<RoleDto>();
+
+    /// <summary>当前页用户近 30 天的登录活动。</summary>
+    public IReadOnlyDictionary<string, UserLoginActivityDto> LoginActivities { get; private set; }
+        = new Dictionary<string, UserLoginActivityDto>(StringComparer.Ordinal);
 
     // ------------------------------------------------------------------ 基类钩子（见 AdminPageModel）
 
@@ -297,6 +308,10 @@ public class UsersModel : AdminPageModel
                 Role = RoleFilter,
                 IsActive = ParseActive(ActiveFilter)
             },
+            cancellationToken);
+
+        LoginActivities = await _audit.GetLoginActivitiesAsync(
+            Users.Items.Select(x => x.Id).ToArray(),
             cancellationToken);
     }
 

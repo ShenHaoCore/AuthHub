@@ -641,6 +641,24 @@ public class AdminUiTests
     }
 
     [Fact]
+    public async Task Users_page_should_render_login_activity_with_thirty_daily_bars()
+    {
+        using var session = NewSession();
+        await LoginAsync(session, "admin", "Admin@12345");
+
+        var html = await CookieSession.ReadHtmlAsync(await session.GetAsync("/admin/users"));
+
+        html.Should().Contain("aria-label=\"查看 admin 的登录活动\"");
+        html.Should().Contain("data-activity-open");
+        html.Should().Contain("aria-expanded=\"false\"");
+        html.Should().Contain("共登录");
+        html.Should().Contain("日期按 UTC 计算");
+        html.Should().Contain("ah-login-activity-chart");
+        Regex.Count(html, "class=\"ah-login-activity-day\"")
+            .Should().BeGreaterThanOrEqualTo(30, because: "有登录活动的用户应展示完整 30 天，而非只展示有数据的日期");
+    }
+
+    [Fact]
     public async Task Profile_mfa_wording_should_match_the_list()
     {
         using var session = NewSession();

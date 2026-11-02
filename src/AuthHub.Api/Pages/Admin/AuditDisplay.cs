@@ -16,6 +16,7 @@ public static class AuditDisplay
         // 账号
         [AuditActionType.UserRegistered] = "注册账号",
         [AuditActionType.UserLoginSucceeded] = "登录成功",
+        [AuditActionType.UserLoginPasswordSucceeded] = "密码校验通过",
         [AuditActionType.UserLoginFailed] = "登录失败",
         [AuditActionType.UserExternalLoginSucceeded] = "第三方登录成功",
         [AuditActionType.UserExternalLoginFailed] = "第三方登录失败",
@@ -72,6 +73,7 @@ public static class AuditDisplay
         {
             AuditActionType.UserRegistered,
             AuditActionType.UserLoginSucceeded,
+            AuditActionType.UserLoginPasswordSucceeded,
             AuditActionType.UserLoginFailed,
             AuditActionType.UserExternalLoginSucceeded,
             AuditActionType.UserExternalLoginFailed,

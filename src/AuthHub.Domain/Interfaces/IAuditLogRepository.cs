@@ -20,5 +20,12 @@ public interface IAuditLogRepository
         int pageSize = 20,
         CancellationToken cancellationToken = default);
 
+    /// <summary>按用户与 UTC 日期聚合完整登录次数，To 为开区间。</summary>
+    Task<IReadOnlyList<(string UserId, DateOnly Date, int Count)>> GetDailyLoginCountsAsync(
+        IReadOnlyCollection<string> userIds,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

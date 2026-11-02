@@ -843,6 +843,28 @@
         });
     }
 
+    /* -------------------------------------------------- 用户登录活动展开面板 */
+
+    function initLoginActivities() {
+        on(document, 'click', function (event) {
+            var opener = event.target.closest('[data-activity-open]');
+            if (!opener || event.defaultPrevented || event.button !== 0
+                || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+
+            var panel = byIdOrSelector(opener.getAttribute('data-activity-open'));
+            if (!panel) {
+                return;
+            }
+
+            event.preventDefault();
+            var willOpen = panel.hidden;
+            panel.hidden = !willOpen;
+            opener.setAttribute('aria-expanded', String(willOpen));
+        });
+    }
+
     /* ------------------------------------------------------------- 初始化 */
 
     function init() {
@@ -854,6 +876,7 @@
         initToasts();
         initTabs();
         initDatePickers();
+        initLoginActivities();
         initAjaxLinks();
         scanAutoOpenDialogs();
     }
