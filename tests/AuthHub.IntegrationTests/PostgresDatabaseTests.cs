@@ -12,22 +12,17 @@ using Npgsql;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// PostgreSQL 提供程序（Database:Provider=Postgres）的端到端行为。
-///
-/// <para><b>守住的行为</b>：换提供程序不是"能编译"就算数 —— 这里把整条链路真正跑在 PG 上：
-/// EnsureCreated 建库建表（Identity + OpenIddict + 自定义表）→ 种子 → m2m 客户端凭证签发 →
-/// 带 Bearer 调 /api/profile（令牌条目校验回查 PG）。其中任何一环对 PG 不兼容
-/// （典型：DateTimeOffset 与 timestamptz 的映射规则）都会在这里炸出来。</para>
-///
-/// <para><b>连接串来源</b>：环境变量 <c>AUTHHUB_TEST_POSTGRES</c>，未设时用默认值
-/// （与 CI 的 postgres 服务容器一致：localhost:5432，postgres/postgres）。
-/// 本机没有可达的 PostgreSQL 时提前返回 —— 提供程序是可选项，其余用例照跑；
-/// CI 的服务容器保证这个用例在流水线上始终真实执行。角色需要 CREATEDB 权限
-/// （EnsureCreated 要建出 GUID 命名的隔离库）。</para>
-///
-/// <para><b>隔离</b>：每次运行用 GUID 命名的临时库，finally 里 EnsureDeleted，
-/// 不碰实例上的任何既有数据库。</para>
+/// PostgreSQL 提供程序（Database:Provider=Postgres）的端到端行为：换提供程序不是"能编译"就算数 ——
+/// 把整条链路真正跑在 PG 上：EnsureCreated 建库建表（Identity + OpenIddict + 自定义表）→ 种子 →
+/// m2m 客户端凭证签发 → 带 Bearer 调 /api/profile（令牌条目校验回查 PG）。任何一环对 PG 不兼容
+/// （典型：DateTimeOffset 与 timestamptz 的映射规则）都会在这里炸出来。
 /// </summary>
+/// <remarks>
+/// - 连接串来自环境变量 <c>AUTHHUB_TEST_POSTGRES</c>，未设时用默认值（与 CI 的 postgres 服务容器一致）。
+///   本机没有可达的 PostgreSQL 时提前返回 —— 提供程序是可选项；CI 的服务容器保证这个用例在流水线上
+///   始终真实执行。角色需要 CREATEDB 权限（EnsureCreated 要建出 GUID 命名的隔离库）。
+/// - 隔离：每次运行用 GUID 命名的临时库，finally 里 EnsureDeleted，不碰实例上的任何既有数据库。
+/// </remarks>
 public class PostgresDatabaseTests
 {
     private const string M2mClientId = AuthHubWebApplicationFactory.M2mClientId;

@@ -3,27 +3,15 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace AuthHub.Api.Models;
 
-/// <summary>
-/// 错误响应的唯一出口（RFC 7807 ProblemDetails）。
-///
-/// 之所以单独抽出来，是因为它有四个调用点，且必须形状完全一致：
-///   1) 控制器：<see cref="ApiControllerBase.Problem"/> 把 Application 层的 Result 翻译成 HTTP；
-///   2) 认证 / 授权失败：<c>AuthHubAuthorizationResultHandler</c> 在认证方案循环结束后写响应；
-///   3) 请求体绑定失败（<c>[ApiController]</c> 的自动 400）：<see cref="InvalidModelStateResponse"/>；
-///   4) FluentValidation 校验失败：<c>ValidationFilter</c>（它把错误塞进 ModelState 后复用同一个工厂）；
-///   5) 未处理异常：<c>ExceptionHandlingMiddleware</c>。
-///
-/// **为什么这几处曾经各写各的**（一段真实的历史，别再退回去）：
-///   后三处原先分别手工拼 ProblemDetails、各自设置 Content-Type。结果是同一个服务里
-///   有**两套 400 契约** —— 绑定失败那套由框架产出（英文标题、<b>没有 code 字段</b>、
-///   traceId 是 W3C traceparent），业务校验失败那套才有 code/traceId。
-///   下游按 <c>code</c> 分支处理时会静默漏掉一半 400。
-///
-/// 另一个关键点是 <see cref="WriteAsync"/> **直接写响应流**，不经过 MVC 的内容协商。
-/// 原因是控制器上的 <c>[Produces("application/json")]</c> 会在结果过滤器里清空并覆盖
-/// <c>ObjectResult.ContentTypes</c>，把 RFC 7807 要求的 <c>application/problem+json</c>
-/// 悄悄改回 <c>application/json</c>，破坏下游按 Content-Type 分支处理的逻辑。
-/// </summary>
+/// <summary>错误响应的唯一出口（RFC 7807 ProblemDetails），各失败路径共用同一形状。</summary>
+/// <remarks>
+/// - 调用点：控制器 <see cref="ApiControllerBase.Problem"/>、认证 / 授权失败
+///   （<c>AuthHubAuthorizationResultHandler</c>）、绑定失败（<see cref="InvalidModelStateResponse"/>）、
+///   FluentValidation（<c>ValidationFilter</c> 复用同一工厂）、未处理异常（<c>ExceptionHandlingMiddleware</c>）。
+/// - 历史：后三处曾各写各的，形成两套 400 契约（框架那套没有 code 字段），下游按 code 分支会静默漏掉一半 400。
+/// - <see cref="WriteAsync"/> 直接写响应流、不经 MVC 内容协商：控制器上的 <c>[Produces("application/json")]</c>
+///   会在结果过滤器里覆盖 ContentTypes，把 <c>application/problem+json</c> 改回 <c>application/json</c>。
+/// </remarks>
 public static class ApiProblemWriter
 {
     /// <summary>RFC 7807 规定的媒体类型（显式带 charset，避免中文 Detail 被按 latin-1 解析）。</summary>
@@ -86,16 +74,9 @@ public static class ApiProblemWriter
     }
 
     /// <summary>
-    /// 把 MVC 的 <see cref="ModelStateDictionary"/> 翻译成统一的 400 响应。
-    ///
-    /// 两个调用点共用它：
-    ///   - <c>[ApiController]</c> 的 <c>InvalidModelStateResponseFactory</c>（请求体绑定失败）；
-    ///   - <c>ValidationFilter</c>（FluentValidation 规则不通过，错误先写进 ModelState 再走这里）。
-    /// 这样"绑定失败"和"业务规则失败"对外是同一个契约。
-    ///
-    /// 边界：字段级文案直接沿用 ModelState 里的原文。绑定失败时框架给的是英文
-    /// （"The X field is required."），本项目未引入本地化资源，因此不做翻译 ——
-    /// 要中文化需要成体系地配 DataAnnotations 资源，不属于"统一出口"这件事。
+    /// 把 MVC 的 <see cref="ModelStateDictionary"/> 翻译成统一的 400 响应，两个调用点共用：
+    /// [ApiController] 的绑定失败与 ValidationFilter（错误先写进 ModelState 再走这里）。
+    /// 字段级文案沿用 ModelState 原文（绑定失败时框架给英文，本地化不在"统一出口"范围内）。
     /// </summary>
     public static IActionResult InvalidModelStateResponse(ActionContext context)
     {
@@ -118,11 +99,9 @@ public static class ApiProblemWriter
     {
         context.Response.StatusCode = problem.Status ?? StatusCodes.Status500InternalServerError;
 
-        // 必须显式传**运行时类型**：WriteAsJsonAsync 的泛型重载按声明类型（ProblemDetails）
-        // 做序列化，ValidationProblemDetails 上的 Errors 会被静默丢掉 ——
-        // 表现就是"400 里没有 errors 字段"，而状态码与 Content-Type 全都正常，很难发现。
-        //
-        // options 传 null 会走 DI 里的 JsonOptions，与其余接口保持同样的命名策略（camelCase）
+        // 必须显式传运行时类型：泛型重载按声明类型（ProblemDetails）序列化，
+        // ValidationProblemDetails 上的 Errors 会被静默丢掉（状态码与 Content-Type 全都正常，很难发现）。
+        // options 传 null 走 DI 里的 JsonOptions，与其余接口保持同样的命名策略。
         return context.Response.WriteAsJsonAsync(
             problem,
             problem.GetType(),

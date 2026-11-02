@@ -113,6 +113,29 @@ WSL2 虚拟机默认空闲约 60 秒自动关机,所有服务随之失联,表现
 
 Windows 与 WSL 两侧均可通过 `localhost:端口` 直连(WSL localhost 转发自动生效)。
 
+> **踩坑(2026-10-31)**:WSL 2.4.10 的 localhost 转发中继会**静默死亡**——服务在 WSL 内
+> 一直健康(`ss -tln` 有监听、内网 curl 200),Windows 侧却时通时断。中继监听
+> (`netstat -ano | findstr :5001`)消失即为中继死亡,`wsl --shutdown` 重启可恢复,
+> 但恢复后数分钟内可能再次死亡。
+>
+> **兜底**:部署实例的 Kestrel 绑定已改为 `0.0.0.0`(`/etc/authhub/authhub.env` 里
+> `Kestrel__Endpoints__Https__Url=https://0.0.0.0:5001` 覆盖 appsettings 的
+> Kestrel:Endpoints——该端点配置优先于 ASPNETCORE_URLS,改 env 变量才生效)。
+> 中继死亡时用 WSL IP 直连(`wsl hostname -I` 取 IP,`https://<IP>:5001`,
+> 浏览器会有证书名警告——开发证书只含 localhost)。
+>
+> **另一个坑**:WSL 会话层有自己的雷——反复 `wsl.exe` 会话(调试时的逐条命令)会触发
+> pam_systemd 竞争性重签用户管理器(WSL 2.4.10 在多次重启周期后 cgroup attach 报
+> Permission denied),两个 `systemd --user` 互相击杀对方的服务,表现为
+> `systemctl --user status authhub` 的 Active 时间每隔一两分钟归零。
+> **后续定性(同日)**:该竞争循环比最初判断更顽固——跨 WSL 版本(2.4.10 → 3.0.3)、
+> 跨网络模式(NAT/mirrored)均复现,且**不依赖 wsl 会话**(静置数分钟后服务仍被弹,
+> Active 时间归零;`ps -eo args | grep -c "[s]ystemd --user"` 大于 1 即两个管理器在互杀)。
+> 竞争间隙内服务可用;Kestrel 已改绑 0.0.0.0(`/etc/authhub/authhub.env` 的
+> `Kestrel__Endpoints__*__Url`),`https://<WSL_IP>:5001` 的 IP 直连兜底不受 localhost
+> 转发影响(开发证书只含 localhost,浏览器会有证书名警告)。**Windows 整机重启**
+> 是已验证的唯一彻底清场手段;若重启后复发,属 WSL 平台层缺陷,向 WSL 上游反馈。
+
 ## 5. HTTPS 开发证书
 
 - Kestrel 使用 WSL 内的 ASP.NET 开发证书(CN=localhost,有效期至 2027-10-24),

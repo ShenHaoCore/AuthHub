@@ -53,13 +53,10 @@ public class OidcEndpointTests
     }
 
     /// <summary>
-    /// 下游服务"不回源也能校验令牌"这个承诺，必须真的成立。
-    ///
-    /// 这里用公钥集里的 n / e 现场还原 RSA 公钥，再对 Access Token 的签名做一次真实的
-    /// 密码学验签 —— 也就是说，任何拿到发现文档的服务都能独立完成校验，不需要 introspection。
-    ///
-    /// 这条之所以重要：如果令牌被加密成 JWE（OpenIddict 的默认行为），第三方根本读不出
-    /// claims，这个测试会直接失败，从而守住 <c>DisableAccessTokenEncryption()</c> 这个决定。
+    /// 下游服务"不回源也能校验令牌"这个承诺，必须真的成立：用公钥集里的 n / e 现场还原 RSA 公钥，
+    /// 对 Access Token 的签名做一次真实验签 —— 任何拿到发现文档的服务都能独立完成校验，不需要 introspection。
+    /// 若令牌被加密成 JWE（OpenIddict 默认行为），第三方读不出 claims，这条会直接失败，
+    /// 从而守住 <c>DisableAccessTokenEncryption()</c> 这个决定。
     /// </summary>
     [Fact]
     public async Task Access_token_should_be_verifiable_offline_with_the_published_jwks()
@@ -196,13 +193,16 @@ public class OidcEndpointTests
         // 因此页面上不应出现这组口令（生产环境同理，且更不该出现）。
         html.Should().NotContain("Admin@12345");
 
-        // 会话 Cookie 必须是 HttpOnly + SameSite=Lax
+        // 登录页此时只下发 antiforgery Cookie。它刻意不带 HttpOnly：脚本类消费方要读它
+        // 换请求令牌（GET /api/antiforgery/token 的 SPA 模式）—— 但它必须与请求令牌配对
+        // 才有效，单独拿到不构成会话凭证；真正的会话 Cookie（authhub.session）是
+        // HttpOnly 的，见 IdentityExtensions 的配置注释。
         var setCookie = response.Headers.TryGetValues("Set-Cookie", out var values)
             ? string.Join(";", values)
             : string.Empty;
         // FluentAssertions 的 Contain 在字符串上没有 OccurrenceConstraint 重载，
         // 直接数出现次数，语义更直白。
-        Regex.Count(setCookie, "httponly", RegexOptions.IgnoreCase).Should().Be(1);
+        Regex.Count(setCookie, "httponly", RegexOptions.IgnoreCase).Should().Be(0);
     }
 
     /// <summary>安全响应头应由中间件统一注入（含 CSP、HSTS、防嗅探）。</summary>

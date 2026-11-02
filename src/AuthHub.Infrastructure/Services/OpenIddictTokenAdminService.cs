@@ -69,7 +69,7 @@ public sealed class OpenIddictTokenAdminService : ITokenAdminService
         await _audit.LogTokensRevokedAsync(subject, tokens, cancellationToken);
 
         _logger.LogInformation("已强制下线 subject={Subject}，撤销令牌 {Tokens} 个、授权 {Authorizations} 个。",
-            subject, tokens, authorizations);
+            LogSanitizer.Sanitize(subject), tokens, authorizations);
 
         return Result.Success(new RevokeResult(tokens, authorizations));
     }

@@ -5,14 +5,9 @@ using OpenIddict.Server;
 namespace AuthHub.Api.Extensions;
 
 /// <summary>
-/// OpenIddict 签名 / 加密密钥的配置。
-///
-/// 优先级：
-///   1) 配置了持久化证书（AuthHub:Keys:SigningCertificatePath）→ 使用它（生产唯一推荐方式，建议从密钥管理服务注入）；
-///   2) Testing 环境 → 临时密钥（进程内生成，不写证书存储，适合 CI）；
-///   3) 其他环境 → 开发证书；若运行环境不允许访问证书存储（Linux 容器 / 受限沙箱）→ 退化为临时密钥。
-///
-/// 注意：临时密钥在进程重启后会变化，已颁发的令牌全部失效。生产必须走路径 1。
+/// OpenIddict 签名 / 加密密钥的配置。优先级：持久化证书（生产唯一推荐方式，建议从密钥管理服务注入）→
+/// Testing 环境用临时密钥（进程内生成，适合 CI）→ 其他环境用开发证书，证书存储不可用时（Linux 容器 / 受限沙箱）降级为临时密钥。
+/// 临时密钥在进程重启后会变化，已颁发的令牌全部失效，生产必须走持久化证书。
 /// </summary>
 internal static class OpenIddictKeySetup
 {
@@ -34,9 +29,8 @@ internal static class OpenIddictKeySetup
             }
 
             // PFX/PKCS#12 文件：同时用于签名与加密。
-            // 用 X509CertificateLoader 而不是 new X509Certificate2(path, password, flags)：
-            // 后者自 .NET 9 起标记为过时（SYSLIB0057），且新 API 默认套用一套更严格的
-            // PKCS#12 加载限制（拒绝可疑的证书链/空密码等边缘形态），对正常 PFX 无影响。
+            // 用 X509CertificateLoader 而非 new X509Certificate2(path, password, flags)：后者自 .NET 9 起过时
+            // （SYSLIB0057），且新 API 默认套用更严格的 PKCS#12 加载限制（对正常 PFX 无影响）。
             var certificate = X509CertificateLoader.LoadPkcs12FromFile(
                 certificatePath,
                 certificatePassword,

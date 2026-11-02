@@ -54,6 +54,11 @@
 `GET 2fa`、`POST 2fa/setup`、`POST 2fa/enable`、`POST 2fa/disable`、`POST 2fa/send-code`、
 `GET consents`、`DELETE consents/{authorizationId}`
 
+**防伪令牌（Cookie 认证的变更端点）**：账号 API 与管理 API 里的 POST / PUT / DELETE / PATCH
+（匿名端点除外）要求 `X-CSRF-TOKEN` 头 —— 先 `GET /api/antiforgery/token` 取一次性令牌，随变更请求
+带上；响应同时下发配对的 `authhub.antiforgery` Cookie，两者必须共存于同一 Cookie jar。令牌与登录身份
+绑定，登录态变更后重新获取。Bearer 认证的调用方不受影响。
+
 ## 受保护资源与管理 API
 
 | 路径 | 必需权限 / Scope |

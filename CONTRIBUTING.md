@@ -48,6 +48,8 @@ git switch -c feature/<短横线描述>
 | `fix` | 修缺陷 | `fix/refresh-token-replay-window` |
 | `chore` | 依赖升级、CI、构建配置 | `chore/net10-upgrade` |
 | `refactor` | 不改行为的结构调整 | `refactor/split-token-service` |
+| `perf` | 只改性能不改行为 | `perf/remove-sync-blocking` |
+| `style` | 格式与注释整理，零行为变化 | `style/comment-slimming` |
 | `docs` | 纯文档 | `docs/deployment-notes` |
 | `test` | 纯测试补充 | `test/mfa-channel-coverage` |
 
@@ -65,6 +67,26 @@ hotfix/1.4.1
 ```
 
 点分三段、不带 `v` 前缀（`v` 只出现在 tag 上，如 `v1.4.0`）。
+
+## 代码注释
+
+注释只写「删掉它读者就会做出错误修改」的内容。写之前先过一遍这个标准，过不了就删。
+
+| 位置 | 形态 | 要求 |
+|---|---|---|
+| 类型头 `<summary>` | 一句话 | 说清"这是什么"，设计展开留给 `<remarks>` 或 docs/ |
+| 类型头 `<remarks>` | 短行列表，3-6 条 | 只收不写就会丢的 why：扩展缝选择、失效/并发/降级承诺、与上游行为的差异 |
+| 成员 XML 注释 | 一行 | 含义不显然才写 |
+| 行内 `//` | 1-2 行 | 只留"为什么这么做"；删掉叙事铺陈（"否则会……表现为……很难查"式排比） |
+| `// ---- X ----` 分节 | 保留 | 文件内职责分界的导航，各分节名与文档分工一致 |
+| 控制器 / 对外 DTO 的 `///` 类型头 | 一句话 + 短 remarks | 会被 OpenAPI 分组描述读取，是对外文档的一部分 —— 措辞按"给调用方看"的标准写，不写实现内幕 |
+
+硬约束：
+
+- 不写多段散文；一行注释说一件事，说完就停
+- 同一信息注释与 docs/ 都有时，注释只留一句并指向文档
+- 不复述代码已经表达的事（方法名、类型名能看出来的不注释）
+- 示例标杆：`RedisCachedTokenStore`、`OpenApiExtensions`（remarks 列表式）与 `AccountService` 分部文件（行内式）
 
 ## 提交信息
 

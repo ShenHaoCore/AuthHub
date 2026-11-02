@@ -1,9 +1,6 @@
 namespace AuthHub.Domain.Enums;
 
-/// <summary>
-/// 审计动作类型。用字符串常量而非 enum 存储，
-/// 便于查询过滤与后续扩展（无需数据库迁移）。
-/// </summary>
+/// <summary>审计动作类型。用字符串常量而非 enum 存储，便于查询过滤与后续扩展（无需数据库迁移）。</summary>
 public static class AuditActionType
 {
     // 账号

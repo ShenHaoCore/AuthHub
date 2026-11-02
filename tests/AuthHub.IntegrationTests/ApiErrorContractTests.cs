@@ -7,21 +7,17 @@ using FluentAssertions;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 错误响应契约（README「错误响应约定」）。
-///
-/// 这里盯住的核心只有一件事：**400 只能有一种形状**。
-///
-/// 起因是一个真实的两套契约：请求体绑定失败由 <c>[ApiController]</c> 的
-/// <c>InvalidModelStateResponseFactory</c> 产出（英文标题、**没有 code 字段**、
-/// traceId 是 W3C traceparent、Content-Type 还是 <c>application/json</c>），
-/// 而 FluentValidation 校验失败由 <c>ValidationFilter</c> 产出（中文标题、有 code）。
-/// 两条路都返回 400，但字段集不同 —— 下游按 <c>code</c> 分支时会静默漏掉一半。
-///
-/// 第二件事：Content-Type 必须是 <c>application/problem+json</c>。
-/// <c>[Produces("application/json")]</c> 会在结果过滤器阶段覆盖
-/// <c>ObjectResult.ContentTypes</c>，所以错误响应必须绕开内容协商直接写响应流
-/// （见 <c>ProblemDetailsResult</c>）。
+/// 错误响应契约（README「错误响应约定」）：盯住的核心只有一件事 —— 400 只能有一种形状。
 /// </summary>
+/// <remarks>
+/// - 起因是真实的两套契约：请求体绑定失败由 <c>[ApiController]</c> 的 <c>InvalidModelStateResponseFactory</c>
+///   产出（英文标题、没有 code 字段、traceId 是 W3C traceparent、Content-Type 还是 <c>application/json</c>），
+///   而 FluentValidation 校验失败由 <c>ValidationFilter</c> 产出（中文标题、有 code）。
+///   两条路都返回 400，但字段集不同 —— 下游按 <c>code</c> 分支时会静默漏掉一半。
+/// - Content-Type 必须是 <c>application/problem+json</c>：<c>[Produces("application/json")]</c> 会在
+///   结果过滤器阶段覆盖 <c>ObjectResult.ContentTypes</c>，所以错误响应必须绕开内容协商直接写响应流
+///   （见 <c>ProblemDetailsResult</c>）。
+/// </remarks>
 [Collection(AuthHubFixture.CollectionName)]
 public class ApiErrorContractTests
 {
@@ -63,7 +59,7 @@ public class ApiErrorContractTests
     }
 
     /// <summary>
-    /// 绑定失败与校验失败必须是**同一组字段**。上一版这两条路径的字段集不同
+    /// 绑定失败与校验失败必须是同一组字段。上一版这两条路径的字段集不同
     /// （绑定那条没有 code、traceId 形状也不一样），单看任一条都发现不了。
     /// </summary>
     [Fact]

@@ -11,24 +11,15 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace AuthHub.Api.Controllers;
 
 /// <summary>
-/// /connect/token 令牌端点（AuthorizationController 的 partial 部分）。
-/// 支持授权码、刷新令牌、客户端凭证与密码流程（密码流程默认关闭）。
+/// /connect/token 令牌端点（AuthorizationController 的 partial 部分），支持授权码、刷新令牌、客户端凭证与密码流程。
 /// </summary>
 public partial class AuthorizationController
 {
-    /// <summary>
-    /// 令牌端点。
-    ///
-    /// 为什么每个 grant_type 都要在这里收尾：本服务开启了 token 端点的 passthrough
-    /// （Program.cs 的 EnableTokenEndpointPassthrough）。passthrough 的准确语义是
-    /// 「OpenIddict 先把请求校验完（客户端认证、PKCE、code / refresh_token 有效性、scope 合法性），
-    /// 再把请求交回应用，由应用决定用哪个主体签发令牌」——
-    /// 因此这里必须为每个允许的流程显式 SignIn 一个 principal，
-    /// 否则请求会以空响应落到 MVC（表现就是 unsupported_grant_type）。
-    ///
-    /// 这样安排还有额外收益：授权码兑换与刷新令牌时都能重新检查账号状态
-    /// （是否被停用 / 锁定 / 需要重新验证），而不是无条件相信当初授权时捕获的声明。
-    /// </summary>
+    /// <summary>令牌端点。本服务开启了 token 端点 passthrough（Program.cs）：OpenIddict 先校验完请求（客户端认证、PKCE、code / refresh_token 有效性、scope 合法性），再交回应用签发。</summary>
+    /// <remarks>
+    /// - 因此每个 grant_type 都必须在此显式 SignIn 一个主体，否则请求以空响应落到 MVC（表现为 unsupported_grant_type）。
+    /// - 额外收益：兑换与刷新时都能重新检查账号状态（停用 / 锁定 / 需要重新验证），不无条件信任授权时捕获的声明。
+    /// </remarks>
     [EndpointSummary("令牌端点")]
     [EndpointDescription("支持授权码、刷新令牌、客户端凭证与密码流程（密码流程默认关闭）。")]
     [HttpPost("~/connect/token")]
@@ -123,12 +114,9 @@ public partial class AuthorizationController
         }
 
         // 用最新的用户资料重建主体，使角色 / 权限变更立即反映到新令牌里。
-        //
         // 受众一致性（RFC 8707）：受众在授权那一刻定死，兑换与刷新都不能改口径 ——
-        //   · 授权码兑换（§4）：令牌请求若带 resource，必须与授权请求的集合完全一致；
-        //   · 刷新（§5）：只允许收窄（请求值是原受众的子集），禁止变宽或切换。
-        // 没有这道检查的话，一个同时持有两个资源权限的客户端，可以用为 A 签发的
-        // 刷新令牌换出 aud={A,B} 的访问令牌 —— 受众绑定这条 MCP 防线就出现回退。
+        // 授权码兑换（§4）请求带 resource 时必须与原授权集合完全一致；刷新（§5）只允许收窄（请求值是原受众的子集）。
+        // 否则一个同时持有两个资源权限的客户端，可以用为 A 签发的刷新令牌换出 aud={A,B} 的访问令牌，受众绑定这条 MCP 防线就出现回退。
         var requestedResources = request.GetResources()
             .Where(resource => !string.IsNullOrWhiteSpace(resource))
             .ToHashSet(StringComparer.Ordinal);
@@ -159,8 +147,7 @@ public partial class AuthorizationController
             }
         }
 
-        // 常规路径（请求不带 resource）沿用原受众：authorization_code / refresh_token
-        // 请求本身通常不带 resource，丢了它，兑换出来的令牌就没有 aud（MCP Server 会直接拒收）。
+        // 常规路径（请求不带 resource）沿用原受众：否则兑换出的令牌没有 aud，MCP Server 会直接拒收。
         var resources = requestedResources.Count > 0 ? requestedResources : originalResources;
 
         return await SignInWithUserAsync(user, scopes, resources, cancellationToken);
@@ -202,10 +189,7 @@ public partial class AuthorizationController
         return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    /// <summary>
-    /// 资源所有者密码流程。默认关闭（AuthHub:Features:EnablePasswordFlow），
-    /// 仅用于内部系统或从旧系统迁移的过渡期 —— 它把用户密码交给了客户端。
-    /// </summary>
+    /// <summary>资源所有者密码流程，默认关闭（AuthHub:Features:EnablePasswordFlow）；仅作内部系统 / 旧系统迁移过渡 —— 它把用户密码交给了客户端。</summary>
     private async Task<IActionResult> PasswordGrantAsync(
         OpenIddictRequest request,
         CancellationToken cancellationToken)

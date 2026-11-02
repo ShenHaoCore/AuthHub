@@ -5,8 +5,7 @@ name: Release Artifacts
 # 也不依赖任何机器上的源码路径(部署流程见 docs/operations/local-wsl-environment.md 第 6 节)。
 #
 # 触发:
-# - release published:发版动作(branch-management.md 第 2 节第 5 步)完全不变,
-#   部署资产在 Release 发布后自动出现。
+# - release published:发版动作完全不变,部署资产在 Release 发布后自动出现。
 # - workflow_dispatch:空跑验证构建链路,默认只上传 workflow 产物不上传 Release;
 #   填 attach_to_tag 可把产物补挂到既有版本的 Release(存量版本迁移到本通道用)。
 on:
@@ -58,6 +57,7 @@ jobs:
           fi
           {
             echo "version=$version"
+            echo "semver=${version#v}"
             echo "ref=$ref"
             echo "attach=$attach"
           } >> "$GITHUB_OUTPUT"
@@ -82,8 +82,9 @@ jobs:
 
       # 与部署端形态一致:framework-dependent,部署机只需 .NET 10 运行时。
       # 只 publish API 工程 —— 它带出全部依赖,单个输出目录即完整部署包。
+      # -p:Version 把 tag 版本写进程序集 ProductVersion:生产机上能从二进制辨认部署的是哪个版本。
       - name: 发布
-        run: dotnet publish src/AuthHub.Api/AuthHub.Api.csproj -c Release --nologo -o publish-out
+        run: dotnet publish src/AuthHub.Api/AuthHub.Api.csproj -c Release --nologo -p:Version=${{ steps.meta.outputs.semver }} -o publish-out
 
       - name: 打包并生成校验和
         run: |

@@ -14,21 +14,17 @@ using StackExchange.Redis;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// Redis 令牌条目缓存（AuthHub:Redis）的端到端行为。
-///
-/// <para><b>守住的行为</b>：开启缓存后，"撤销立刻生效"的语义一分不丢 ——
-/// ① 令牌级撤销（管理器 TryRevokeAsync，底层 UpdateAsync → 缓存精确删键）；
-/// ② 批量撤销（RevokeBySubjectAsync，缓存层递增全局版本号，旧条目立刻判过期）；
-/// ③ 关闭开关时行为与引入缓存之前完全一致。撤销用例都断言"撤销后的**下一次**校验立刻 401"，
-/// 而不是等 TTL —— 这正是缓存层存在的意义：降本不降语义。</para>
-///
-/// <para><b>为什么用真实 Redis 而不是假实现</b>：版本号比对、管线化读、键删除这些语义
-/// 用假的 IDatabase 测不出来；而部署形态（WSL 本机 / CI 服务容器）里 Redis 都在
-/// localhost:6379。连不上就跳过 —— 缓存是可选组件，没有 Redis 的环境跑其余用例即可。</para>
-///
-/// <para><b>隔离</b>：每个工厂用独立的 KeyPrefix（GUID），用例只碰自己的键，
-/// 绝不 flush 开发环境里的 Redis。</para>
+/// Redis 令牌条目缓存（AuthHub:Redis）的端到端行为：开启缓存后，"撤销立刻生效"的语义一分不丢
+/// —— 撤销用例都断言"撤销后的下一次校验立刻 401"而不是等 TTL，这正是缓存层存在的意义：降本不降语义。
 /// </summary>
+/// <remarks>
+/// - 令牌级撤销（管理器 TryRevokeAsync，底层 UpdateAsync → 缓存精确删键）。
+/// - 批量撤销（RevokeBySubjectAsync，缓存层递增全局版本号，旧条目立刻判过期）。
+/// - 关闭开关时行为与引入缓存之前完全一致。
+/// - 用真实 Redis 而不是假实现：版本号比对、管线化读、键删除这些语义用假 IDatabase 测不出来；
+///   而部署形态（WSL 本机 / CI 服务容器）里 Redis 都在 localhost:6379。连不上就跳过 —— 缓存是可选组件。
+/// - 隔离：每个工厂用独立的 KeyPrefix（GUID），用例只碰自己的键，绝不 flush 开发环境里的 Redis。
+/// </remarks>
 public class RedisTokenCacheTests
 {
     private const string M2mClientId = AuthHubWebApplicationFactory.M2mClientId;
@@ -126,8 +122,7 @@ public class RedisTokenCacheTests
 
     /// <summary>
     /// Redis 不可达时返回 null，调用方提前结束 —— 本机没有 Redis 的开发环境不至于红一片
-    /// （xunit 2.9 没有顺手的运行时 skip API，"提前返回"比"硬红"更友好；CI 的服务容器
-    /// 保证这两个用例在流水线上始终真实执行）。
+    /// （xunit 2.9 没有顺手的运行时 skip API，"提前返回"比"硬红"友好；CI 的服务容器保证始终真实执行）。
     /// </summary>
     private static (AuthHubWebApplicationFactory Factory, HttpClient Client)? CreateEnabledHost()
     {

@@ -11,15 +11,14 @@ namespace AuthHub.IntegrationTests;
 
 /// <summary>
 /// 资源白名单库表化(issue #23)的验收用例。
-///
-/// <para>核心语义变化:<c>AuthHub:Resources</c> 配置从「白名单本体」降级为「幂等种子」,
-/// 白名单本体搬到 RegisteredResources 表 —— 资源校验每请求现查库,管理 API 变更即时生效。
-/// 两条红线必须始终成立:① 未登记(或停用)的资源一律 <c>invalid_target</c>(默认拒绝);
-/// ② 配置资源升级后自动入库,行为与升级前完全一致。</para>
-///
-/// <para>用独立宿主(不用共享 <see cref="AuthHubFixture"/>):验收 1 需要「白名单为空」的起点,
-/// 而共享宿主的配置资源是固定注入的。</para>
 /// </summary>
+/// <remarks>
+/// - 核心语义变化：<c>AuthHub:Resources</c> 配置从「白名单本体」降级为「幂等种子」，本体搬到
+///   RegisteredResources 表 —— 资源校验每请求现查库，管理 API 变更即时生效。
+/// - 两条红线：未登记(或停用)的资源一律 <c>invalid_target</c>(默认拒绝)；配置资源升级后自动入库，行为不变。
+/// - 用独立宿主(不用共享 <see cref="AuthHubFixture"/>)：验收 1 需要「白名单为空」的起点，
+///   而共享宿主的配置资源是固定注入的。
+/// </remarks>
 public class RegisteredResourceTests
 {
     private const string McpResource = "https://mcp.example.com/mcp";
@@ -164,9 +163,8 @@ public class RegisteredResourceTests
     // ------------------------------------------------------------------ 辅助
 
     /// <summary>
-    /// 空白名单宿主。**必须显式把 AuthHub__Resources__0 置空**：
-    /// 工厂走进程级环境变量，而基线字典不含这个键 —— 前一个用例设过的资源会残留进来，
-    /// 让"白名单为空"的起点悄悄失真。
+    /// 空白名单宿主。必须显式把 AuthHub__Resources__0 置空：工厂走进程级环境变量，基线字典不含这个键 ——
+    /// 前一个用例设过的资源会残留进来，让"白名单为空"的起点悄悄失真。
     /// </summary>
     private static AuthHubWebApplicationFactory CreateFactory() =>
         new(new Dictionary<string, string> { ["AuthHub__Resources__0"] = string.Empty });

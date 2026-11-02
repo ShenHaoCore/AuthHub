@@ -5,15 +5,11 @@ using FluentAssertions;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 环境护栏在**真实宿主**里的行为。
-///
-/// 判定规则由单元测试逐条钉住（<c>EnvironmentGuardTests</c>），这里只验证两件单元测试
-/// 看不到的事：护栏确实被接进了启动序列，以及它触发时的**失败形态** —— 进程起不来、
-/// 消息里带着出问题的配置项路径与那个豁免开关。一个"写了检查却没人调用"的护栏
-/// 与完全没有护栏，在行为上是无法区分的。
-///
-/// 另有一条用例从反面确认豁免有效：测试宿主所在的 <c>Testing</c> 环境不该被这些规则挡住，
-/// 否则整套集成测试会在加上护栏的当天集体变红。
+/// 环境护栏在真实宿主里的行为。判定规则由单元测试逐条钉住（<c>EnvironmentGuardTests</c>），
+/// 这里只验证两件单元测试看不到的事：护栏确实被接进了启动序列，以及它触发时的失败形态 ——
+/// 进程起不来、消息里带着出问题的配置项路径与那个豁免开关（一个"写了检查却没人调用"的护栏
+/// 与完全没有护栏，在行为上是无法区分的）。另有一条用例从反面确认豁免有效：
+/// 测试宿主所在的 <c>Testing</c> 环境不该被这些规则挡住，否则集成测试会在加上护栏的当天集体变红。
 /// </summary>
 public class EnvironmentGuardIntegrationTests : IDisposable
 {
@@ -32,9 +28,8 @@ public class EnvironmentGuardIntegrationTests : IDisposable
     [Fact]
     public void A_local_only_connection_string_should_block_startup_in_production()
     {
-        // 这条模拟的正是"开发配置被带到了服务器上"：连接串还是 (local)。
-        // Provider 要一起改成 SqlServer，否则会先命中"受保护环境用 SQLite"那条规则
-        // 而不再检查连接串 —— 那样测的就不是这个场景了。
+        // 这条模拟的正是"开发配置被带到了服务器上"：连接串还是 (local)。Provider 要一起改成 SqlServer，
+        // 否则会先命中"受保护环境用 SQLite"那条规则而不再检查连接串 —— 那样测的就不是这个场景了。
         using var factory = new AuthHubWebApplicationFactory(
             new Dictionary<string, string>
             {

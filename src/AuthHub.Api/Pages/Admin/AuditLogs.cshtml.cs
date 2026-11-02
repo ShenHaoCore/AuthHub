@@ -10,20 +10,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace AuthHub.Api.Pages.Admin;
 
-/// <summary>
-/// 审计日志查询（只读）。
-///
-/// 两处与后端能力相关的、必须讲清楚的取舍：
-///
-/// 1) **时间区间是闭区间**。仓储里的实现是 <c>CreatedAt &gt;= From &amp;&amp; CreatedAt &lt;= To</c>，
-///    因此"选择到 10 月 5 日"不能直接把 10 月 5 日 00:00 传给 To（那样会漏掉当天几乎所有记录）。
-///    这里把用户选的日期解释为"整天"：To = 次日零点减 1 tick。页面上标注了"含当天"。
-///
-/// 2) **后端只支持按 UserId 精确匹配**（`AuditLogRepository` 用的是 `x.UserId == userId`），
-///    而日志表里同时存了 UserName。直接让管理员填 GUID 太不友好，因此在页面层做一次
-///    "用户名 → ID"的解析：看起来像 GUID 就按 ID 用，否则去用户表里搜一次。
-///    搜不到时把原值当 ID 传下去 —— 自然查不到任何记录，比悄悄返回全量要安全。
-/// </summary>
+/// <summary>审计日志查询（只读）。</summary>
+/// <remarks>
+/// - 时间区间是闭区间（仓储实现 <c>CreatedAt &gt;= From &amp;&amp; CreatedAt &lt;= To</c>）：用户选的日期解释为"整天"，To = 次日零点减 1 tick，页面上标注"含当天"。
+/// - 后端只支持按 UserId 精确匹配（<c>AuditLogRepository</c> 用 <c>x.UserId == userId</c>），而表里同时存了 UserName，因此在页面层做一次「用户名 → ID」解析：像 GUID 就按 ID 用，否则去用户表搜一次；搜不到把原值当 ID 传下去 —— 自然查不到任何记录，比悄悄返回全量安全。
+/// </remarks>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.AuditRead)]
 public class AuditLogsModel : PageModel
 {
@@ -33,9 +24,8 @@ public class AuditLogsModel : PageModel
     private const string DateFormat = "yyyy-MM-dd";
 
     /// <summary>
-    /// 日期筛选接受的写法。原生浏览器的日期控件把值提交成 yyyy-MM-dd，
-    /// 但输入框是普通文本框，管理员键盘手输时更常见 yyyy/M/d 这种省零写法 ——
-    /// 这里三种分隔符、月日 1~2 位都收，避免"输了个 2026/10/6 被拒"的无谓摩擦。
+    /// 日期筛选接受的写法：输入框是普通文本框，管理员手输常见 yyyy/M/d 省零写法，
+    /// 三种分隔符、月日 1~2 位都收，避免"输了个 2026/10/6 被拒"的无谓摩擦。
     /// </summary>
     private static readonly string[] AcceptedDateFormats =
         { "yyyy-MM-dd", "yyyy-M-d", "yyyy/M/d", "yyyy.M.d" };
@@ -198,10 +188,7 @@ public class AuditLogsModel : PageModel
 
     // ------------------------------------------------------------------ 内部辅助
 
-    /// <summary>
-    /// 把用户填的"用户 ID 或用户名"解析成 ID。
-    /// 解析不到时原样返回 —— 该值不会匹配任何 GUID 主键，因此结果是空集而不是全量。
-    /// </summary>
+    /// <summary>把用户填的"用户 ID 或用户名"解析成 ID；解析不到时原样返回 —— 不匹配任何 GUID 主键，结果是空集而不是全量。</summary>
     private async Task<string> ResolveUserIdAsync(string value, CancellationToken cancellationToken)
     {
         if (Guid.TryParse(value, out _))

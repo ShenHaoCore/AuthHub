@@ -5,21 +5,14 @@ namespace AuthHub.Api.Extensions;
 
 /// <summary>
 /// 反向代理转发头的装配。
-///
-/// <para><b>要解决的问题</b>：<c>ForwardedHeadersOptions</c> 的信任范围默认只有 loopback。
-/// 反代跑在另一个容器 / 另一台机器时，它发来的 <c>X-Forwarded-For</c> 与
-/// <c>X-Forwarded-Proto</c> 会被 ASP.NET Core **静默丢弃** —— 结果是审计日志里所有来源 IP
-/// 都记成网关地址，以及 <c>RequireHttps</c> 下 <c>Request.IsHttps</c> 恒为 false
-/// 造成的重定向异常。这两种症状都不会直接把方向指向"代理信任范围"，因此这里刻意把
-/// "只信任了什么"写进启动日志。</para>
-///
-/// <para><b>三种配置形态</b>（优先级从高到低）：
-/// <list type="number">
-///   <item><c>TrustAnyProxy=true</c> —— 显式声明"上游地址不固定"（容器编排里最常见），清空信任列表，等同信任任何直连来源；</item>
-///   <item><c>KnownProxies</c> / <c>KnownNetworks</c> —— 显式列出网关地址或网段（推荐）；</item>
-///   <item>都不配 —— 沿用 .NET 的 loopback 默认值，并**打一条警告**说明它意味着什么。</item>
-/// </list></para>
 /// </summary>
+/// <remarks>
+/// - 要解决的问题：ForwardedHeadersOptions 默认只信任 loopback，反代跑在另一个容器 / 另一台机器时，
+///   X-Forwarded-* 被静默丢弃 —— 审计日志的来源 IP 全记成网关地址、RequireHttps 下重定向异常；
+///   两种症状都不指向"代理信任范围"，因此"只信任了什么"写进启动日志。
+/// - 配置形态（优先级从高到低）：TrustAnyProxy=true（显式声明上游地址不固定，清空信任列表）；
+///   KnownProxies / KnownNetworks（推荐）；都不配（沿用 .NET loopback 默认并打警告）。
+/// </remarks>
 internal static class ForwardedHeadersExtensions
 {
     public static void UseAuthHubForwardedHeaders(this WebApplication app)

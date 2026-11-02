@@ -4,10 +4,7 @@ namespace AuthHub.Infrastructure.Services;
 
 /// <summary>
 /// OpenIddict 权限项（ept: / gt: / rst: / scp:）与业务概念（授权类型、Scope）之间的翻译。
-///
-/// 为什么不把 ept:/gt: 这类字符串直接暴露给管理 API：
-/// 它们属于 OpenIddict 的内部表达，前端界面和调用方需要的是
-/// “允许哪些授权类型、允许哪些 Scope”，翻译放在这里，两边解耦。
+/// 不把内部权限字符串直接暴露给管理 API —— 前端需要的是"允许哪些授权类型、哪些 Scope"，翻译放这里两边解耦。
 /// </summary>
 internal static class OpenIddictPermissionTranslator
 {
@@ -43,8 +40,7 @@ internal static class OpenIddictPermissionTranslator
 
         if (hasPostLogoutRedirectUris)
         {
-            // OpenIddict 6.0 起 logout 端点更名为 end-session（规范用词），
-            // 权限常量随之改名；数据库里的旧值 ept:logout 仍向后兼容。
+            // OpenIddict 6.0 起 logout 端点更名 end-session，权限常量随之改名；库里的旧值 ept:logout 仍向后兼容。
             permissions.Add(Oidc.Permissions.Endpoints.EndSession);
         }
 
@@ -82,8 +78,7 @@ internal static class OpenIddictPermissionTranslator
             permissions.Add(Oidc.Permissions.Prefixes.Scope + scope);
         }
 
-        // 资源权限（RFC 8707）：客户端只能请求自己被授权的资源。
-        // 缺这一项时，即使资源已在服务端登记，请求也会被以「该客户端不允许使用指定资源」拒绝。
+        // 资源权限（RFC 8707）：客户端只能请求自己被授权的资源；缺这项时即使资源已登记，请求也会被拒绝。
         foreach (var resource in resources)
         {
             permissions.Add(Oidc.Permissions.Prefixes.Resource + resource);

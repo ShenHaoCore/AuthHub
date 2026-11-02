@@ -7,10 +7,8 @@ using FluentAssertions;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 忘记密码 / 重置密码 / 邮箱确认的集成测试。
-///
-/// 邮件通道在测试环境是 LoggingEmailSender（只写日志），
-/// 所以这里只验证 HTTP 层行为：页面渲染、表单提交跳转、API 状态码，
+/// 忘记密码 / 重置密码 / 邮箱确认的集成测试。邮件通道在测试环境是 LoggingEmailSender（只写日志），
+/// 因此只验证 HTTP 层行为：页面渲染、表单提交跳转、API 状态码；
 /// 不验证邮件是否真的发出（那属于基础设施层，单元测试已覆盖）。
 /// </summary>
 [Collection(AuthHubFixture.CollectionName)]

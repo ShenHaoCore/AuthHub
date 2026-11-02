@@ -4,43 +4,28 @@ using Microsoft.Extensions.Hosting;
 
 namespace AuthHub.Infrastructure.Configuration;
 
-/// <summary>
-/// 启动期的**环境一致性**护栏：检查"这份配置与它所在的环境"是否自洽。
-///
-/// <para><b>要解决什么</b>：环境串用的错误几乎都是静默的。开发配置被带进生产时，
-/// 连接串会指向一台本机实例 —— 表现是"启动很慢然后超时"，看不出是连错了地方；
-/// 反过来生产配置用在开发机上，则可能真的连上某台共享库。这类问题的共同点是
-/// <b>没有一条报错指向真正的原因</b>，而它们又都是"看一眼配置就能确认"的事，
-/// 所以值得在启动期一次性问清楚。</para>
-///
-/// <para><b>为什么判定逻辑是纯函数</b>：输入只有 <see cref="IConfiguration"/> 与环境名，
-/// 输出是一组结论。这样整套规则表可以在没有数据库、没有主机的单元测试里逐条钉住 ——
-/// 与 <c>ProxyTrustParser</c>、<c>AuthHubSeeder.Decide</c> 是同一个模式。</para>
-///
-/// <para><b>为什么只查"受保护环境"</b>：见 <see cref="IsProtectedEnvironment"/>。
-/// 开发机连本机数据库天经地义，对这些环境做检查只会制造噪音，然后被人关掉。</para>
-/// </summary>
+/// <summary>启动期的环境一致性护栏：检查「这份配置与它所在的环境」是否自洽。</summary>
+/// <remarks>
+/// - 针对的是静默的环境串错误：开发配置带进生产会连到本机实例（表现为启动慢然后超时），
+///   且没有一条报错指向真正的原因 —— 这类问题看一眼配置就能确认，值得启动期一次性问清。
+/// - 判定逻辑是纯函数（输入只有 <see cref="IConfiguration"/> 与环境名），整套规则表可在没有数据库与主机的
+///   单元测试里逐条钉住，与 ProxyTrustParser、AuthHubSeeder.Decide 是同一个模式。
+/// - 只查受保护环境（见 <see cref="IsProtectedEnvironment"/>）：开发机连本机库天经地义，检查它们只会制造噪音然后被关掉。
+/// </remarks>
 public static class EnvironmentGuard
 {
     /// <summary>护栏强度。默认 <see cref="GuardMode.Strict"/>。</summary>
     public const string GuardModeKey = "AuthHub:Security:GuardMode";
 
-    /// <summary>
-    /// 集成测试用的环境名。它与 <c>WebApplicationFactory</c> 里 <c>UseEnvironment("Testing")</c>
-    /// 的值必须一致 —— 对不上会让护栏去检查测试宿主，而测试夹具的配置（SQLite 临时库、
-    /// 明文演示口令）本来就是"不该拿去部署"的样子，检查它会全线误伤。
-    /// </summary>
+    /// <summary>集成测试用的环境名，必须与测试夹具 <c>UseEnvironment("Testing")</c> 一致 —— 对不上会让护栏去检查本不该检查的测试宿主。</summary>
     public const string TestingEnvironmentName = "Testing";
 
     /// <summary>占位符哨兵：连接串里留着它就说明从来没被替换成真实值。</summary>
     private const string PlaceholderMarker = "CHANGE_ME";
 
     /// <summary>
-    /// 受保护环境 = 需要认真对待部署配置的环境。
-    ///
-    /// 判据刻意是"**不是** Development、也**不是** Testing"，而不是"是 Production"：
-    /// 这样自定义的环境名（Staging、PreProd）天然也被保护 —— 漏保护的代价是某个环境
-    /// 悄悄跑着开发配置，而多保护的代价只是多一次启动失败。
+    /// 受保护环境 = 非 Development 且非 Testing。判据刻意用排除法而非"是 Production"，
+    /// 让 Staging、PreProd 等自定义环境名天然被保护：漏保护的代价是某环境悄悄跑着开发配置，多保护只多一次启动失败。
     /// </summary>
     public static bool IsProtectedEnvironment(string environmentName)
         => !string.Equals(environmentName, Environments.Development, StringComparison.OrdinalIgnoreCase)
@@ -54,10 +39,8 @@ public static class EnvironmentGuard
     }
 
     /// <summary>
-    /// 评估这份配置与这个环境是否自洽。
-    ///
-    /// 不受保护的环境直接返回空集；<see cref="GuardMode.Off"/> 同理。
-    /// <see cref="GuardMode.Warn"/> 把全部结论降级为警告（"我知道我在做什么，但请记下来"）。
+    /// 评估这份配置与这个环境是否自洽。不受保护的环境或 <see cref="GuardMode.Off"/> 返回空集；
+    /// <see cref="GuardMode.Warn"/> 把全部结论降级为警告。
     /// </summary>
     public static IReadOnlyList<EnvironmentGuardFinding> Evaluate(
         IConfiguration configuration,
@@ -87,9 +70,7 @@ public static class EnvironmentGuard
             : findings;
     }
 
-    /// <summary>
-    /// 连接串：这是最容易"看起来对、连的是别处"的一项。
-    /// </summary>
+    /// <summary>连接串：最容易"看起来对、连的是别处"的一项。</summary>
     private static void InspectConnectionString(IConfiguration configuration, List<EnvironmentGuardFinding> findings)
     {
         const string key = "ConnectionStrings:DefaultConnection";
@@ -108,8 +89,7 @@ public static class EnvironmentGuard
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            // 连接串缺失由 PersistenceExtensions 在更早的阶段抛出（那时连 DbContext 都注册不了），
-            // 这里不重复报 —— 两条消息描述同一件事只会让人怀疑有第二个问题。
+            // 连接串缺失由 PersistenceExtensions 在更早的阶段抛出（那时连 DbContext 都注册不了），这里不重复报。
             return;
         }
 
@@ -151,10 +131,7 @@ public static class EnvironmentGuard
         }
     }
 
-    /// <summary>
-    /// Issuer 是令牌里 <c>iss</c> 的取值，也是发现文档对外公布的地址。
-    /// 错的下游表现是"验签失败 / 发现文档与令牌对不上"，排查方向很难指回配置。
-    /// </summary>
+    /// <summary>Issuer 决定令牌 <c>iss</c> 与发现文档地址；配错下游只表现为验签失败，很难指回配置。</summary>
     private static void InspectIssuer(IConfiguration configuration, List<EnvironmentGuardFinding> findings)
     {
         const string key = "AuthHub:Issuer";
@@ -168,8 +145,7 @@ public static class EnvironmentGuard
             return;
         }
 
-        // example.com 是 RFC 2606 的保留域名，永远不会是真实的生产地址 ——
-        // 出现在这里只可能是模板没改。
+        // example.com 是 RFC 2606 保留域名，永远不会是真实生产地址，出现即模板没改。
         if (issuer.Contains("example.com", StringComparison.OrdinalIgnoreCase))
         {
             findings.Add(new EnvironmentGuardFinding(
@@ -179,9 +155,7 @@ public static class EnvironmentGuard
         }
     }
 
-    /// <summary>
-    /// 接口文档是一份"有哪些接口、收什么参数"的清单，不该对外可见。
-    /// </summary>
+    /// <summary>接口文档是"有哪些接口、收什么参数"的清单，不该对外可见。</summary>
     private static void InspectApiDocs(IConfiguration configuration, List<EnvironmentGuardFinding> findings)
     {
         const string key = "AuthHub:Features:EnableApiDocs";
@@ -195,9 +169,7 @@ public static class EnvironmentGuard
         }
     }
 
-    /// <summary>
-    /// 传输层：RequireHttps 关掉之后，会话 Cookie 不再强制 Secure，也没有 HSTS。
-    /// </summary>
+    /// <summary>RequireHttps 关掉后没有 HSTS，会话 Cookie 也不再强制 Secure。</summary>
     private static void InspectTransport(IConfiguration configuration, List<EnvironmentGuardFinding> findings)
     {
         const string key = "AuthHub:Security:RequireHttps";
@@ -213,9 +185,7 @@ public static class EnvironmentGuard
             "否则请打开它。"));
     }
 
-    /// <summary>
-    /// 资源所有者密码流程（ROPC）会让本服务经手用户的明文口令，且无法支持 MFA。
-    /// </summary>
+    /// <summary>密码流程（ROPC）让本服务经手用户明文口令，且无法支持 MFA。</summary>
     private static void InspectPasswordFlow(IConfiguration configuration, List<EnvironmentGuardFinding> findings)
     {
         const string key = "AuthHub:Features:EnablePasswordFlow";
@@ -229,11 +199,8 @@ public static class EnvironmentGuard
     }
 
     /// <summary>
-    /// 从连接串里取出 Server / Data Source 的值。
-    ///
-    /// 刻意不用 <c>SqlConnectionStringBuilder</c>：那会把判定绑死在 SQL Server 上，
-    /// 而这里还要辨认 SQLite 与未来的其它提供程序（Provider 已经在调用方判过了），
-    /// 一次解析失败就会静默漏报 —— 漏报正是护栏最不该有的失败方式。
+    /// 从连接串里取出 Server / Data Source 的值。刻意不用 SqlConnectionStringBuilder：
+    /// 它把判定绑死在 SQL Server 上（这里还要辨认 SQLite 等），解析失败还会静默漏报 —— 漏报是护栏最不该有的失败方式。
     /// </summary>
     private static string? ExtractServer(string connectionString)
     {
@@ -266,9 +233,7 @@ public static class EnvironmentGuard
            || key.Equals("Address", StringComparison.OrdinalIgnoreCase)
            || key.Equals("Network Address", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// 本机**专用**写法：这些 Server 值离开本机进程就不可达，在任何部署环境里都必然是配置没改。
-    /// </summary>
+    /// <summary>本机专用写法：这些 Server 值离开本机进程就不可达，在任何部署环境里必然是配置没改。</summary>
     private static bool IsLocalOnlyServer(string server)
         => server.StartsWith("(localdb)", StringComparison.OrdinalIgnoreCase)
            || server.StartsWith("(local)", StringComparison.OrdinalIgnoreCase)
@@ -276,9 +241,7 @@ public static class EnvironmentGuard
            || server.StartsWith(@".\", StringComparison.Ordinal)
            || server.StartsWith("./", StringComparison.Ordinal);
 
-    /// <summary>
-    /// loopback：单机部署时正当，因此只是警告。剥掉实例名、端口与 <c>tcp:</c> 前缀再判断。
-    /// </summary>
+    /// <summary>loopback：单机部署时正当因此只是警告；剥掉实例名、端口与 <c>tcp:</c> 前缀再判断。</summary>
     private static bool IsLoopbackServer(string server)
     {
         var host = server;

@@ -7,8 +7,7 @@ public record RegisterRequest(string UserName, string Email, string Password, st
 public record LoginRequest(string UserNameOrEmail, string Password, bool RememberMe = false);
 
 /// <summary>
-/// 登录结果。
-/// <see cref="RequiresTwoFactor"/> 为 true 时，客户端需携带 <see cref="TwoFactorToken"/>
+/// 登录结果。<see cref="RequiresTwoFactor"/> 为 true 时，客户端需携带 <see cref="TwoFactorToken"/>
 /// 与用户输入的验证码调用两阶段验证接口。
 /// </summary>
 public sealed record LoginResponse
@@ -46,10 +45,7 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 /// <summary>申请密码重置（忘记密码）：只接收邮箱，成功后向该邮箱发送重置链接。</summary>
 public record ForgotPasswordRequest(string Email);
 
-/// <summary>
-/// 重置密码请求。Token 来自邮箱里的重置链接（Identity 签名令牌，带过期），
-/// 校验通过才会真正改密。
-/// </summary>
+/// <summary>重置密码请求。Token 来自邮箱里的重置链接（Identity 签名令牌，带过期）。</summary>
 public record ResetPasswordRequest(string Email, string Token, string NewPassword);
 
 /// <summary>重发邮箱确认邮件：用户注册后没收到确认信时使用。</summary>

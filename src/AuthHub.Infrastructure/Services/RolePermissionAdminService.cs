@@ -15,16 +15,14 @@ namespace AuthHub.Infrastructure.Services;
 /// <summary>
 /// <see cref="IRolePermissionAdminService"/> 的实现：把后台勾选的「角色 → 权限」落成
 /// <c>RolePermissionOverrides</c> 里的一行，写完让 <see cref="IRolePermissionMap"/> 的缓存失效。
-///
-/// 三条设计约束，改之前先读：
-///   1) **整体替换语义**：数据库里的行是该角色权限的完整快照，空数组表示"收回全部权限"，
-///      与"没有这一行（回落配置）"是两回事。因此这里不做增量增删。
-///   2) **防自锁**：变更后必须仍有角色持有 <c>roles.manage</c>。这是唯一能把管理员
-///      彻底关在门外的改动 —— 一旦没人能进「角色与权限」页，恢复它只能去改数据库。
-///   3) **缓存失效只覆盖本进程**：单实例部署下改完即生效；多实例要等各自重启。
-///      会话 Cookie 里的声明是登录那一刻生成的，已登录用户最迟在一个安全戳校验周期
-///      （见 <c>SecurityStampValidatorOptions.ValidationInterval</c>，本项目设为 5 分钟）后刷新。
 /// </summary>
+/// <remarks>
+/// - 整体替换语义：库里的行是该角色权限的完整快照，空数组表示"收回全部权限"，与"没有这一行（回落配置）"是两回事，
+///   因此不做增量增删。
+/// - 防自锁：变更后必须仍有角色持有 <c>roles.manage</c> —— 一旦没人能进「角色与权限」页，恢复只能去改数据库。
+/// - 缓存失效只覆盖本进程：单实例改完即生效，多实例要等各自重启；已登录用户的声明最迟在一个安全戳校验周期
+///   （<c>SecurityStampValidatorOptions.ValidationInterval</c>，本项目设为 5 分钟）后刷新。
+/// </remarks>
 public sealed class RolePermissionAdminService : IRolePermissionAdminService
 {
     private readonly AuthHubDbContext _dbContext;
@@ -72,8 +70,8 @@ public sealed class RolePermissionAdminService : IRolePermissionAdminService
             return Result.Failure(Error.NotFound($"角色 {name} 不存在。"));
         }
 
-        // 纵深防御：界面只会提交权限目录里的值，但表单数据一律按不可信处理。
-        // 大小写不匹配也在这里拦下 —— 权限名会被拿去精确匹配 [Authorize(Policy=...)]。
+        // 纵深防御：界面只会提交权限目录里的值，但表单数据一律按不可信处理；
+        // 大小写不匹配也拦下 —— 权限名要精确匹配 [Authorize(Policy=...)]。
         var unknown = permissions
             .Where(p => !AuthHubConstants.Permissions.All.Contains(p, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal)
@@ -167,8 +165,8 @@ public sealed class RolePermissionAdminService : IRolePermissionAdminService
     }
 
     /// <summary>
-    /// 防自锁：把 <paramref name="replacement"/> 当成该角色的新归属，检查变更之后是否还有角色持有
-    /// <c>roles.manage</c>。传 null 表示"这次不改这个角色"（当前实现用不到，留给将来复用）。
+    /// 防自锁：把 <paramref name="replacement"/> 当成该角色的新归属，检查变更之后是否还有角色持有 <c>roles.manage</c>。
+    /// 传 null 表示"这次不改这个角色"（当前实现用不到，留给将来复用）。
     /// </summary>
     private Result EnsureRolesManageSurvives(string roleName, IReadOnlyCollection<string>? replacement)
     {
@@ -194,9 +192,8 @@ public sealed class RolePermissionAdminService : IRolePermissionAdminService
     }
 
     /// <summary>
-    /// 按角色名找覆盖行。该表只有几行，整表载入后在内存里做不区分大小写的比对 ——
-    /// 各数据库默认排序规则对大小写的处理不一致（SQLite 主键区分、SQL Server 通常不区分），
-    /// 走 SQL 的等值查询会得到"同一个角色在两种提供程序下取到不同结果"的诡异行为。
+    /// 按角色名找覆盖行：表只有几行，整表载入后内存里做不区分大小写的比对。不走 SQL 等值查询 ——
+    /// 各数据库默认排序规则对大小写处理不一，同一角色在两种提供程序下会取到不同结果。
     /// </summary>
     private async Task<RolePermissionOverride?> FindOverrideAsync(string roleName, CancellationToken cancellationToken)
     {

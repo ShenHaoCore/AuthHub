@@ -6,9 +6,8 @@ using System.Net.Http.Json;
 namespace AuthHub.IntegrationTests;
 
 /// <summary>
-/// 受保护资源与授权策略的集成测试。
-/// 重点验证：未认证返回 401（而不是 302 到登录页）、登录了但缺权限返回 403、
-/// 缺 scope 时写操作被拒。
+/// 受保护资源与授权策略的集成测试：未认证返回 401（而不是 302 到登录页）、
+/// 登录了但缺权限返回 403、缺 scope 时写操作被拒。
 /// </summary>
 [Collection(AuthHubFixture.CollectionName)]
 public class ApiAuthorizationTests
@@ -90,14 +89,12 @@ public class ApiAuthorizationTests
     [Fact]
     public async Task Client_credentials_token_should_be_rejected_by_userinfo()
     {
-        // userinfo 面向"用户身份"。OpenIddict 在校验阶段就要求令牌能代表一个用户，
-        // M2M（client_credentials）令牌的 sub 是 client_id 而不是用户，
-        // 因此请求在 passthrough 到控制器之前就被拒了，我们的 Userinfo() 根本不会被调用。
-        //
-        // 语义与 RFC 6750 一致：令牌本身有效、只是身份/范围不足 → 403（不是 401）。
+        // userinfo 面向"用户身份"：M2M（client_credentials）令牌的 sub 是 client_id 而不是用户，
+        // OpenIddict 在校验阶段（passthrough 之前）就拒了，我们的 Userinfo() 根本不会被调用。
+        // 语义与 RFC 6750 一致：令牌本身有效、只是身份/范围不足 → 403（不是 401），
         // 错误细节放在 WWW-Authenticate 头里、响应体为空。
-        // 注意错误码是 OpenIddict 自己的 insufficient_access（ID2095），
-        // 而非 RFC 6750 里的 insufficient_scope —— 这是库的既定契约，不去覆写它。
+        // 错误码是 OpenIddict 自己的 insufficient_access（ID2095），而非 RFC 6750 的 insufficient_scope
+        // —— 这是库的既定契约，不去覆写它。
         var token = await _fixture.GetClientCredentialsTokenAsync("api:read");
 
         var response = await _fixture.Client.SendAsync(

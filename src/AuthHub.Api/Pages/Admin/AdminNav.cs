@@ -18,13 +18,10 @@ public sealed record AdminNavGroup(string Title, IReadOnlyList<AdminNavItem> Ite
 /// <summary>面包屑项（<see cref="Href"/> 为空表示当前页，不可点击）。</summary>
 public sealed record BreadcrumbItem(string Text, string? Href);
 
-/// <summary>
-/// 后台导航的单一事实源：侧边栏、面包屑、页面标题都从这里取。
-///
-/// 权限点与 <see cref="AuthHubConstants.Permissions"/> 一一对应 —— 菜单可见性
-/// 只做“界面收敛”，真正的访问控制在各页面的授权策略上（见 UiPolicies），
-/// 不依赖前端是否隐藏了入口。
-/// </summary>
+/// <summary>后台导航的单一事实源：侧边栏、面包屑、页面标题都从这里取。</summary>
+/// <remarks>
+/// - 权限点与 <see cref="AuthHubConstants.Permissions"/> 一一对应；菜单可见性只做「界面收敛」，真正的访问控制在各页面的授权策略上（见 UiPolicies），不依赖前端是否隐藏了入口。
+/// </remarks>
 public static class AdminNav
 {
     /// <summary>24×24 描边图标的 path 数据（与 authhub.css 的 .ah-icon 配合）。</summary>

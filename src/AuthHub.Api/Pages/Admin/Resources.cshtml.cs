@@ -8,24 +8,18 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AuthHub.Api.Pages.Admin;
 
-/// <summary>
-/// 资源标识白名单（RFC 8707）的管理页。
-///
-/// 与 <see cref="ScopesModel"/> 同构，但有三个只有资源才成立的差别，页面上也各有提示：
-///
-/// 1) **变更即时生效**。校验每请求现查 <c>RegisteredResources</c>，登记 / 启停 / 删除都
-///    不需要重启 —— 这正是 #23 把白名单从配置搬进库表的理由。
-/// 2) **停用 ≠ 删除**。<c>Enabled=false</c> 的登记等同未登记（请求拿到 <c>invalid_target</c>），
-///    但记录还在，重新勾选即可恢复；删除则是彻底移除。
-/// 3) **删除有两步**。仍有客户端持有该资源的 <c>rsrc:</c> 权限时服务端返回 409，
-///    必须先到客户端页收回授权。页面把这条错误显示在列表顶部，而不是假装删除成功。
-/// </summary>
+/// <summary>资源标识白名单（RFC 8707）的管理页，与 <see cref="ScopesModel"/> 同构。</summary>
+/// <remarks>
+/// - 变更即时生效：校验每请求现查 <c>RegisteredResources</c>，登记 / 启停 / 删除都不需要重启 —— 这正是 #23 把白名单从配置搬进库表的理由。
+/// - 停用 ≠ 删除：<c>Enabled=false</c> 等同未登记（请求拿到 <c>invalid_target</c>）但记录还在，重新勾选即可恢复；删除则是彻底移除。
+/// - 删除有两步：仍有客户端持有该资源的 <c>rsrc:</c> 权限时服务端返回 409，必须先到客户端页收回授权 —— 页面把这条错误显示在列表顶部，而不是假装删除成功。
+/// </remarks>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.ResourcesManage)]
 public class ResourcesModel : AdminPageModel
 {
     /// <summary>
-    /// 统计引用时一次拉取的客户端上限（<see cref="IClientAdminService"/> 内部上限为 200）。
-    /// 超过这个数则计数为下界，界面上以 "≥" 标注 —— 不假装精确。
+    /// 统计引用时一次拉取的客户端上限（<see cref="IClientAdminService"/> 内部上限为 200）；
+    /// 超过则计数为下界，界面上以 "≥" 标注 —— 不假装精确。
     /// </summary>
     private const int ReferenceScanSize = 200;
 
@@ -145,8 +139,7 @@ public class ResourcesModel : AdminPageModel
         }
 
         // DisplayName / Description 直接传表单原文（而不是 TrimToNull）：
-        // 服务端把 null 解释为"不修改"、空串解释为"清空"，两者不能混为一谈。
-        // 表单里两个输入框始终存在，清空即真的清空。
+        // 服务端把 null 解释为"不修改"、空串解释为"清空"；表单里两个输入框始终存在，清空即真的清空。
         var result = await _resources.UpdateAsync(
             EditId.Value,
             new UpdateResourceRequest(

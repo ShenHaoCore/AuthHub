@@ -5,10 +5,8 @@ using FluentAssertions;
 namespace AuthHub.UnitTests.Infrastructure;
 
 /// <summary>
-/// 反向代理信任范围的解析。
-///
-/// 这批用例守的是**安全边界**：信任范围写错的后果是客户端可以伪造来源 IP，
-/// 进而污染审计日志、并让按 IP 分区的限流形同虚设。因此这里对"边界值"的断言比对正常值更多。
+/// 反向代理信任范围的解析。这批用例守的是安全边界：信任范围写错的后果是客户端可以伪造来源 IP，
+/// 进而污染审计日志、并让按 IP 分区的限流形同虚设 —— 因此对"边界值"的断言比对正常值更多。
 /// </summary>
 public class ProxyTrustParserTests
 {
@@ -89,9 +87,8 @@ public class ProxyTrustParserTests
     [Fact]
     public void Describe_should_render_cidr_not_the_type_name()
     {
-        // Microsoft.AspNetCore.HttpOverrides.IPNetwork 是**引用类型且没有重写 ToString()**，
-        // 直接把它插进日志模板只会打出类型全名，那一行日志就等于没有信息。
-        // 这条用例专门钉住"启动日志里能读懂到底信任了哪些网段"。
+        // Microsoft.AspNetCore.HttpOverrides.IPNetwork 是引用类型且没有重写 ToString()，
+        // 直接插进日志模板只会打出类型全名 —— 钉住"启动日志里能读懂到底信任了哪些网段"。
         var described = ProxyTrustParser.Describe(ProxyTrustParser.ParseNetworks(new[] { "172.16.0.0/12" }));
 
         described.Should().Be("172.16.0.0/12");

@@ -3,16 +3,12 @@ using AuthHub.Application.Options;
 
 namespace AuthHub.Infrastructure.Security;
 
-/// <summary>
-/// CIMD 客户端元数据（<c>client_id</c> 指向的那份 JSON）—— 解析与校验。
-///
-/// <para><b>为什么手写解析而不是反序列化到一个 DTO</b>：这里的每个字段都是"不可信输入"，
-/// 校验规则需要逐条显式表达并与错误信息一一对应。反序列化 + 特性校验会把"缺字段"
-/// 变成 <c>null</c> 或默认值，而"缺 client_name" 和"client_name 是空串"必须同样被拒。</para>
-///
-/// <para><b>为什么不能信元数据里的 scope</b>：见 <see cref="CimdOptions.AllowedScopes"/>。
-/// 元数据由客户端自己托管，等于由攻击者控制；白名单是唯一的边界。</para>
-/// </summary>
+/// <summary>CIMD 客户端元数据（<c>client_id</c> 指向的那份 JSON）—— 解析与校验。</summary>
+/// <remarks>
+/// - 手写解析而非反序列化到 DTO：每个字段都是不可信输入，校验规则要逐条显式表达并与错误信息一一对应；
+///   "缺 client_name"和"client_name 是空串"必须同样被拒。
+/// - 元数据里的 scope 不可信（元数据由客户端自托管即攻击者控制），白名单 <see cref="CimdOptions.AllowedScopes"/> 是唯一边界。
+/// </remarks>
 public sealed record CimdClientMetadata
 {
     public required string ClientId { get; init; }
@@ -31,14 +27,8 @@ public sealed record CimdClientMetadata
     public required string[] Scopes { get; init; }
 
     /// <summary>
-    /// 解析并校验元数据文档。任一项不满足即失败，错误信息直接说明是哪一条 ——
-    /// 这段文本会进日志与审计，被拒的部署方需要据此修正自己的元数据。
+    /// 解析并校验元数据文档；任一项不满足即失败，错误信息会进日志与审计，被拒方据此修正自己的元数据。
     /// </summary>
-    /// <param name="document">原始 JSON 文本。</param>
-    /// <param name="expectedClientId">请求里的 <c>client_id</c>（必须与文档里的完全一致）。</param>
-    /// <param name="options">白名单配置。</param>
-    /// <param name="metadata">成功时解析出的元数据。</param>
-    /// <param name="error">失败原因。</param>
     public static bool TryParse(
         string document,
         string expectedClientId,
@@ -69,8 +59,7 @@ public sealed record CimdClientMetadata
                 return false;
             }
 
-            // ① client_id 必须等于请求用的 URL —— 否则一个文档可以替别的客户端"背书"，
-            //    攻击者只要在自己域名上放一份写着别人 client_id 的文档就能冒名
+            // ① client_id 必须等于请求用的 URL —— 否则一份文档可以替别的客户端"背书"冒名
             var declaredId = ReadString(root, "client_id");
             if (string.IsNullOrEmpty(declaredId))
             {
@@ -84,8 +73,7 @@ public sealed record CimdClientMetadata
                 return false;
             }
 
-            // ② client_name 必填：同意页要展示"是哪个应用在要权限"，
-            //    缺了它用户只能看到一个裸 URL，等于没有知情同意
+            // ② client_name 必填：同意页要展示"是哪个应用在要权限"，缺了等于没有知情同意
             var clientName = ReadString(root, "client_name");
             if (string.IsNullOrWhiteSpace(clientName))
             {
@@ -101,8 +89,7 @@ public sealed record CimdClientMetadata
                 return false;
             }
 
-            // ④ 客户端认证方式：CIMD 没有登记密钥的环节，只可能是 public（none）。
-            //    声明了别的认证方式说明它期望被当作 confidential —— 我们无法验证，只能拒
+            // ④ 认证方式：CIMD 没有登记密钥的环节，只可能是 public（none）；声明其它方式无法验证，只能拒
             var authMethod = ReadString(root, "token_endpoint_auth_method")?.Trim() ?? "none";
             if (!string.Equals(authMethod, "none", StringComparison.OrdinalIgnoreCase))
             {
@@ -158,17 +145,9 @@ public sealed record CimdClientMetadata
     }
 
     /// <summary>
-    /// 校验并规范化回调地址。
-    ///
-    /// <para>两条关键规则（对应 MCP 规范对 <c>application_type</c> 的要求）：</para>
-    /// <list type="bullet">
-    /// <item><b>web</b> 不允许回环地址 —— 否则一个"网页应用"可以把自己的回调指向用户本机，
-    /// 借浏览器去打通本地服务（授权码会被送到 <c>http://localhost:某端口</c>）。</item>
-    /// <item><b>native</b> 允许回环地址，且**去掉显式端口**：RFC 8252 §7.3 要求授权服务器
-    /// 忽略 loopback 的端口。OpenIddict 内置的 relaxed 比较正是"请求带非默认端口、
-    /// 库里存默认端口"时才生效（见 <c>OpenIddictApplicationManager.ValidateRedirectUriAsync</c>），
-    /// 所以必须在入库前把端口去掉，否则随机端口的桌面客户端会被判成非法回调。</item>
-    /// </list>
+    /// 校验并规范化回调地址（对应 MCP 规范对 <c>application_type</c> 的要求）：web 不允许回环地址；
+    /// native 允许回环且按 RFC 8252 §7.3 去掉显式端口 —— OpenIddict 的 relaxed 比较只在
+    /// "请求带非默认端口、库里存默认端口"时生效，必须入库前去端口。
     /// </summary>
     private static bool TryReadRedirectUris(
         JsonElement root,

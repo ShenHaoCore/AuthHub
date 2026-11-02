@@ -3,32 +3,20 @@ using System.Net.Sockets;
 
 namespace AuthHub.Infrastructure.Security;
 
-/// <summary>
-/// CIMD 元数据拉取的**出站地址策略** —— 本仓库唯一一处"由匿名请求驱动出站连接"的地方，
-/// 因此把判断逻辑抽成纯函数，逐条钉死在单元测试里。
-///
-/// <para><b>威胁模型</b>：攻击者把 <c>client_id</c> 填成 <c>https://169.254.169.254/latest/meta-data/</c>
-/// 或 <c>https://internal.corp/…</c>，诱导授权服务器替他请求内网地址，再根据响应差异
-/// （状态码、耗时、错误信息）推断内网拓扑。仅校验 URL 字符串不够 ——
-/// 一个公网域名可以解析到内网 IP（DNS rebinding），所以真正生效的检查必须发生在
-/// **连接建立时**，针对已解析出的 IP 地址（见 <c>CimdMetadataFetcher.ConnectPublicOnlyAsync</c>）。</para>
-///
-/// <para><b>为什么"要么全公网、要么全拒"</b>：DNS 返回多个地址时，只挑公网那个虽然也能防住
-/// 直接访问内网，但会让"这个域名有时能通、有时不通"变成常态，且难以解释。全拒的语义清楚：
-/// 元数据文档必须托管在一个干净的、纯公网的地址上。</para>
-/// </summary>
+/// <summary>CIMD 元数据拉取的出站地址策略 —— 本仓库唯一一处"由匿名请求驱动出站连接"的地方，判断逻辑抽成纯函数钉在单元测试里。</summary>
+/// <remarks>
+/// - 威胁模型：攻击者把 <c>client_id</c> 填成云元数据或内网地址，诱导授权服务器替他请求内网，
+///   再按响应差异（状态码、耗时、错误信息）推断内网拓扑；仅校验 URL 不够（公网域名可解析到内网 IP），
+///   真正生效的检查必须发生在连接建立时、针对已解析出的 IP（见 <c>CimdMetadataFetcher.ConnectPublicOnlyAsync</c>）。
+/// - "要么全公网、要么全拒"：只挑公网地址会让"这个域名有时能通有时不通"成为常态且难以解释；
+///   全拒语义清楚 —— 元数据必须托管在干净的纯公网地址上。
+/// </remarks>
 public static class CimdAddressPolicy
 {
-    /// <summary>
-    /// 元数据 URL 允许使用的端口。CIMD 面向生产客户端，没有理由走非标准端口；
-    /// 收窄到 443 让"出站连接的目标"在日志里一眼可辨。
-    /// </summary>
+    /// <summary>元数据 URL 允许使用的端口：CIMD 面向生产客户端没有理由走非标准端口，收窄到 443 让出站目标在日志里一眼可辨。</summary>
     public const int AllowedPort = 443;
 
-    /// <summary>
-    /// 判断一个已解析的 IP 是否属于"可从公网访问"的地址。
-    /// 保留地址、私网、回环、链路本地、组播、文档/测试网段一律为 <c>false</c>。
-    /// </summary>
+    /// <summary>判断已解析的 IP 是否属于可从公网访问的地址（保留/私网/回环/链路本地/组播/文档网段均为 <c>false</c>）。</summary>
     public static bool IsPublic(IPAddress? address)
     {
         if (address is null)
@@ -59,10 +47,8 @@ public static class CimdAddressPolicy
     }
 
     /// <summary>
-    /// 判断元数据 URL 本身是否可接受：必须是无凭据、无片段、标准端口的 HTTPS 绝对地址。
-    ///
-    /// <para>片段会被浏览器/HTTP 客户端剥离后再请求，导致"校验的字符串"与"实际请求的地址"
-    /// 不是同一个东西；凭据（<c>https://user@host</c>）是经典的 URL 混淆手法。两者都直接拒。</para>
+    /// 元数据 URL 是否可接受：无凭据、无片段、标准端口的 HTTPS 绝对地址。
+    /// 片段会被客户端剥离后再请求（校验的与实际请求的不是同一地址），凭据是经典 URL 混淆手法，都直接拒。
     /// </summary>
     public static bool IsAllowedMetadataUri(Uri? uri)
     {
@@ -78,12 +64,7 @@ public static class CimdAddressPolicy
                && uri.Port == AllowedPort;
     }
 
-    /// <summary>
-    /// 回环地址判定（用于 native 客户端的回调地址校验）。
-    ///
-    /// <para>RFC 8252 §7.3 允许 native 应用使用任意端口的 loopback 回调，
-    /// 因此这里只看"是不是本机"，不看端口。</para>
-    /// </summary>
+    /// <summary>回环地址判定（用于 native 客户端回调校验）：RFC 8252 §7.3 允许任意端口的 loopback 回调，只看主机不看端口。</summary>
     public static bool IsLoopbackHost(Uri uri) =>
         uri.IsAbsoluteUri
         && uri.IsLoopback

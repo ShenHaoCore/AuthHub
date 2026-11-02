@@ -1,13 +1,9 @@
 namespace AuthHub.Application.Interfaces;
 
-/// <summary>
-/// 拉取 CIMD 元数据文档（<c>client_id</c> 指向的 HTTPS 地址）。
-///
-/// <para>抽成接口不是为了"将来可能换实现"，而是为了**把 SSRF 防护与业务流程分开测试**：
-/// 防护的每一条（仅 https、拒私网、限跳数、限体积、超时）用真实地址策略做单元测试；
-/// 而"拉到元数据之后怎么注册客户端"用假拉取器做端到端测试 —— 后者不可能真去请求一个
-/// 公网域名（测试不该依赖外部网络，也不该把 CI 变成出站扫描器）。</para>
-/// </summary>
+/// <summary>拉取 CIMD 元数据文档（<c>client_id</c> 指向的 HTTPS 地址）。</summary>
+/// <remarks>
+/// - 抽成接口不是为了"将来可能换实现"，而是**把 SSRF 防护与业务流程分开测试**：防护的每一条（仅 https、拒私网、限跳数、限体积、超时）用真实地址策略做单元测试，"拉到元数据之后怎么注册客户端"用假拉取器做端到端测试 —— 测试不该依赖外部网络，也不该把 CI 变成出站扫描器。
+/// </remarks>
 public interface ICimdMetadataFetcher
 {
     /// <summary>

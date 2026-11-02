@@ -13,17 +13,13 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace AuthHub.Api.Controllers;
 
 /// <summary>
-/// /connect/authorize 授权端点（AuthorizationController 的 partial 部分）。
-/// GET 用于发起授权，POST 用于提交同意页（同意 / 拒绝）。
+/// /connect/authorize 授权端点（AuthorizationController 的 partial 部分）：GET 发起授权，POST 提交同意页。
 /// </summary>
 public partial class AuthorizationController
 {
     /// <summary>
-    /// 授权端点。GET 用于发起授权，POST 用于提交同意页（同意 / 拒绝）。
-    ///
-    /// 这里忽略防伪令牌是与 OpenIddict 官方实践一致的：
-    /// 授权请求的合法性由 redirect_uri 白名单 + state + PKCE 保证，
-    /// 而同意表单回传的是完整原始请求参数，攻击者无法凭空构造。
+    /// 授权端点：GET 发起授权，POST 提交同意页（同意 / 拒绝）。[IgnoreAntiforgeryToken] 与 OpenIddict 官方实践一致：
+    /// 授权请求的合法性由 redirect_uri 白名单 + state + PKCE 保证，同意表单回传的是完整原始请求参数，攻击者无法凭空构造；
     /// 登录表单（/account/login）则强制校验防伪令牌，见 AccountController。
     /// </summary>
     [EndpointSummary("授权端点")]
@@ -103,8 +99,7 @@ public partial class AuthorizationController
             {
                 if (request.HasPromptValue(PromptValues.None))
                 {
-                    // prompt=none 表示调用方要求“静默完成”。此时既不能弹登录页（上面已判断），
-                    // 也不能弹同意页，必须按 OIDC 规范显式报 consent_required。
+                    // prompt=none 时不能弹同意页（登录页上面已排除），必须按 OIDC 规范显式报 consent_required。
                     return ForbidWithError(Errors.ConsentRequired, "用户尚未授予该应用所需的权限，无法静默完成授权。");
                 }
 
@@ -133,9 +128,7 @@ public partial class AuthorizationController
                 cancellationToken);
         }
 
-        // 4) 签发授权码 / 令牌
-        //
-        // 把请求里的 resource 一并传下去：授权码里会记住这些受众，兑换令牌时才能原样落到 aud
+        // 4) 签发授权码 / 令牌：把请求里的 resource 一并传下去，授权码会记住这些受众，兑换时才能原样落到 aud
         //（MCP 的授权规范要求令牌的 aud 就是 MCP Server 自己的地址）。
         return await SignInWithUserAsync(user, request.GetScopes(), request.GetResources(), cancellationToken);
     }

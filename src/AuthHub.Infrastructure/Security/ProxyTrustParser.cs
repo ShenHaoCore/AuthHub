@@ -5,27 +5,17 @@ using AspNetIpNetwork = System.Net.IPNetwork;
 
 namespace AuthHub.Infrastructure.Security;
 
-/// <summary>
-/// 反向代理信任范围的解析。
-///
-/// <para><b>存在的理由</b>：<c>ForwardedHeadersOptions</c> 的 <c>KnownProxies</c> /
-/// <c>KnownNetworks</c> 默认**只含 loopback**（<c>127.0.0.1/8</c> 与 <c>::1</c>）。
-/// 也就是说，把 Nginx 放在另一个容器或另一台机器上时，它发来的
-/// <c>X-Forwarded-For</c> / <c>X-Forwarded-Proto</c> 会被 ASP.NET Core **静默丢弃** ——
-/// 不报错、不打日志，只是 <c>RemoteIpAddress</c> 变成网关地址。
-/// 本项目为此提供可配置的信任范围，把"静默"变成"显式声明"。</para>
-///
-/// <para><b>为什么解析写在这里而不是 Api 层</b>：这样它可以被单元测试直接覆盖。
-/// 解析的是安全边界，写错等于把来源 IP 的可信度交给客户端伪造，值得钉住每条边界行为。</para>
-/// </summary>
+/// <summary>反向代理信任范围的解析。</summary>
+/// <remarks>
+/// - 存在的理由：ForwardedHeadersOptions 的 KnownProxies/KnownNetworks 默认只含 loopback，把 Nginx 放在
+///   另一容器或另一台机器上时，X-Forwarded-For 会被 ASP.NET Core 静默丢弃（RemoteIpAddress 变成网关地址，无报错无日志）。
+/// - 解析写在这里而非 Api 层，为的是能被单元测试直接钉住 —— 解析的是安全边界，写错等于把来源 IP 的可信度交给客户端伪造。
+/// </remarks>
 public static class ProxyTrustParser
 {
     /// <summary>
-    /// 解析 CIDR 网段列表，如 <c>172.16.0.0/12</c>、<c>fd00::/8</c>。
-    ///
-    /// 刻意**要求写出前缀长度**：<c>10.0.0.5</c> 这种裸 IP 会被拒绝而不是默认补成 <c>/32</c>。
-    /// 在"信任谁能伪造转发头"这件事上，让用户明确写出范围比替她猜一个更安全 ——
-    /// 尤其 <c>10.0.0.0/8</c> 与 <c>10.0.0.5</c> 的授权范围相差 1600 万个地址。
+    /// 解析 CIDR 网段列表，如 <c>172.16.0.0/12</c>、<c>fd00::/8</c>。刻意要求写出前缀长度，裸 IP 拒收而不默认补成 <c>/32</c> ——
+    /// <c>10.0.0.0/8</c> 与 <c>10.0.0.5</c> 的授权范围相差 1600 万个地址。
     /// </summary>
     /// <exception cref="FormatException">某个值不是合法 CIDR 时抛出，消息里带上原值。</exception>
     public static IReadOnlyList<AspNetIpNetwork> ParseNetworks(IEnumerable<string>? values)
@@ -40,8 +30,7 @@ public static class ProxyTrustParser
                 continue;
             }
 
-            // System.Net.IPNetwork 是值类型，TryParse 失败时 out 参数为 default，
-            // 因此只需判断返回值，不需要（也无法）判空。
+            // System.Net.IPNetwork 是值类型，TryParse 失败时 out 参数为 default，判断返回值即可。
             if (!AspNetIpNetwork.TryParse(raw.Trim(), out var network))
             {
                 throw new FormatException(
@@ -56,10 +45,7 @@ public static class ProxyTrustParser
         return networks;
     }
 
-    /// <summary>
-    /// 解析单个代理地址列表，如 <c>10.0.0.5</c>、<c>2001:db8::1</c>。
-    /// 这里收的是**裸地址**（不像网段那样要求前缀）—— 单个代理就是一台机器。
-    /// </summary>
+    /// <summary>解析单个代理地址列表，如 <c>10.0.0.5</c>、<c>2001:db8::1</c>。收裸地址（不像网段要求前缀）—— 单个代理就是一台机器。</summary>
     /// <exception cref="FormatException">某个值不是合法 IP 地址时抛出，消息里带上原值。</exception>
     public static IReadOnlyList<IPAddress> ParseAddresses(IEnumerable<string>? values)
     {
@@ -85,11 +71,7 @@ public static class ProxyTrustParser
         return addresses;
     }
 
-    /// <summary>
-    /// 把网段渲染成 <c>172.16.0.0/12</c> 这种可读形式，用于启动日志。
-    ///
-    /// <c>System.Net.IPNetwork</c> 的 <c>ToString()</c> 就是 CIDR 形式，直接用。
-    /// </summary>
+    /// <summary>把网段渲染成 <c>172.16.0.0/12</c> 这种可读形式，用于启动日志。</summary>
     public static string Describe(IEnumerable<AspNetIpNetwork> networks)
         => string.Join("、", networks.Select(n => n.ToString()));
 }

@@ -11,35 +11,21 @@ using Oidc = OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace AuthHub.Infrastructure.Data.Seed;
 
-/// <summary>
-/// 种子数据：内置角色、Scope、演示客户端、演示账号、演示资源。
-///
-/// 设计原则：
-/// - 幂等：每一项都先查后建，重复启动不会产生脏数据；
-/// - 密码/密钥全部可被配置覆盖（<c>AuthHub:Seed:*</c>），避免把生产口令写死在代码里；
-/// - **由配置开关控制，而不是按环境硬编码**：<c>AuthHub:Seeding:Enabled</c> 决定要不要跑；
-///   生产环境还需再显式设置 <c>AuthHub:Seeding:AllowInProduction=true</c>，
-///   否则即使 Enabled=true 也会被跳过并打警告 —— 理由见 <see cref="Decide"/>。
-/// </summary>
+/// <summary>种子数据：内置角色、Scope、演示客户端、演示账号、演示资源。</summary>
+/// <remarks>
+/// - 幂等：每一项都先查后建，重复启动不会产生脏数据。
+/// - 密码/密钥全部可被配置覆盖（<c>AuthHub:Seed:*</c>），不把生产口令写死在代码里。
+/// - 由配置开关控制而非按环境硬编码：<c>AuthHub:Seeding:Enabled</c> 决定要不要跑；生产还需显式设置
+///   <c>AuthHub:Seeding:AllowInProduction=true</c> 二次确认，否则跳过并打警告 —— 理由见 <see cref="Decide"/>。
+/// </remarks>
 public static class AuthHubSeeder
 {
-    /// <summary>
-    /// 播种是否放行的判定结果。<see cref="SkipReason"/> 在放行时为 <c>null</c>。
-    /// </summary>
-    /// <param name="Allowed">是否允许播种。</param>
-    /// <param name="SkipReason">被跳过时给日志的说明。</param>
+    /// <summary>播种是否放行的判定结果；放行时 <see cref="SkipReason"/> 为 <c>null</c>。</summary>
     public readonly record struct SeedDecision(bool Allowed, string? SkipReason);
 
     /// <summary>
-    /// 判定当前配置是否允许播种。**刻意做成纯函数**：它是"防误开"的安全护栏，
-    /// 决策逻辑必须能脱离数据库与宿主被直接测试。
-    ///
-    /// <para><b>为什么需要生产期二次确认</b>：种子数据里有演示账号
-    /// （<c>alice</c>，密码写在源码常量里）与演示客户端密钥，它们的存在是为了让人
-    /// clone 下来就能登录试用。一旦在生产上跑起来，等于留下几个公开密码的可用账号，
-    /// 而症状（多了两个用户）非常容易被忽略。因此这里选择**默认拒绝**：
-    /// 生产环境即使 <c>Seeding:Enabled=true</c> 也要再设一次
-    /// <c>Seeding:AllowInProduction=true</c> 才会执行，把"误开"与"确实要初始化"区分开。</para>
+    /// 判定当前配置是否允许播种。刻意做成纯函数，防误开护栏的决策逻辑要能脱离数据库与宿主直接测试；
+    /// 生产期二次确认是因为种子含演示账号与写在源码里的演示客户端密钥，生产上跑起来等于留下公开口令的可用账号。
     /// </summary>
     public static SeedDecision Decide(IConfiguration configuration, bool isProduction)
     {
@@ -92,11 +78,8 @@ public static class AuthHubSeeder
     }
 
     /// <summary>
-    /// 演示资源：让开发环境的资源白名单开箱非空，串起「演示客户端请求 → 资源 → aud」的完整演示链路。
-    ///
-    /// <para>与演示账号/演示客户端同一门槛：只在播种被放行时执行（生产需 AllowInProduction），
-    /// 且幂等（先查后建）。资源标识用演示专用域（.local 保留段，永不与真实/测试标识冲突）；
-    /// 管理员可随时在资源页下线或删除，删除后不会被重新种出（它不在 <c>AuthHub:Resources</c> 配置种子里）。</para>
+    /// 演示资源：让开发环境的资源白名单开箱非空。与演示账号/客户端同一门槛（播种放行才执行）且幂等；
+    /// 资源标识用 .local 保留段永不与真实标识冲突，管理员删除后不会被重新种出（不在 <c>AuthHub:Resources</c> 配置种子里）。
     /// </summary>
     private static async Task SeedDemoResourceAsync(
         IServiceProvider services,

@@ -6,17 +6,15 @@ using Microsoft.Extensions.Hosting;
 namespace AuthHub.UnitTests.Infrastructure;
 
 /// <summary>
-/// 启动期环境护栏。
-///
-/// 这套规则的价值全在"**边界**"上：判严了会把正当的部署形态挡在门外（然后被人直接关掉护栏），
-/// 判松了等于没做。所以用例刻意成对出现 —— 同一项配置的"该拦"与"不该拦"各有断言，
+/// 启动期环境护栏。这套规则的价值全在"边界"上：判严了会把正当的部署形态挡在门外（然后被人直接关掉护栏），
+/// 判松了等于没做。用例刻意成对出现 —— 同一项配置的"该拦"与"不该拦"各有断言，
 /// 并逐条钉住 Fail 与 Warn 的分界：Fail 只留给"在部署环境里必然不成立"的取值。
 /// </summary>
 public class EnvironmentGuardTests
 {
     /// <summary>
-    /// 一份"完全自洽的部署配置"作为基线，各用例只覆盖自己要测的那一项。
-    /// 不这么做的话，每个用例都要把全部无关项都写对才能断言，改一项就会牵动一片。
+    /// 一份"完全自洽的部署配置"作为基线，各用例只覆盖自己要测的那一项 ——
+    /// 否则每个用例都要把全部无关项都写对，改一项牵动一片。
     /// </summary>
     private static IConfiguration Config(params (string Key, string Value)[] overrides)
     {
@@ -70,9 +68,8 @@ public class EnvironmentGuardTests
     [Fact]
     public void Testing_should_be_exempt()
     {
-        // 集成测试的宿主环境（WebApplicationFactory 用 UseEnvironment("Testing")）。
-        // 它的配置本来就是"不该拿去部署"的样子：SQLite 临时库、明文演示口令、
-        // RequireHttps=false。检查它会全线误伤。
+        // 集成测试的宿主环境（WebApplicationFactory 用 UseEnvironment("Testing")）：
+        // 配置本来就是"不该拿去部署"的样子（SQLite 临时库、明文演示口令、RequireHttps=false），检查会全线误伤。
         var findings = EnvironmentGuard.Evaluate(
             Config(
                 ("Database:Provider", "Sqlite"),
@@ -94,9 +91,8 @@ public class EnvironmentGuardTests
     public void Protected_environments_should_be_everything_except_development_and_testing(
         string environmentName, bool expected)
     {
-        // 判据刻意是"不是开发、也不是测试"而不是"是生产"：自定义的环境名（Staging、
-        // PreProd）因此天然被保护。漏保护的代价是某个环境悄悄跑着开发配置，
-        // 而多保护的代价只是多一次启动失败 —— 两者不对称，所以往严的一边倒。
+        // 判据刻意是"不是开发、也不是测试"而不是"是生产"：自定义的环境名（Staging、PreProd）天然被保护。
+        // 漏保护的代价是某环境悄悄跑开发配置，多保护只是多一次启动失败 —— 两者不对称，往严的一边倒。
         EnvironmentGuard.IsProtectedEnvironment(environmentName).Should().Be(expected);
     }
 
@@ -109,9 +105,8 @@ public class EnvironmentGuardTests
     [InlineData("Data Source=(local);Database=AuthHub;Trusted_Connection=True")]
     public void Local_only_connection_strings_should_block_startup(string connectionString)
     {
-        // 这是本次护栏最想抓的场景：开发配置被带到了服务器上。
-        // (local) 走共享内存、(localdb) 是 LocalDB 实例 —— 离开本机进程就不可达，
-        // 在部署环境里没有任何"凑合能跑"的可能，所以是 Fail 而不是 Warn。
+        // 这是本次护栏最想抓的场景：开发配置被带到了服务器上。(local) 走共享内存、(localdb) 是 LocalDB 实例
+        // —— 离开本机进程就不可达，部署环境里没有任何"凑合能跑"的可能，所以是 Fail 而不是 Warn。
         var findings = EnvironmentGuard.Evaluate(
             Config(("ConnectionStrings:DefaultConnection", connectionString)),
             Environments.Production);
@@ -131,9 +126,8 @@ public class EnvironmentGuardTests
     [InlineData("Server=[::1],1433;Database=AuthHub")]
     public void Loopback_connection_strings_should_only_warn(string connectionString)
     {
-        // 与上一条的分界就在这里：localhost 在单机部署里是**正当**的，
-        // 判成 Fail 会把这类部署直接挡在门外。所以降一级，只要求它被看见。
-        // 顺带钉住解析要能剥掉端口、实例名、tcp: 前缀与 IPv6 方括号。
+        // 与上一条的分界：localhost 在单机部署里是正当的，判成 Fail 会把这类部署挡在门外，
+        // 所以降一级只要求它被看见。顺带钉住解析要能剥掉端口、实例名、tcp: 前缀与 IPv6 方括号。
         var findings = EnvironmentGuard.Evaluate(
             Config(("ConnectionStrings:DefaultConnection", connectionString)),
             Environments.Production);

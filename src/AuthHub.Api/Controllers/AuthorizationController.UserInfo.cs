@@ -66,10 +66,7 @@ public partial class AuthorizationController
         return Ok(claims);
     }
 
-    /// <summary>
-    /// 登出：清除本服务的 Identity 会话；若请求带了 post_logout_redirect_uri，
-    /// 由 OpenIddict 校验白名单后跳回客户端。
-    /// </summary>
+    /// <summary>登出：清除本服务的 Identity 会话；带 post_logout_redirect_uri 时由 OpenIddict 校验白名单后跳回客户端。</summary>
     [EndpointSummary("OIDC 登出端点")]
     [EndpointDescription("清除本服务会话；带 post_logout_redirect_uri 时按白名单跳回客户端。")]
     [HttpGet("~/connect/logout")]

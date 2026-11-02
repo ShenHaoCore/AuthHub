@@ -8,28 +8,18 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace AuthHub.Api.Pages.Admin;
 
-/// <summary>
-/// OAuth Scope 管理（`IScopeAdminService` → `IOpenIddictScopeManager`）。
-///
-/// 三个需要向使用者交代清楚的点，页面上也各有对应提示：
-///
-/// 1) **`openid` / `offline_access` 不在这张表里**。它们由 OpenIddict 内部处理，
-///    不落 `OpenIddictScope` 表，所以列表里看不到 —— 但客户端的 `scp:` 权限里
-///    确实会有。看不到不等于不存在，因此加了说明，避免管理员去"补建"一个同名的。
-///
-/// 2) **Scope 名称是主键、不可改**。`UpdateScopeRequest` 里没有 Name 字段，
-///    编辑弹窗里的名称是只读的；要改名只能删掉重建。
-///
-/// 3) **删除不会级联清理客户端的 `scp:` 权限**。OpenIddict 不做引用完整性检查，
-///    删掉一个仍被客户端引用的 scope，会让那些客户端的授权请求在下一步
-///    "scope 不在允许列表里"而失败。所以列表里给出引用计数，删除前明确警告。
-/// </summary>
+/// <summary>OAuth Scope 管理（<c>IScopeAdminService</c> → <c>IOpenIddictScopeManager</c>）。</summary>
+/// <remarks>
+/// - openid / offline_access 不在这张表里：由 OpenIddict 内部处理、不落 OpenIddictScope 表，列表里看不到但客户端的 scp: 权限里确实会有 —— 页面加了说明，避免管理员去"补建"同名 scope。
+/// - Scope 名称是主键、不可改（UpdateScopeRequest 没有 Name 字段）：编辑弹窗名称只读，要改名只能删掉重建。
+/// - 删除不会级联清理客户端的 scp: 权限（OpenIddict 不做引用完整性检查）：仍被引用的 scope 删掉后，那些客户端授权请求会因 scope 不在允许列表而失败 —— 列表给出引用计数，删除前明确警告。
+/// </remarks>
 [Authorize(Policy = AuthHubConstants.Policies.Ui.ScopesManage)]
 public class ScopesModel : AdminPageModel
 {
     /// <summary>
-    /// 统计引用时一次拉取的客户端上限（`IClientAdminService` 内部上限为 200）。
-    /// 超过这个数则计数为下界，界面上以 "≥" 标注 —— 不假装精确。
+    /// 统计引用时一次拉取的客户端上限（<c>IClientAdminService</c> 内部上限为 200）；
+    /// 超过则计数为下界，界面上以 "≥" 标注 —— 不假装精确。
     /// </summary>
     private const int ReferenceScanSize = 200;
 

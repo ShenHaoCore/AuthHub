@@ -1,9 +1,6 @@
 namespace AuthHub.Domain.Constants;
 
-/// <summary>
-/// 全解决方案共享的常量。放在 Domain 层，使 Application / Infrastructure / Api
-/// 不必各自硬编码字符串，也避免为此引用 OpenIddict 包。
-/// </summary>
+/// <summary>全解决方案共享的常量。放在 Domain 层，使各层不必各自硬编码字符串，也避免为此引用 OpenIddict 包。</summary>
 public static class AuthHubConstants
 {
     /// <summary>客户端 / 令牌相关的自定义声明类型。</summary>
@@ -87,17 +84,11 @@ public static class AuthHubConstants
         public const string TokensRevoke = "AuthHub.Permission." + Permissions.TokensRevoke;
         public const string AuditRead = "AuthHub.Permission." + Permissions.AuditRead;
 
-        /// <summary>
-        /// 管理后台**页面**（Razor Pages）专用策略名。
-        ///
-        /// 为什么必须与上面的 API 策略分开：Program.cs 的 AddAuthentication 把三个默认方案
-        /// 都改成了 OpenIddict 的「令牌校验」方案（为了让 /api/* 未带令牌时返回 401 而不是
-        /// 302 跳登录页）。浏览器直接访问后台页面时如果走默认方案，未认证同样会得到
-        /// 401 + WWW-Authenticate，用户看到的是一个空白或 JSON 页面。
-        ///
-        /// 因此后台页面的策略显式**只挂 Identity 会话 Cookie 方案**：未登录 → 302 到
-        /// /account/login，无权限 → 302 到 /account/denied，符合浏览器页面的预期。
-        /// </summary>
+        /// <summary>管理后台**页面**（Razor Pages）专用策略名。</summary>
+        /// <remarks>
+        /// - 与 API 策略分开的原因：Program.cs 的 AddAuthentication 把三个默认方案都改成了 OpenIddict 的「令牌校验」方案（让 /api/* 未带令牌时返回 401 而不是 302 跳登录页），浏览器直接访问后台页面若走默认方案，未认证会得到 401 + WWW-Authenticate 的空白或 JSON 页面。
+        /// - 因此后台页面的策略显式**只挂 Identity 会话 Cookie 方案**：未登录 → 302 到 /account/login，无权限 → 302 到 /account/denied，符合浏览器页面的预期。
+        /// </remarks>
         public static class Ui
         {
             /// <summary>已登录即可（“我的账户”页）。</summary>

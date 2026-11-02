@@ -4,11 +4,47 @@
 
 ## 目录
 
+- [从 Release 产物部署（Linux）](#从-release-产物部署linux)
 - [配置（生产）](#配置生产)
 - [容器 / 反代部署的两个隐性依赖](#容器--反代部署的两个隐性依赖)
 - [迁移](#迁移)
 - [反向代理](#反向代理)
 - [Docker](#docker)
+
+---
+
+## 从 Release 产物部署（Linux）
+
+> 2026-10-25（v1.5.1 起）部署产物改由 CI 构建并挂到 GitHub Release：部署端只下载，不碰源码、不做本地构建。
+> WSL 本机环境的具体操作实例见 [local-wsl-environment.md 第 6 节](local-wsl-environment.md#6-代码同步通道)，
+> 本节是适用于任意 Linux 主机的通用流程。
+
+**产物来源**：GitHub Release 页 Assets 里的 `authhub-<tag>-linux-fdd.tar.gz` + 同名 `.sha256`
+（Release 发布后由 `release-artifacts.yml` 自动构建挂载）。形态是 framework-dependent 部署——
+部署机只需装 .NET 10 运行时，不需要 SDK。
+
+```bash
+# 1) 下载产物与校验和，并核对（公共仓库，资产下载无需认证）
+gh release download v1.6.0 -p 'authhub-*-linux-fdd.tar.gz*' -D /tmp/authhub
+cd /tmp/authhub && sha256sum -c authhub-v1.6.0-linux-fdd.tar.gz.sha256   # 须输出 OK
+
+# 2) 解压到版本化目录。注意：归档不含顶层目录，直接落进目标路径
+sudo mkdir -p /opt/authhub/releases/1.6.0
+sudo tar -xzf authhub-v1.6.0-linux-fdd.tar.gz -C /opt/authhub/releases/1.6.0
+
+# 3) 切软链指向新版本 —— 升级与回滚都只改这一条链
+sudo ln -sfn /opt/authhub/releases/1.6.0 /opt/authhub/current
+
+# 4) 重启服务（systemd 单元里的 ExecStart 指向 /opt/authhub/current/AuthHub.Api）
+sudo systemctl restart authhub
+```
+
+**环境变量按上文[配置（生产）](#配置生产)注入**（systemd 单元用 `EnvironmentFile=` 指向受保护的
+env 文件），`ASPNETCORE_ENVIRONMENT=Production` 必须在其中。归档内的
+`appsettings.Production.json` 已内置非敏感基线，不要在部署机上改它 —— 升级会被新版覆盖。
+
+**升级 = 新目录 + 切链 + 重启**；**回滚 = 软链切回旧版本目录再重启**。
+旧版本目录在确认回滚窗口关闭后手动清理。
 
 ---
 

@@ -7,23 +7,15 @@ using Microsoft.Extensions.Options;
 namespace AuthHub.Infrastructure.Services;
 
 /// <summary>
-/// <see cref="IRolePermissionMap"/> 的实现：把三种来源按优先级叠成一张生效表。
-///
-///   出厂默认（<c>CreateDefaultRoles()</c>） ← 配置 <c>AuthHub:RolePermissions</c> ← 运行时覆盖（数据库）
-///
-/// 做成**单例 + 懒加载快照**，理由有三：
-///   1) 解析角色发生在每次登录（生成 authhub:permission 声明）与每次渲染角色页，属热路径，
-///      不能每次都去读一遍覆盖表；
-///   2) 惰性加载是必须的 —— 单例可能先于数据库初始化被解析（启动期自检就跑在迁移之前），
-///      构造函数里不能碰数据访问；
-///   3) 快照一旦建好就是不可变对象，读路径无锁。
-///
-/// **叠加规则里最容易写错的一条**：覆盖行存的是该角色权限的**完整快照**，
-/// 因此"有覆盖行 + 空数组"是"显式收回全部权限"，**不能**回落配置 ——
-/// 那正是它与"没有覆盖行"的唯一区别。
-///
-/// 类名里的 Layered 说的就是这件事：它不是"配置的封装"，而是三层叠加后的结果。
+/// <see cref="IRolePermissionMap"/> 的实现：三种来源按优先级叠成一张生效表 ——
+/// 出厂默认（<c>CreateDefaultRoles()</c>）← 配置 <c>AuthHub:RolePermissions</c> ← 运行时覆盖（数据库）。
 /// </summary>
+/// <remarks>
+/// - 单例 + 懒加载快照：解析角色是每次登录与角色页渲染的热路径；单例可能先于数据库初始化被解析
+///   （构造函数不能碰数据访问）；快照不可变，读路径无锁。
+/// - 叠加规则里最容易写错的一条：覆盖行存的是该角色权限的完整快照，"有覆盖行 + 空数组"是显式收回全部权限，
+///   不能回落配置 —— 那是它与"没有覆盖行"的唯一区别。
+/// </remarks>
 public sealed class LayeredRolePermissionMap : IRolePermissionMap
 {
     /// <summary>生效表的不可变快照。</summary>
@@ -50,8 +42,7 @@ public sealed class LayeredRolePermissionMap : IRolePermissionMap
         _overrideStore = overrideStore;
         _logger = logger;
 
-        // 构造时一次性拷贝「出厂默认 + 配置」的叠加结果。
-        // 拷贝而非持有 Options 里的引用，是为了让构造之后任何对 Options 实例的改写都影响不到它。
+        // 构造时拷贝「出厂默认 + 配置」的叠加结果而非持有 Options 引用，构造之后对 Options 的改写影响不到它。
         _baseline = options.Value.Roles.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.ToArray(),
@@ -119,7 +110,7 @@ public sealed class LayeredRolePermissionMap : IRolePermissionMap
         var effective = new Dictionary<string, string[]>(_baseline, StringComparer.OrdinalIgnoreCase);
         foreach (var (roleName, permissions) in overrides)
         {
-            // 整体替换。空数组在这里就是"该角色没有任何权限"，**不**回落 baseline。
+            // 整体替换。空数组在这里就是"该角色没有任何权限"，不回落 baseline。
             effective[roleName] = permissions;
         }
 

@@ -4,19 +4,15 @@ namespace AuthHub.Api.Pages.Shared;
 
 /// <summary>
 /// 分页组件（<c>_Pagination.cshtml</c>）的视图模型。
-///
-/// 关键点：翻页链接必须**保留当前筛选条件**，否则用户翻到第二页筛选就被清空了。
-/// 因此这里由页面把原始查询参数一并传入，<see cref="UrlFor"/> 负责重建查询串。
+/// 关键点：翻页链接必须保留当前筛选条件，否则翻到第二页筛选就被清空 —— 页面把原始查询参数一并传入，<see cref="UrlFor"/> 负责重建查询串。
 /// </summary>
 public sealed class PaginationModel
 {
     /// <summary>当前页码（从 1 开始）。</summary>
     public int Page { get; init; } = 1;
 
-    /// <summary>每页条数。</summary>
     public int PageSize { get; init; } = 20;
 
-    /// <summary>总条数。</summary>
     public long Total { get; init; }
 
     /// <summary>当前页面路径（不含查询串）。</summary>
@@ -35,7 +31,6 @@ public sealed class PaginationModel
     /// <summary>本页第一条在整体中的序号（无数据时为 0）。</summary>
     public int FirstItemNumber => Total == 0 ? 0 : ((Page - 1) * PageSize) + 1;
 
-    /// <summary>本页最后一条在整体中的序号。</summary>
     public int LastItemNumber => (int)Math.Min(Total, (long)Page * PageSize);
 
     /// <summary>“上一页”链接的样式类。</summary>

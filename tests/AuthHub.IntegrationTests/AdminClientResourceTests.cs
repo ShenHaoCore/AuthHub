@@ -9,16 +9,13 @@ namespace AuthHub.IntegrationTests;
 
 /// <summary>
 /// 管理后台的「允许的资源」字段（RFC 8707）。
-///
-/// <para><b>为什么这条链路值得单独钉住</b>：资源的勾选是**整组覆盖**语义
-/// （<c>UpdateClientAsync</c> 用提交值重建 <c>rsrc:</c> 权限）。前端一旦漏渲染某个已持有的
-/// 资源，管理员改个显示名就会把 MCP 客户端的受众权限清掉，而症状出现在几天后的
-/// <c>invalid_target</c> 上 —— 与"改显示名"这件事毫无关联。所以这里既验证勾上会生效，
-/// 也验证白名单外的历史资源仍会出现在弹窗里。</para>
-///
-/// <para>选择走真实表单提交而不是直接调服务：这一层的价值恰好在页面与 service 的接缝
-/// （绑定名、数组绑定、单选值），直接调 service 就把接缝绕过去了。</para>
 /// </summary>
+/// <remarks>
+/// - 资源勾选是整组覆盖语义（<c>UpdateClientAsync</c> 用提交值重建 <c>rsrc:</c> 权限）：前端一旦漏渲染
+///   某个已持有的资源，管理员改个显示名就会清掉 MCP 客户端的受众权限，症状是几天后的
+///   <c>invalid_target</c>，与"改显示名"毫无关联。所以既验证勾上生效，也验证白名单外的历史资源仍出现在弹窗里。
+/// - 走真实表单提交而非直接调服务：这一层的价值恰好在页面与 service 的接缝（绑定名、数组绑定、单选值）。
+/// </remarks>
 public class AdminClientResourceTests
 {
     private const string McpResource = "https://mcp.example.com/mcp";
