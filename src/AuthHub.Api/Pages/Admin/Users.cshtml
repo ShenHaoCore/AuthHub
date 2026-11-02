@@ -105,6 +105,8 @@
                         <tbody>
                             @foreach (var user in Model.Users.Items)
                             {
+                                var activity = Model.LoginActivities[user.Id];
+                                var activityFrom = activity.Days[0].Date.ToString("yyyy-MM-dd");
                                 <tr>
                                     <td>
                                         <div class="ah-cell-main">@user.DisplayName</div>
@@ -196,6 +198,13 @@
                                     </td>
                                     <td class="ah-col-actions">
                                         <div class="ah-act">
+                                            <a class="ah-act-btn" href="/admin/audit-logs?user=@user.Id&from=@activityFrom"
+                                               title="查看近 30 天登录活动" aria-label="查看 @user.UserName 的登录活动"
+                                               data-activity-open="#activity-@user.Id"
+                                               aria-controls="activity-@user.Id" aria-expanded="false">
+                                                <ah-icon path="@AdminNav.Icons.Clock" size="15" />
+                                            </a>
+
                                             <button type="button" class="ah-act-btn" title="编辑资料与角色"
                                                     aria-label="编辑 @user.UserName"
                                                     data-dialog-open="#dlg-edit-@user.Id">
@@ -235,6 +244,44 @@
                                                 </button>
                                             </form>
                                         </div>
+                                    </td>
+                                </tr>
+                                <tr id="activity-@user.Id" class="ah-login-activity-row" hidden>
+                                    <td colspan="7" class="ah-login-activity-cell">
+                                        <div class="ah-login-activity-head">
+                                            <div>
+                                                <strong>近 30 天登录活动</strong>
+                                                <span class="ah-login-activity-summary">共登录 @activity.Total 次 · 日期按 UTC 计算</span>
+                                            </div>
+                                            @if (User.HasClaim(AuthHubConstants.ClaimTypes.Permission, AuthHubConstants.Permissions.AuditRead))
+                                            {
+                                                <a class="ah-btn ah-btn--sm" href="/admin/audit-logs?user=@user.Id&from=@activityFrom">查看审计日志</a>
+                                            }
+                                        </div>
+
+                                        @if (activity.Total == 0)
+                                        {
+                                            <div class="ah-login-activity-empty">近 30 天无登录</div>
+                                        }
+                                        else
+                                        {
+                                            var maxCount = activity.Days.Max(x => x.Count);
+                                            <div class="ah-login-activity-chart" role="list" aria-label="@user.UserName 近 30 天每日登录次数">
+                                                @foreach (var day in activity.Days)
+                                                {
+                                                    var height = Math.Max(8, (int)Math.Round(day.Count * 100d / maxCount));
+                                                    var label = $"{day.Date:yyyy-MM-dd}：{day.Count} 次登录";
+                                                    <div class="ah-login-activity-day" role="listitem" title="@label" aria-label="@label">
+                                                        <span class="ah-login-activity-bar @(day.Count == 0 ? "ah-login-activity-bar--empty" : null)"
+                                                              style="height: @(height)%;" aria-hidden="true"></span>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="ah-login-activity-labels" aria-hidden="true">
+                                                <span>@activityFrom</span>
+                                                <span>@activity.Days[^1].Date.ToString("yyyy-MM-dd")</span>
+                                            </div>
+                                        }
                                     </td>
                                 </tr>
                             }

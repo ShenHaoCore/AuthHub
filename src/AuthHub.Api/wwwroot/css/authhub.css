@@ -542,6 +542,7 @@ input, select, textarea { accent-color: var(--ah-primary); }
 .ah-act-btn:hover { background: var(--ah-hover); color: var(--ah-primary); border-color: var(--ah-primary-border); text-decoration: none; }
 .ah-act-btn.ah-act-danger:hover { color: var(--ah-danger); border-color: var(--ah-danger-border); background: var(--ah-danger-soft); }
 .ah-act-btn[disabled] { opacity: .45; cursor: not-allowed; }
+.ah-act-btn[aria-expanded="true"] { background: var(--ah-primary-soft); color: var(--ah-primary); border-color: var(--ah-primary-border); }
 
 /* ============================================================== 表单 */
 
@@ -767,6 +768,25 @@ input, select, textarea { accent-color: var(--ah-primary); }
         linear-gradient(var(--ah-border), var(--ah-border)) left center / 1px 100% no-repeat,
         var(--ah-surface-subtle);
 }
+
+/* 用户行内登录活动：默认折叠，展开后不改变主表的列宽与信息密度。 */
+.ah-table td.ah-login-activity-cell { padding: 16px 20px; background: var(--ah-surface-subtle); }
+.ah-login-activity-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ah-login-activity-head strong { display: block; font-size: 14px; }
+.ah-login-activity-summary { display: block; margin-top: 4px; color: var(--ah-muted); font-size: 12.5px; }
+.ah-login-activity-chart {
+    display: grid;
+    grid-template-columns: repeat(30, minmax(0, 1fr));
+    align-items: end;
+    gap: 3px;
+    height: 56px;
+    margin-top: 16px;
+}
+.ah-login-activity-day { display: flex; align-items: flex-end; min-width: 0; height: 100%; }
+.ah-login-activity-bar { display: block; width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--ah-primary); }
+.ah-login-activity-bar--empty { background: var(--ah-border); }
+.ah-login-activity-labels { display: flex; justify-content: space-between; margin-top: 6px; color: var(--ah-muted); font: 11px var(--ah-mono); }
+.ah-login-activity-empty { margin-top: 14px; padding: 22px; border: 1px dashed var(--ah-border); border-radius: var(--ah-radius-sm); color: var(--ah-muted); text-align: center; background: var(--ah-surface); }
 
 /* 首列（通常是名称 / 主标识）给一个下限：表格被挤压时它最先被压成逐字竖排 */
 .ah-table td:first-child { min-width: 96px; }

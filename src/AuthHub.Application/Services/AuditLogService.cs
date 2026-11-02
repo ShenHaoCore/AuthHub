@@ -82,6 +82,42 @@ public sealed class AuditLogService : IAuditLogService
         return new PagedResult<AuditLogDto>(dtos, total, query.Page, query.PageSize);
     }
 
+    public async Task<IReadOnlyDictionary<string, UserLoginActivityDto>> GetLoginActivitiesAsync(
+        IReadOnlyCollection<string> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<string, UserLoginActivityDto>(StringComparer.Ordinal);
+        if (userIds.Count == 0)
+        {
+            return result;
+        }
+
+        var today = DateOnly.FromDateTime(_clock.UtcNow.UtcDateTime);
+        var startDate = today.AddDays(-29);
+        var from = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var counts = await _repository.GetDailyLoginCountsAsync(
+            userIds,
+            from,
+            from.AddDays(30),
+            cancellationToken);
+        var countsByDay = counts.ToDictionary(x => (x.UserId, x.Date), x => x.Count);
+
+        foreach (var userId in userIds.Distinct(StringComparer.Ordinal))
+        {
+            var days = Enumerable.Range(0, 30)
+                .Select(offset =>
+                {
+                    var date = startDate.AddDays(offset);
+                    countsByDay.TryGetValue((userId, date), out var count);
+                    return new LoginActivityDayDto(date, count);
+                })
+                .ToArray();
+            result[userId] = new UserLoginActivityDto(days.Sum(x => x.Count), days);
+        }
+
+        return result;
+    }
+
     public Task LogLoginSucceededAsync(string userId, string userName, string? clientId = null, CancellationToken cancellationToken = default)
         => LogAsync(new AuditEntry(AuditActionType.UserLoginSucceeded, true, userId, userName, clientId), cancellationToken);
 

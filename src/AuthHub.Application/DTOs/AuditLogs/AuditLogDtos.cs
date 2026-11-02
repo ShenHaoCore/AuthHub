@@ -26,6 +26,12 @@ public sealed record AuditLogDto
     public DateTimeOffset CreatedAt { get; init; }
 }
 
+/// <summary>某一天的完整登录次数。</summary>
+public sealed record LoginActivityDayDto(DateOnly Date, int Count);
+
+/// <summary>用户近 30 天的登录活动。</summary>
+public sealed record UserLoginActivityDto(int Total, IReadOnlyList<LoginActivityDayDto> Days);
+
 /// <summary>审计日志查询条件。</summary>
 public sealed class AuditLogQuery : PagedQuery
 {

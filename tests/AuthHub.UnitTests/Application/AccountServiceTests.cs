@@ -192,6 +192,11 @@ public class AccountServiceTests
         _signIn.Verify(
             s => s.SignInAsync(It.IsAny<ApplicationUser>(), It.IsAny<bool>(), It.IsAny<string?>()),
             Times.Never);
+        _audit.Verify(
+            x => x.LogAsync(
+                It.Is<AuditEntry>(entry => entry.Action == AuditActionType.UserLoginPasswordSucceeded),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]

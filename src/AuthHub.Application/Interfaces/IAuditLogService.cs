@@ -11,6 +11,11 @@ public interface IAuditLogService
 
     Task<PagedResult<AuditLogDto>> QueryAsync(AuditLogQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>按 UTC 日期汇总用户近 30 天已完成登录的次数。</summary>
+    Task<IReadOnlyDictionary<string, UserLoginActivityDto>> GetLoginActivitiesAsync(
+        IReadOnlyCollection<string> userIds,
+        CancellationToken cancellationToken = default);
+
     // ---- 便捷方法：覆盖最常见的几类审计场景 ----
 
     Task LogLoginSucceededAsync(string userId, string userName, string? clientId = null, CancellationToken cancellationToken = default);

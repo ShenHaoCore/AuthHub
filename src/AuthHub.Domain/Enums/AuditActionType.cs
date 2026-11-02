@@ -6,6 +6,7 @@ public static class AuditActionType
     // 账号
     public const string UserRegistered = "user.registered";
     public const string UserLoginSucceeded = "user.login.succeeded";
+    public const string UserLoginPasswordSucceeded = "user.login.password_succeeded";
     public const string UserLoginFailed = "user.login.failed";
     public const string UserLogout = "user.logout";
     public const string UserPasswordChanged = "user.password.changed";

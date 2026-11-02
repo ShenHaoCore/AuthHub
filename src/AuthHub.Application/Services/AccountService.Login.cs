@@ -90,7 +90,7 @@ public partial class AccountService
         {
             // 密码正确但还需第二因子：此时绝不建立正式会话
             await _audit.LogAsync(
-                new AuditEntry(AuditActionType.UserLoginSucceeded, true, user.Id, user.UserName, Details: "密码校验通过，等待 MFA"),
+                new AuditEntry(AuditActionType.UserLoginPasswordSucceeded, true, user.Id, user.UserName, Details: "密码校验通过，等待 MFA"),
                 cancellationToken);
 
             var ticket = _tickets.Protect(user.Id, request.RememberMe);

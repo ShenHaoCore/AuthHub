@@ -1,4 +1,5 @@
 using AuthHub.Domain.Entities;
+using AuthHub.Domain.Enums;
 using AuthHub.Domain.Interfaces;
 using AuthHub.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -67,6 +68,38 @@ public sealed class AuditLogRepository : IAuditLogRepository
             .ToListAsync(cancellationToken);
 
         return (items, total);
+    }
+
+    public async Task<IReadOnlyList<(string UserId, DateOnly Date, int Count)>> GetDailyLoginCountsAsync(
+        IReadOnlyCollection<string> userIds,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken = default)
+    {
+        var completedActions = new[]
+        {
+            AuditActionType.UserLoginSucceeded,
+            AuditActionType.UserExternalLoginSucceeded,
+            AuditActionType.TwoFactorRecoveryCodeUsed
+        };
+
+        var logs = await _dbContext.AuditLogs.AsNoTracking()
+            .Where(x => x.Succeeded
+                        && x.UserId != null
+                        && userIds.Contains(x.UserId)
+                        && completedActions.Contains(x.Action)
+                        && x.CreatedAt >= from
+                        && x.CreatedAt < to
+                        // 旧版本把等待 MFA 也记为登录成功；新事件已拆分，这里兼容历史数据。
+                        && x.Details != "密码校验通过，等待 MFA")
+            .Select(x => new { x.UserId, x.CreatedAt })
+            .ToListAsync(cancellationToken);
+
+        // SQLite 不能翻译 DateTimeOffset 的日期分组；只投影两个字段后按 UTC 计数，保持跨提供方一致。
+        return logs
+            .GroupBy(x => new { x.UserId, Date = DateOnly.FromDateTime(x.CreatedAt.UtcDateTime) })
+            .Select(g => (UserId: g.Key.UserId!, g.Key.Date, Count: g.Count()))
+            .ToArray();
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
